@@ -1,10 +1,24 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "google/gemini-3.8-flash",
+  "small_model": "google/gemini-3.5-flash-lite",
+  "default_agent": "build",
+  "instructions": [
+    ".opencode/instructions.md"
+  ],
+  "share": "disabled",
+  "subagent_depth": 2,
+  "enabled_providers": [
+    "google",
+    "openrouter"
+  ],
   "provider": {
     "google": {
       "options": {
-        "apiKey": "{env:GEMINI_API_KEY}"
+        "apiKey": "{env:GEMINI_API_KEY}",
+        "timeout": 180000,
+        "headerTimeout": 15000,
+        "chunkTimeout": 30000
       },
       "models": {
         "gemini-3.8-flash": {},
@@ -14,10 +28,13 @@
     },
     "openrouter": {
       "options": {
-        "apiKey": "{env:OPENROUTER_API_KEY}"
+        "apiKey": "{env:OPENROUTER_API_KEY}",
+        "timeout": 180000,
+        "headerTimeout": 15000,
+        "chunkTimeout": 30000
       },
       "models": {
-        "google/gemini-3.8-flash": {}
+        "free": {}
       }
     }
   },
@@ -31,5 +48,15 @@
         "x-consumer-api-key": "{env:COMPOSIO_API_KEY}"
       }
     }
+  },
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git push *": "deny",
+      "git push": "deny",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny"
+    },
+    "external_directory": "deny"
   }
 }
