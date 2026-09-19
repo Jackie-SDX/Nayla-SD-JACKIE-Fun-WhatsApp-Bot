@@ -14,9 +14,13 @@ permissions:
 jobs:
   opencode:
     if: |
-      contains(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, '/opencode')
+      github.event.comment.user.login == github.repository_owner &&
+      (contains(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, '/opencode'))
     runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -24,11 +28,72 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Run OpenCode
+      - name: Preflight credentials
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          if [[ -z "${GEMINI_API_KEY:-}" ]]; then
+            echo "::error title=Missing GEMINI_API_KEY::Add the existing Google AI Studio API key as an Actions secret named GEMINI_API_KEY."
+            missing=1
+          fi
+          if [[ -z "${COMPOSIO_API_KEY:-}" ]]; then
+            echo "::error title=Missing COMPOSIO_API_KEY::Add your Composio Connect consumer key (ck_...) as an Actions secret named COMPOSIO_API_KEY."
+            missing=1
+          fi
+          exit "$missing"
+
+      - name: Run OpenCode - Gemini 2.5 Flash
+        id: gemini_primary
+        continue-on-error: true
         uses: anomalyco/opencode/github@latest
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: google/gemini-2.5-flash
           use_github_token: true
+
+      - name: Run OpenCode - Gemini 2.5 Flash-Lite fallback
+        id: gemini_fallback
+        if: steps.gemini_primary.outcome == 'failure'
+        continue-on-error: true
+        uses: anomalyco/opencode/github@latest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: google/gemini-2.5-flash-lite
+          use_github_token: true
+
+      - name: Run OpenCode - OpenRouter fallback
+        id: openrouter_fallback
+        if: steps.gemini_primary.outcome == 'failure' && steps.gemini_fallback.outcome == 'failure' && env.OPENROUTER_API_KEY != ''
+        continue-on-error: true
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: openrouter/google/gemini-2.5-flash
+          use_github_token: true
+
+      - name: Fail if all model attempts failed
+        if: always()
+        env:
+          PRIMARY: ${{ steps.gemini_primary.outcome }}
+          GEMINI_FALLBACK: ${{ steps.gemini_fallback.outcome }}
+          OPENROUTER_FALLBACK: ${{ steps.openrouter_fallback.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$PRIMARY" != "success" && "$GEMINI_FALLBACK" != "success" && "$OPENROUTER_FALLBACK" != "success" ]]; then
+            echo "::error title=All OpenCode model attempts failed::Gemini 2.5 Flash, Gemini 2.5 Flash-Lite, and the optional OpenRouter fallback all failed."
+            exit 1
+          fi
