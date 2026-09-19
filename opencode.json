@@ -1,14 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "google/gemini-2.5-flash",
+  "model": "google/gemini-3.8-flash",
   "provider": {
     "google": {
       "options": {
         "apiKey": "{env:GEMINI_API_KEY}"
       },
       "models": {
-        "gemini-2.5-flash": {},
-        "gemini-2.5-flash-lite": {}
+        "gemini-3.8-flash": {},
+        "gemini-3.6-flash": {},
+        "gemini-3.5-flash-lite": {}
       }
     },
     "openrouter": {
@@ -16,7 +17,7 @@
         "apiKey": "{env:OPENROUTER_API_KEY}"
       },
       "models": {
-        "google/gemini-2.5-flash": {}
+        "google/gemini-3.8-flash": {}
       }
     }
   },

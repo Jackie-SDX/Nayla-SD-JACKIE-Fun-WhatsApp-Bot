@@ -16,7 +16,7 @@ jobs:
     if: |
       github.event.comment.user.login == github.repository_owner &&
       (contains(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, '/opencode'))
+       contains(github.event.comment.body, '/opencode'))
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -46,7 +46,7 @@ jobs:
           fi
           exit "$missing"
 
-      - name: Run OpenCode - Gemini 2.5 Flash
+      - name: Run OpenCode - Gemini 3.8 Flash
         id: gemini_primary
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
@@ -55,11 +55,11 @@ jobs:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          model: google/gemini-2.5-flash
+          model: google/gemini-3.8-flash
           use_github_token: true
           share: false
 
-      - name: Run OpenCode - Gemini 2.5 Flash-Lite fallback
+      - name: Run OpenCode - Gemini 3.6 Flash fallback
         id: gemini_fallback
         if: steps.gemini_primary.outcome == 'failure'
         continue-on-error: true
@@ -69,13 +69,31 @@ jobs:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          model: google/gemini-2.5-flash-lite
+          model: google/gemini-3.6-flash
+          use_github_token: true
+          share: false
+
+      - name: Run OpenCode - Gemini 3.5 Flash-Lite fallback
+        id: gemini_lite_fallback
+        if: steps.gemini_primary.outcome == 'failure' && steps.gemini_fallback.outcome == 'failure'
+        continue-on-error: true
+        uses: anomalyco/opencode/github@latest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: google/gemini-3.5-flash-lite
           use_github_token: true
           share: false
 
       - name: Run OpenCode - OpenRouter fallback
         id: openrouter_fallback
-        if: steps.gemini_primary.outcome == 'failure' && steps.gemini_fallback.outcome == 'failure' && env.OPENROUTER_API_KEY != ''
+        if: |
+          steps.gemini_primary.outcome == 'failure' &&
+          steps.gemini_fallback.outcome == 'failure' &&
+          steps.gemini_lite_fallback.outcome == 'failure' &&
+          env.OPENROUTER_API_KEY != ''
         continue-on-error: true
         uses: anomalyco/opencode/github@latest
         env:
@@ -83,7 +101,7 @@ jobs:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          model: openrouter/google/gemini-2.5-flash
+          model: openrouter/google/gemini-3.8-flash
           use_github_token: true
           share: false
 
@@ -92,11 +110,15 @@ jobs:
         env:
           PRIMARY: ${{ steps.gemini_primary.outcome }}
           GEMINI_FALLBACK: ${{ steps.gemini_fallback.outcome }}
+          GEMINI_LITE_FALLBACK: ${{ steps.gemini_lite_fallback.outcome }}
           OPENROUTER_FALLBACK: ${{ steps.openrouter_fallback.outcome }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$PRIMARY" != "success" && "$GEMINI_FALLBACK" != "success" && "$OPENROUTER_FALLBACK" != "success" ]]; then
-            echo "::error title=All OpenCode model attempts failed::Gemini 2.5 Flash, Gemini 2.5 Flash-Lite, and the optional OpenRouter fallback all failed."
+          if [[ "$PRIMARY" != "success" &&
+                "$GEMINI_FALLBACK" != "success" &&
+                "$GEMINI_LITE_FALLBACK" != "success" &&
+                "$OPENROUTER_FALLBACK" != "success" ]]; then
+            echo "::error title=All OpenCode model attempts failed::Gemini 3.8 Flash, Gemini 3.6 Flash, Gemini 3.5 Flash-Lite, and the optional OpenRouter fallback all failed."
             exit 1
           fi
