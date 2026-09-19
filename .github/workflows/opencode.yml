@@ -57,6 +57,7 @@ jobs:
         with:
           model: google/gemini-2.5-flash
           use_github_token: true
+          share: false
 
       - name: Run OpenCode - Gemini 2.5 Flash-Lite fallback
         id: gemini_fallback
@@ -70,6 +71,7 @@ jobs:
         with:
           model: google/gemini-2.5-flash-lite
           use_github_token: true
+          share: false
 
       - name: Run OpenCode - OpenRouter fallback
         id: openrouter_fallback
@@ -83,6 +85,7 @@ jobs:
         with:
           model: openrouter/google/gemini-2.5-flash
           use_github_token: true
+          share: false
 
       - name: Fail if all model attempts failed
         if: always()
