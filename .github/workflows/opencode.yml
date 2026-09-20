@@ -95,7 +95,9 @@ jobs:
           trap 'rm -rf "$tmp"' EXIT
           curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 \
             "${{ steps.opencode_release.outputs.url }}" -o "$tmp/opencode.tar.gz"
-          echo "${{ steps.opencode_release.outputs.digest }}  $tmp/opencode.tar.gz" | sha256sum --check -
+          digest="${{ steps.opencode_release.outputs.digest }}"
+          digest="${digest#sha256:}"
+          echo "$digest  $tmp/opencode.tar.gz" | sha256sum --check -
           mkdir -p "$tmp/extract"
           tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
           binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
