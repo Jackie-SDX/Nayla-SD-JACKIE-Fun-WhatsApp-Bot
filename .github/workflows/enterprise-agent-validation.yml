@@ -20,6 +20,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      OPENCODE_V2_VERSION: "2.0.3"
+      COPILOT_CLI_VERSION: "1.0.86"
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
