@@ -33,10 +33,10 @@ jobs:
       - name: Assert expected repository invariant
         run: |
           set -euo pipefail
-          # Benchmark instrumentation (first attempt): the expected value below is
-          # INTENTIONALLY wrong so this deterministic assertion fails exactly once
-          # against a real GitHub Actions run before the minimal fix lands.
-          expected="whatsapp-vibe-moderator-intentional-invariant-mismatch"
+          # Permanent regression-harness invariant: the top-level package name
+          # must stay 'whatsapp-vibe-moderator' so the harness guards the repo
+          # identity against accidental renames.
+          expected="whatsapp-vibe-moderator"
           actual="$(node -e "process.stdout.write(require('./package.json').name)")"
           if [[ "$actual" != "$expected" ]]; then
             echo "::error title=Repository invariant mismatch::expected package.json name '${expected}' but got '${actual}'"
