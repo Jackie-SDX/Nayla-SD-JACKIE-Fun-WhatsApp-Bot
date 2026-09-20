@@ -121,6 +121,8 @@ TARGET_SRC="$TESTS/target-src"
 CONTROLLER="$TESTS/controller"
 mkdir -p "$TARGET_SRC/.opencode/agents" "$TARGET_SRC/plugins" "$CONTROLLER/.opencode/agents"
 git -C "$TARGET_SRC" init -q -b main
+git -C "$TARGET_SRC" config user.name "fixture"
+git -C "$TARGET_SRC" config user.email "fixture@example.com"
 printf 'target instructions\n' > "$TARGET_SRC/.opencode/instructions.md"
 printf '{target:true}\n' > "$TARGET_SRC/opencode.json"
 printf 'trust me\n'      > "$TARGET_SRC/AGENTS.md"
@@ -188,10 +190,14 @@ fi
 GUARD_REPO="$TESTS/guard-repo"
 mkdir -p "$GUARD_REPO"
 git -C "$GUARD_REPO" init -q -b main
+git -C "$GUARD_REPO" config user.name "fixture"
+git -C "$GUARD_REPO" config user.email "fixture@example.com"
 git -C "$GUARD_REPO" commit -q --allow-empty -m init
 # (a) embedded git repository fixture (the exact failure mode of the prior run)
 mkdir -p "$GUARD_REPO/.octmp/octest/target"
 git -C "$GUARD_REPO/.octmp/octest/target" init -q -b main
+git -C "$GUARD_REPO/.octmp/octest/target" config user.name "fixture"
+git -C "$GUARD_REPO/.octmp/octest/target" config user.email "fixture@example.com"
 printf 'fixture\n' > "$GUARD_REPO/.octmp/octest/target/x.txt"
 git -C "$GUARD_REPO/.octmp/octest/target" add -A
 git -C "$GUARD_REPO/.octmp/octest/target" commit -qm fixture
