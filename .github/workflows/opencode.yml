@@ -17,8 +17,10 @@ jobs:
       (
         github.event.comment.body == '/oc' ||
         startsWith(github.event.comment.body, '/oc ') ||
+        startsWith(github.event.comment.body, '/oc\\n') ||
         github.event.comment.body == '/opencode' ||
-        startsWith(github.event.comment.body, '/opencode ')
+        startsWith(github.event.comment.body, '/opencode ') ||
+        startsWith(github.event.comment.body, '/opencode\\n')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 35
