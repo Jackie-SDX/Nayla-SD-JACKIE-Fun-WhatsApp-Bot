@@ -44,4 +44,14 @@ grep -q 'OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}' .github/workflows/op
 grep -q 'COUNCIL_EVIDENCE_DIR' .github/workflows/opencode.yml
 grep -q 'workflow-enforced' .opencode/instructions.md
 
+bash -n .github/scripts/run-opencode-council-stage.sh
+bash -n .github/scripts/run-opencode-attempt.sh
+bash -n .github/scripts/publish-opencode-change.sh
+grep -q 'workflow-enforced agent council' .opencode/instructions.md
+grep -q 'opencode run --standalone' docs/AGENT_COUNCIL.md
+! grep -q 'connect.composio.dev/mcp' .github/scripts/run-copilot-attempt.sh
+! grep -q 'x-consumer-api-key' .github/scripts/run-copilot-attempt.sh
+! grep -q '^      id-token: write
+ .github/workflows/opencode.yml
+! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
 echo "Enterprise council validation: PASS"
