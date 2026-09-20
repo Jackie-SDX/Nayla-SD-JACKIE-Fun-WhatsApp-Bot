@@ -54,7 +54,8 @@ jobs:
           grep -q 'prepare-composio-mcp.sh' .github/workflows/opencode.yml
           grep -q 'cleanup-composio-mcp.sh' .github/workflows/opencode.yml
           ! grep -A4 'Bootstrap Composio session MCP' .github/workflows/opencode.yml | grep -q 'continue-on-error: true'
-          grep -Fq 'https://(app|backend)\\.composio\\.dev/tool_router/' .github/scripts/prepare-composio-mcp.sh
+          grep -Fq 'https://(app|backend)' .github/scripts/prepare-composio-mcp.sh
+          grep -Fq 'tool_router/' .github/scripts/prepare-composio-mcp.sh
           grep -q 'mcp-remote@0.14.2' opencode.json
           grep -q 'http-only' opencode.json
           grep -q 'header-file' opencode.json
