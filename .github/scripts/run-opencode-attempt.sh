@@ -18,12 +18,6 @@ set -e
 safe_contents="$(cat "$raw_log")"
 
 for secret in \
-  "${GEMINI_API_KEY:-}" \
-  "${GEMINI_API_KEY_2:-}" \
-  "${GEMINI_API_KEY_3:-}" \
-  "${GEMINI_API_KEY_4:-}" \
-  "${GEMINI_API_KEY_5:-}" \
-  "${OPENROUTER_API_KEY:-}" \
   "${COMPOSIO_API_KEY:-}" \
   "${OPENCODE_API_KEY:-}" \
   "${GITHUB_TOKEN:-}" \
@@ -37,7 +31,7 @@ printf '%s\n' "$safe_contents" |
   sed -E \
     -e 's/(AIza[[:alnum:]_-]{20,})/[REDACTED_GOOGLE_KEY]/g' \
     -e 's/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g' \
-    -e 's/(sk-or-v1-[[:alnum:]_-]{20,})/[REDACTED_OPENROUTER_KEY]/g' \
+    -e 's/(sk-or-v1-[[:alnum:]_-]{20,})/[REDACTED_EXTERNAL_API_KEY]/g' \
     -e 's/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
   > "$safe_log"
 

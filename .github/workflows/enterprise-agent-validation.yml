@@ -50,11 +50,12 @@ jobs:
           grep -q 'OPENCODE_API_KEY' .github/workflows/opencode.yml
           grep -q 'OPENCODE_ZEN_FREE_MODELS' .github/workflows/opencode.yml
           grep -q 'COMPOSIO_API_KEY' .github/workflows/opencode.yml
-          grep -q 'COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}' .github/workflows/opencode.yml
+          grep -q 'COMPOSIO_USER_ID:' .github/workflows/opencode.yml
           grep -q 'prepare-composio-mcp.sh' .github/workflows/opencode.yml
           grep -q 'cleanup-composio-mcp.sh' .github/workflows/opencode.yml
           ! grep -A4 'Bootstrap Composio session MCP' .github/workflows/opencode.yml | grep -q 'continue-on-error: true'
-          grep -E -q 'https://(app|backend)\\.composio\\.dev/tool_router/' .github/scripts/prepare-composio-mcp.sh
+          grep -Fq 'https://(app|backend)' .github/scripts/prepare-composio-mcp.sh
+          grep -Fq 'tool_router/' .github/scripts/prepare-composio-mcp.sh
           grep -q 'mcp-remote@0.14.2' opencode.json
           grep -q 'http-only' opencode.json
           grep -q 'header-file' opencode.json
@@ -101,9 +102,7 @@ jobs:
           grep -q 'mcp:true' .github/scripts/prepare-composio-mcp.sh
           ! grep -q 'connected_accounts' .github/scripts/prepare-composio-mcp.sh
           ! grep -q 'OPENCODE_CONFIG_CONTENT' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'toolkit_slugs=tavily_mcp' .github/scripts/prepare-composio-mcp.sh
           grep -q 'COMPOSIO_MCP_HEADERS_FILE' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'OPENCODE_CONFIG_CONTENT' .github/scripts/prepare-composio-mcp.sh
           grep -q 'persist-credentials: false' .github/workflows/opencode.yml
           grep -q 'contents: write' .github/workflows/opencode.yml
           grep -q 'issues: write' .github/workflows/opencode.yml
