@@ -43,8 +43,8 @@ grep -q 'Publish OpenCode attempt 1' .github/workflows/opencode.yml
 grep -q 'Validate command gate' .github/workflows/opencode.yml
 grep -q 'OPENCODE_API_KEY:' .github/workflows/opencode.yml
 grep -q 'COUNCIL_EVIDENCE_DIR' .github/workflows/opencode.yml
-grep -q 'workflow-enforced agent council' .opencode/instructions.md
-grep -q 'opencode run --standalone' docs/AGENT_COUNCIL.md
+grep -q 'The GitHub Actions workflow is the authoritative council control plane' .opencode/instructions.md
+grep -q 'separate top-level CLI sessions' docs/AGENT_COUNCIL.md
 
 bash -n .github/scripts/run-opencode-council-stage.sh
 bash -n .github/scripts/run-opencode-attempt.sh
