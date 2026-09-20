@@ -9,11 +9,19 @@
   "subagent_depth": 2,
   "mcp": {
     "composio": {
-      "type": "remote",
-      "url": "{env:COMPOSIO_MCP_URL}",
+      "type": "local",
+      "command": [
+        "npx",
+        "--yes",
+        "mcp-remote@0.14.2",
+        "{env:COMPOSIO_MCP_URL}",
+        "--transport",
+        "http-only",
+        "--header-file",
+        "{env:COMPOSIO_MCP_HEADERS_FILE}"
+      ],
       "enabled": true,
-      "oauth": false,
-      "headers": {}
+      "timeout": 20000
     }
   },
   "permission": {

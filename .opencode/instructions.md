@@ -181,6 +181,8 @@ Never send a project API key as `x-consumer-api-key`, never hard-code a `ck_*` c
 
 The MCP session should be as short-lived and scoped as practical. Do not print session URLs, session headers, or API keys.
 When `COMPOSIO_API_KEY` is configured, failure to create or validate the session-backed MCP is a hard failure; only an absent optional credential may disable the integration and continue.
+OpenCode 1.x reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. Session headers, when returned, are held in a mode-0600 temporary header file and deleted during cleanup.
+The session user must match an active connected account. Prefer an explicit `COMPOSIO_USER_ID`; when it is absent or has no active Tavily connection, resolve a unique active project user. Never guess when multiple users are active.
 
 ### Tavily
 
