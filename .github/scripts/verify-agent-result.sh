@@ -99,21 +99,39 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
       reason="target CI evidence is not observable with the available workflow credential"
       break
     fi
-    success_count="$(jq '[.check_runs[]? | select(.conclusion == "success")] | length' <<<"$checks" 2>/dev/null || echo 0)"
-    if [[ "$success_count" -gt 0 ]]; then
+    total_checks="$(jq '.check_runs | length' <<<"$checks" 2>/dev/null || echo 0)"
+    success_count="$(jq '[.check_runs[]? | select(.status == "completed" and .conclusion == "success")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    skipped_count="$(jq '[.check_runs[]? | select(.status == "completed" and .conclusion == "skipped")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    neutral_count="$(jq '[.check_runs[]? | select(.status == "completed" and .conclusion == "neutral")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    pending_count="$(jq '[.check_runs[]? | select(.status == "queued" or .status == "in_progress")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    failure_count="$(jq '[.check_runs[]? | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled" or .conclusion == "action_required" or .conclusion == "startup_failure" or .conclusion == "stale")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    if [[ "$failure_count" -gt 0 ]]; then
+      reason="target CI has $failure_count failed/non-green check run(s) on exact head $head_sha"
+      break
+    fi
+    if [[ "$pending_count" -gt 0 ]]; then
+      if [[ "$SECONDS" -lt "$deadline" ]]; then
+        pending=true
+        sleep "$poll_seconds"
+        continue
+      fi
+      break
+    fi
+    if [[ "$total_checks" -gt 0 && "$success_count" -gt 0 && "$((success_count + skipped_count + neutral_count))" -eq "$total_checks" ]]; then
       verified=true
       break
     fi
-    st="$(gh api "/repos/$rrepo/commits/$head_sha/status" 2>/dev/null || printf '%s' '{"state":"pending"}')"
-    if [[ "$(jq -r '.state // ""' <<<"$st")" == "success" ]]; then
-      verified=true
-      break
-    fi
-    states="$(jq -r '[.check_runs[]?.status] | if index("in_progress") or index("queued") then "pending" else "done" end' <<<"$checks" 2>/dev/null || echo done)"
-    if [[ "$states" == "pending" && "$SECONDS" -lt "$deadline" ]]; then
-      pending=true
-      sleep "$poll_seconds"
-      continue
+    if [[ "$total_checks" -eq 0 ]]; then
+      st="$(gh api "/repos/$rrepo/commits/$head_sha/status" 2>/dev/null || printf '%s' '{"state":"pending"}')"
+      if [[ "$(jq -r '.state // ""' <<<"$st")" == "success" ]]; then
+        verified=true
+        break
+      fi
+      if [[ "$(jq -r '.state // "pending"' <<<"$st")" == "pending" && "$SECONDS" -lt "$deadline" ]]; then
+        pending=true
+        sleep "$poll_seconds"
+        continue
+      fi
     fi
     break
   done
