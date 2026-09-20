@@ -19,14 +19,20 @@ jobs:
         startsWith(github.event.comment.body, '/opencode')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 360
     permissions:
       contents: write
       issues: write
       pull-requests: write
+      actions: write
+      checks: read
+      statuses: read
       id-token: write
     env:
-      GITHUB_TOKEN: ${{ github.token }}
+      UNIVERSAL_TOKEN: ${{ secrets.UNIVERSAL_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+      OPENCODE_AGENT_TIMEOUT_MINUTES: "350"
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free' }}
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
@@ -120,6 +126,7 @@ jobs:
             exit 1
           }
           [[ -n "$COMPOSIO_API_KEY" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured."
+          [[ -n "${UNIVERSAL_TOKEN:-}" ]] && echo "Universal GitHub credential: configured" || echo "Universal GitHub credential: not configured; using the workflow GitHub token."
           echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
 
       - name: Bootstrap Composio session MCP
@@ -172,7 +179,7 @@ jobs:
         if: steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'github-copilot'
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
@@ -188,7 +195,7 @@ jobs:
 
       - name: Select route 2
         id: route_2
-        if: steps.classify_1.outcome == 'success'
+        if: steps.agent_1.outcome == 'failure' && steps.agent_1.outputs.termination_reason != 'timeout' && steps.classify_1.outcome == 'success'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -232,7 +239,7 @@ jobs:
         if: steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'github-copilot'
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
@@ -248,7 +255,7 @@ jobs:
 
       - name: Select route 3
         id: route_3
-        if: steps.classify_2.outcome == 'success'
+        if: steps.agent_2.outcome == 'failure' && steps.agent_2.outputs.termination_reason != 'timeout' && steps.classify_2.outcome == 'success'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -291,7 +298,7 @@ jobs:
         if: steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'github-copilot'
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
@@ -306,10 +313,28 @@ jobs:
           git branch --show-current
           git log -1 --oneline
 
-      - name: Human handoff after exhausted or blocked recovery
-        if: always() && steps.agent_1.outcome == 'failure' && (steps.agent_3.outcome != 'success')
+      - name: Reconcile OpenCode publication
+        if: always() && ((steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'opencode') || (steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'opencode') || (steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'opencode'))
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+        shell: bash
+        run: bash .github/scripts/reconcile-opencode-result.sh
+
+      - name: Post controlled timeout continuation
+        if: always() && (steps.agent_1.outputs.termination_reason == 'timeout' || steps.agent_2.outputs.termination_reason == 'timeout' || steps.agent_3.outputs.termination_reason == 'timeout')
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          OPENCODE_AGENT_TIMEOUT_MINUTES: "350"
+        shell: bash
+        run: bash .github/scripts/post-oc-continuation.sh
+
+      - name: Human handoff after exhausted or blocked recovery
+        if: always() && steps.agent_1.outcome == 'failure' && (steps.agent_3.outcome != 'success') && steps.agent_1.outputs.termination_reason != 'timeout' && steps.agent_2.outputs.termination_reason != 'timeout' && steps.agent_3.outputs.termination_reason != 'timeout'
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
           SAFE_LOG: ${{ steps.agent_3.outputs.safe_log_path || steps.agent_2.outputs.safe_log_path || steps.agent_1.outputs.safe_log_path }}
         shell: bash
