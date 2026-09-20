@@ -66,30 +66,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '"model": "openrouter/qwen/qwen3.8-27b:free"' opencode.json
-          grep -q '"qwen/qwen3.8-27b:free": {}' opencode.json
-          grep -q '"gemini-3.8-flash": {}' opencode.json
-          grep -q '"gemini-3.7-flash": {}' opencode.json
-          grep -q '"gemini-3.6-flash": {}' opencode.json
-          grep -q '"gemini-3.5-flash": {}' opencode.json
-          grep -q '"gemini-3.5-flash-lite": {}' opencode.json
-          grep -q 'GEMINI_API_KEY_4' .github/workflows/opencode.yml
-          grep -q 'GEMINI_API_KEY_5' .github/workflows/opencode.yml
-          grep -q 'OPENROUTER_PRIMARY_MODEL' .github/workflows/opencode.yml
-          grep -q 'route_count=27' .github/scripts/select-opencode-route.sh
-          grep -q 'provider_is_excluded' .github/scripts/select-opencode-route.sh
-          grep -q 'OPENCODE_EXCLUDED_PROVIDERS' .github/scripts/select-opencode-route.sh
-          grep -q 'statusCode' .github/scripts/classify-provider-failure.sh
-          ! grep -Eq 'chat/completions|generateContent|streamGenerateContent|curl' .github/scripts/select-opencode-route.sh
-          grep -q 'qwen/qwen3.8-27b:free' .github/scripts/select-opencode-route.sh
-          grep -q 'openrouter/free' .github/scripts/select-opencode-route.sh
-          grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
-          grep -q 'safe_log' .github/scripts/run-opencode-attempt.sh
-          test "$(grep -c 'Run OpenCode attempt [123]$' .github/workflows/opencode.yml)" -eq 3
-          ! grep -q 'Run OpenCode attempt 4' .github/workflows/opencode.yml
-          grep -q 'three-strike' .opencode/instructions.md
-          grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
-          ! grep -Eiq 'qwen/qwen3\.8-max|max-0902' .github/workflows/opencode.yml .github/scripts/*.sh
+          grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
+          grep -q '@github/copilot@1.0.86' .github/workflows/opencode.yml
+          grep -q -- '--model auto' .github/scripts/run-copilot-attempt.sh
+          grep -q -- '--no-ask-user' .github/scripts/run-copilot-attempt.sh
+          grep -q -- '--additional-mcp-config' .github/scripts/run-copilot-attempt.sh
+          grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
+          grep -q 'Create isolated agent branch' .github/workflows/opencode.yml
+          grep -q 'Publish verified agent changes' .github/workflows/opencode.yml
+          grep -q 'isolated branch' .github/copilot-instructions.md
+          ! grep -Eiq 'openrouter|huggingface|hugging-face|chat/completions|generateContent|streamGenerateContent' .github/workflows/opencode.yml .github/scripts/select-opencode-route.sh .github/scripts/run-copilot-attempt.sh
+          ! grep -q 'opencode github run' .github/workflows/opencode.yml
+          ! grep -Eiq 'echo|printf' .github/workflows/opencode.yml <(grep -E 'COPILOT_GITHUB_TOKEN|COMPOSIO_API_KEY' .github/workflows/opencode.yml)
+          test "$(grep -c 'Run GitHub Copilot attempt' .github/workflows/opencode.yml)" -eq 1
 
       - name: Validate reactive routing without inference probes
         shell: bash
