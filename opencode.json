@@ -1,45 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "openrouter/qwen/qwen3.8-27b:free",
+  "model": "opencode/big-pickle",
   "default_agent": "build",
   "instructions": [
     ".opencode/instructions.md"
   ],
   "share": "disabled",
   "subagent_depth": 2,
-  "enabled_providers": [
-    "google",
-    "openrouter"
-  ],
-  "provider": {
-    "google": {
-      "options": {
-        "apiKey": "{env:GEMINI_API_KEY}",
-        "timeout": 180000,
-        "headerTimeout": 15000,
-        "chunkTimeout": 30000
-      },
-      "models": {
-        "gemini-3.8-flash": {},
-        "gemini-3.7-flash": {},
-        "gemini-3.6-flash": {},
-        "gemini-3.5-flash": {},
-        "gemini-3.5-flash-lite": {}
-      }
-    },
-    "openrouter": {
-      "options": {
-        "apiKey": "{env:OPENROUTER_API_KEY}",
-        "timeout": 180000,
-        "headerTimeout": 15000,
-        "chunkTimeout": 30000
-      },
-      "models": {
-        "qwen/qwen3.8-27b:free": {},
-        "free": {}
-      }
-    }
-  },
   "mcp": {
     "composio": {
       "type": "remote",

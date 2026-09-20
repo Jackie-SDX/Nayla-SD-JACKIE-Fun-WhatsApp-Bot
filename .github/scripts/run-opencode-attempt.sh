@@ -25,7 +25,9 @@ for secret in \
   "${GEMINI_API_KEY_5:-}" \
   "${OPENROUTER_API_KEY:-}" \
   "${COMPOSIO_API_KEY:-}" \
-  "${GITHUB_TOKEN:-}"; do
+  "${OPENCODE_API_KEY:-}" \
+  "${GITHUB_TOKEN:-}" \
+  "${COPILOT_GITHUB_TOKEN:-}"; do
   if [[ -n "$secret" ]]; then
     safe_contents="${safe_contents//$secret/[REDACTED]}"
   fi

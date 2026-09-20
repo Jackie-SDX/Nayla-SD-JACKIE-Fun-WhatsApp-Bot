@@ -41,6 +41,7 @@ prompt+=$'\n\nDo not commit, push, reset, clean, delete branches, or create GitH
 set +e
 copilot \
   --model auto \
+  --max-ai-credits "${COPILOT_MAX_AI_CREDITS:-60}" \
   --no-ask-user \
   -s \
   --allow-tool "shell" \
@@ -61,7 +62,7 @@ RAW_LOG="$raw_log" SAFE_LOG="$safe_log" python3 - <<'PY'
 import os, re
 from pathlib import Path
 raw=Path(os.environ["RAW_LOG"]).read_text(errors="replace")
-for key in ("COPILOT_GITHUB_TOKEN","GITHUB_TOKEN","COMPOSIO_API_KEY","GEMINI_API_KEY","GEMINI_API_KEY_2","GEMINI_API_KEY_3","GEMINI_API_KEY_4","GEMINI_API_KEY_5"):
+for key in ("COPILOT_GITHUB_TOKEN","GITHUB_TOKEN","COMPOSIO_API_KEY","OPENCODE_API_KEY","GEMINI_API_KEY","GEMINI_API_KEY_2","GEMINI_API_KEY_3","GEMINI_API_KEY_4","GEMINI_API_KEY_5"):
     value=os.environ.get(key)
     if value:
         raw=raw.replace(value,"[REDACTED]")
