@@ -27,7 +27,7 @@ jobs:
     env:
       COPILOT_MAX_AI_CREDITS: "60"
       OPENCODE_V2_VERSION: "2.0.3"
-  COPILOT_CLI_VERSION: "1.0.86"
+      COPILOT_CLI_VERSION: "1.0.86"
       OPENCODE_ZEN_FREE_MODELS: "big-pickle,mimo-v2.5-free,ling-3.0-flash-fin-free,nemotron-3-ultra-free,nemotron-3.5-lightning-free,muse-spark-1.3-contributor-free,jev-1.13-free,deepseek-v4-flash-free"
 
     steps:
