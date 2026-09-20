@@ -175,6 +175,12 @@ If E2B exposes a direct command/code-execution capability, use it for isolated r
 
 Use Composio as an actual API/tool gateway, not merely as configuration.
 
+This repository uses Composio's current session-backed MCP architecture. The GitHub Actions job authenticates the Tool Router session API with the project API key (`ak_*`) using the `x-api-key` header, receives the short-lived `session.mcp.url` and `session.mcp.headers`, injects them into OpenCode at runtime, and deletes the session after the run.
+
+Never send a project API key as `x-consumer-api-key`, never hard-code a `ck_*` consumer key, and never use the legacy `connect.composio.dev/mcp` endpoint. A configured MCP endpoint is not evidence of connectivity; `opencode mcp list` and an actual tool call are the runtime evidence.
+
+The MCP session should be as short-lived and scoped as practical. Do not print session URLs, session headers, or API keys.
+
 ### Tavily
 
 Use Tavily for:
