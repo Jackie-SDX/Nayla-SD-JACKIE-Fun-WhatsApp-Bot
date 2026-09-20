@@ -225,11 +225,8 @@ jobs:
           grep -q '@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}' .github/scripts/run-copilot-attempt.sh
           grep -q 'allow-tool "write"' .github/scripts/run-copilot-attempt.sh
 
-
-grep -q 'published=true' .github/scripts/publish-copilot-change.sh
-grep -q 'published=false' .github/scripts/publish-copilot-change.sh
-grep -q 'produced no repository changes' .github/scripts/publish-copilot-change.sh
-grep -q 'outputs.published' .github/workflows/opencode.yml
-
-
-grep -q 'Copilot deterministic validation: PASS' .github/scripts/run-copilot-attempt.sh
+          grep -q 'published=true' .github/scripts/publish-copilot-change.sh
+          grep -q 'published=false' .github/scripts/publish-copilot-change.sh
+          grep -q 'produced no repository changes' .github/scripts/publish-copilot-change.sh
+          grep -q 'outputs.published' .github/workflows/opencode.yml
+          grep -q 'Copilot deterministic validation: PASS' .github/scripts/run-copilot-attempt.sh
