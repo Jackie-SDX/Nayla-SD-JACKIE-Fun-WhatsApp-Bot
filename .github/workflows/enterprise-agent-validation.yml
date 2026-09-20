@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -42,6 +42,8 @@ jobs:
           bash -n .github/scripts/classify-provider-failure.sh
           bash -n .github/scripts/prepare-composio-mcp.sh
           bash -n .github/scripts/cleanup-composio-mcp.sh
+          bash -n .github/scripts/post-oc-continuation.sh
+          bash -n .github/scripts/reconcile-opencode-result.sh
           jq empty package.json
 
       - name: Run application test suite
@@ -61,13 +63,25 @@ jobs:
           ins=Path(".opencode/instructions.md").read_text()
           runner=Path(".github/scripts/run-opencode-attempt.sh").read_text()
           selector=Path(".github/scripts/select-opencode-route.sh").read_text()
+          critic=Path(".opencode/agents/critic.md").read_text()
+          cont=Path(".github/scripts/post-oc-continuation.sh").read_text()
+          recon=Path(".github/scripts/reconcile-opencode-result.sh").read_text()
           assert "OPENCODE_API_KEY" in wf
           assert "COMPOSIO_API_KEY" in wf
           assert "COMPOSIO_USER_ID:" in wf
+          assert "secrets.UNIVERSAL_TOKEN" in wf
+          assert "actions: write" in wf
+          assert "checks: read" in wf
+          assert "statuses: read" in wf
           assert "contents: write" in wf
           assert "issues: write" in wf
           assert "pull-requests: write" in wf
-          assert "timeout-minutes: 350" in wf
+          assert "timeout-minutes: 360" in wf
+          assert "OPENCODE_AGENT_TIMEOUT_MINUTES" in wf
+          assert "post-oc-continuation.sh" in wf
+          assert "reconcile-opencode-result.sh" in wf
+          assert "termination_reason != 'timeout'" in wf
+          assert "timeout --signal=TERM" in runner
           assert "opencode github run" in runner
           assert "github-copilot/auto" in selector
           assert cfg["mcp"]["composio"]["type"]=="local"
@@ -80,6 +94,15 @@ jobs:
           assert "if: steps.classify_1.outcome == 'success'" in wf
           assert "if: steps.classify_2.outcome == 'success'" in wf
           assert "advance_route" in Path(".github/scripts/classify-provider-failure.sh").read_text()
+          assert "termination_reason" in runner
+          assert "evidence ledger" in ins
+          assert "/oc continue" in ins
+          assert "/oc retry failed jobs" in ins
+          assert "adversarial" in ins.lower()
+          assert "read-only adversarial verifier" in critic
+          assert "bash: deny" in critic
+          assert "gh issue comment" in cont
+          assert "merged_same_head" in recon
           assert "three-strike" not in ins
           assert "up to five total evidence-based forensic recovery cycles" not in ins
           print("continuous-agent contract: OK")
