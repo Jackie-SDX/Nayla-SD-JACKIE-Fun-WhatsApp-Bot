@@ -224,6 +224,9 @@ jobs:
           grep -Fq 'oc-run-id' .github/workflows/opencode.yml
           grep -Fq 'OC_RUN_START_ISO' .github/workflows/opencode.yml
           grep -Fq 'commits/$head_sha/check-runs' .github/scripts/verify-agent-result.sh
+          grep -Fq 'EXPECTED_TARGET_HEAD' .github/scripts/verify-agent-result.sh
+          grep -Fq 'branch head ($branch_sha) does not match target PR head' .github/scripts/verify-agent-result.sh
+          grep -Fq 'failure_count' .github/scripts/verify-agent-result.sh
           grep -Fq 'OC_CI_VERIFY_WAIT_MINUTES' .github/scripts/verify-agent-result.sh
           grep -Fq 'OPENCODE_RETRY_CURRENT_ROUTE' .github/scripts/select-opencode-route.sh
           grep -Fq 'zero process exit' .opencode/instructions.md
