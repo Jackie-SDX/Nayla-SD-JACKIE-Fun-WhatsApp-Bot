@@ -1,1 +1,145 @@
-name: enterprise-agent-validation\n\non:\n  push:\n    branches:\n      - 'audit/**'\n      - 'feature/**'\n  pull_request:\n  workflow_dispatch:\n\nconcurrency:\n  group: enterprise-agent-validation-${{ github.ref }}\n  cancel-in-progress: true\n\npermissions:\n  contents: read\n\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    steps:\n      - name: Checkout\n        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803\n        with:\n          fetch-depth: 1\n          persist-credentials: false\n\n      - name: Validate required files\n        shell: bash\n        run: |\n          set -euo pipefail\n          test -f .github/workflows/opencode.yml\n          test -f .github/workflows/opencode-cache.yml\n          test -f .github/scripts/select-opencode-route.sh\n          test -f .github/scripts/run-opencode-attempt.sh\n          test -f .opencode/instructions.md\n          test -f opencode.json\n          test -f .github/dependabot.yml\n          test -f .github/CODEOWNERS\n          test -f docs/ENTERPRISE_AGENT_AUDIT.md\n\n      - name: Validate JSON and YAML syntax\n        shell: bash\n        run: |\n          set -euo pipefail\n          jq empty opencode.json\n          ruby -e 'require "yaml"; Dir[".github/workflows/*.yml",".github/dependabot.yml"].uniq.each { |f| YAML.load_file(f); puts "YAML OK: #{f}" }'\n\n      - name: Validate shell and application syntax\n        shell: bash\n        run: |\n          set -euo pipefail\n          bash -n .github/scripts/select-opencode-route.sh\n          bash -n .github/scripts/run-opencode-attempt.sh\n          [[ ! -f index.js ]] || node --check index.js\n          [[ ! -f pair.js ]] || node --check pair.js\n\n      - name: Validate enterprise routing and recovery invariants\n        shell: bash\n        run: |\n          set -euo pipefail\n          grep -q '"model": "openrouter/qwen/qwen3.8-27b:free"' opencode.json\n          grep -q '"gemini-3.7-flash": {}' opencode.json\n          grep -q '"gemini-3.6-flash": {}' opencode.json\n          grep -q '"gemini-3.5-flash": {}' opencode.json\n          grep -q '"gemini-3.5-flash-lite": {}' opencode.json\n          grep -q 'GEMINI_API_KEY_4' .github/workflows/opencode.yml\n          grep -q 'OPENROUTER_PRIMARY_MODEL' .github/workflows/opencode.yml\n          grep -q 'GEMINI_API_KEY_5' .github/workflows/opencode.yml\n          grep -q 'Gemini key slots available: $gemini_count/5' .github/workflows/opencode.yml\n          grep -q 'FORENSIC_RECOVERY_MAX: "5"' .github/workflows/opencode.yml\n          grep -q 'FORENSIC_FAILURE_STRIKE_MAX: "3"' .github/workflows/opencode.yml\n          grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh\n          grep -q 'safe_log' .github/scripts/run-opencode-attempt.sh\n          grep -q 'GEMINI_API_KEY_5' .github/scripts/run-opencode-attempt.sh\n          for model in gemini-3.8-flash gemini-3.7-flash gemini-3.6-flash gemini-3.5-flash gemini-3.5-flash-lite; do grep -q "$model" .github/scripts/select-opencode-route.sh; done\n          grep -q 'openrouter/free' .github/scripts/select-opencode-route.sh\n          grep -q 'route_count=27' .github/scripts/select-opencode-route.sh\n          grep -q 'qwen/qwen3.8-27b:free' .github/scripts/select-opencode-route.sh\n          grep -q 'openrouter/qwen/qwen3.8-27b:free' opencode.json\n          grep -q 'qwen/qwen3.8-27b:free' opencode.json\n          test "$(grep -c 'Run OpenCode attempt [123]$' .github/workflows/opencode.yml)" -eq 3\n          ! grep -q 'Run OpenCode attempt 4' .github/workflows/opencode.yml\n          grep -q 'three-strike' .opencode/instructions.md\n          grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md\n          ! grep -Eiq 'qwen/qwen3\\.8-max|max-0902' .github/workflows/opencode.yml .github/scripts/*.sh\n\n      - name: Validate security invariants\n        shell: bash\n        run: |\n          set -euo pipefail\n          jq -e '.share == "disabled"' opencode.json >/dev/null\n          jq -e '.permission.external_directory == "deny"' opencode.json >/dev/null\n          jq -e '.permission.doom_loop == "deny"' opencode.json >/dev/null\n          jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.bash["git commit *"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.bash["git branch -D *"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.read["*.env"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.read["*.env.*"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.read[".env"] == "deny"' opencode.json >/dev/null\n          jq -e '.permission.read[".npmrc"] == "deny"' opencode.json >/dev/null\n          grep -q 'connect.composio.dev/mcp' opencode.json\n          grep -q 'persist-credentials: false' .github/workflows/opencode.yml\n          grep -q 'contents: write' .github/workflows/opencode.yml\n          grep -q 'issues: write' .github/workflows/opencode.yml\n          grep -q 'pull-requests: write' .github/workflows/opencode.yml\n          ! grep -q 'id-token: write' .github/workflows/opencode.yml\n          ! grep -q 'actions/cache/save' .github/workflows/opencode.yml\n          ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml\n          ! grep -Eiq '(^|[^[:alnum:]_])(echo|printf)[^\n]*\$\{?(GEMINI_API_KEY|OPENROUTER_API_KEY|COMPOSIO_API_KEY)' .github/workflows/opencode.yml .github/scripts/*.sh\n          ! grep -Eiq 'qwen/qwen3\\.8-max' .github/workflows/opencode.yml .github/scripts/*.sh\n          grep -q 'actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode.yml\n          grep -q 'actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode-cache.yml\n          grep -q 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/opencode.yml\n          grep -q 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/enterprise-agent-validation.yml\n\n      - name: Audit application packaging and reproducibility\n        shell: bash\n        run: |\n          set -u\n          if node -e 'const fs=require("fs"); const p=require("./package.json"); const s=p.scripts?.start||""; const m=s.match(/node\s+([A-Za-z0-9._\/-]+\.js)/); if (m && !fs.existsSync(m[1])) process.exit(2)' 2>/dev/null; then\n            echo "Start entrypoint exists."\n          else\n            echo "::warning title=Application packaging finding::package.json may reference a start-time JavaScript file that is absent from the repository tree."\n          fi\n          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then\n            echo "npm lockfile present."\n          else\n            echo "::warning title=No npm lockfile::Dependency installation is not fully reproducible yet."\n          fi\n          if node -e 'const p=require("./package.json"); process.exit(p.scripts?.test ? 0 : 1)' 2>/dev/null; then\n            echo "Automated test script present."\n          else\n            echo "::warning title=No automated test script::Repository validation cannot claim a project test suite."\n          fi\n\n      - name: Audit main governance visibility\n        env:\n          GH_TOKEN: ${{ github.token }}\n        shell: bash\n        run: |\n          set -u\n          if gh api "repos/${GITHUB_REPOSITORY}/branches/main/protection" >/dev/null 2>&1; then\n            echo "main branch protection is visible."\n          else\n            echo "::warning title=Main branch protection unavailable::Repository governance must be configured deliberately in GitHub settings."\n          fi\n\n
+name: enterprise-agent-validation
+
+on:
+  push:
+    branches:
+      - 'audit/**'
+      - 'feature/**'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: enterprise-agent-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/opencode.yml
+          test -f .github/workflows/opencode-cache.yml
+          test -f .github/scripts/select-opencode-route.sh
+          test -f .github/scripts/run-opencode-attempt.sh
+          test -f .opencode/instructions.md
+          test -f opencode.json
+          test -f .github/dependabot.yml
+          test -f .github/CODEOWNERS
+          test -f docs/ENTERPRISE_AGENT_AUDIT.md
+
+      - name: Validate JSON and YAML syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq empty opencode.json
+          ruby -e 'require "yaml"; Dir[".github/workflows/*.yml",".github/dependabot.yml"].uniq.each { |f| YAML.load_file(f); puts "YAML OK: #{f}" }'
+
+      - name: Validate shell and application syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n .github/scripts/select-opencode-route.sh
+          bash -n .github/scripts/run-opencode-attempt.sh
+          [[ ! -f index.js ]] || node --check index.js
+          [[ ! -f pair.js ]] || node --check pair.js
+
+      - name: Validate enterprise routing and recovery invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"model": "openrouter/qwen/qwen3.8-27b:free"' opencode.json
+          grep -q '"qwen/qwen3.8-27b:free": {}' opencode.json
+          grep -q '"gemini-3.8-flash": {}' opencode.json
+          grep -q '"gemini-3.7-flash": {}' opencode.json
+          grep -q '"gemini-3.6-flash": {}' opencode.json
+          grep -q '"gemini-3.5-flash": {}' opencode.json
+          grep -q '"gemini-3.5-flash-lite": {}' opencode.json
+          grep -q 'GEMINI_API_KEY_4' .github/workflows/opencode.yml
+          grep -q 'GEMINI_API_KEY_5' .github/workflows/opencode.yml
+          grep -q 'OPENROUTER_PRIMARY_MODEL' .github/workflows/opencode.yml
+          grep -q 'route_count=27' .github/scripts/select-opencode-route.sh
+          grep -q 'qwen/qwen3.8-27b:free' .github/scripts/select-opencode-route.sh
+          grep -q 'openrouter/free' .github/scripts/select-opencode-route.sh
+          grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
+          grep -q 'safe_log' .github/scripts/run-opencode-attempt.sh
+          test "$(grep -c 'Run OpenCode attempt [123]$' .github/workflows/opencode.yml)" -eq 3
+          ! grep -q 'Run OpenCode attempt 4' .github/workflows/opencode.yml
+          grep -q 'three-strike' .opencode/instructions.md
+          grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
+          ! grep -Eiq 'qwen/qwen3\.8-max|max-0902' .github/workflows/opencode.yml .github/scripts/*.sh
+
+      - name: Validate security invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.share == "disabled"' opencode.json >/dev/null
+          jq -e '.permission.external_directory == "deny"' opencode.json >/dev/null
+          jq -e '.permission.doom_loop == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git commit *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git branch -D *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read["*.env"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read["*.env.*"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read[".env"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read[".npmrc"] == "deny"' opencode.json >/dev/null
+          grep -q 'connect.composio.dev/mcp' opencode.json
+          grep -q 'persist-credentials: false' .github/workflows/opencode.yml
+          grep -q 'contents: write' .github/workflows/opencode.yml
+          grep -q 'issues: write' .github/workflows/opencode.yml
+          grep -q 'pull-requests: write' .github/workflows/opencode.yml
+          ! grep -q 'id-token: write' .github/workflows/opencode.yml
+          ! grep -q 'actions/cache/save' .github/workflows/opencode.yml
+          ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml
+          ! grep -Eiq '(echo|printf)[[:space:]].*\$\{?(GEMINI_API_KEY|OPENROUTER_API_KEY|COMPOSIO_API_KEY)' .github/workflows/opencode.yml .github/scripts/*.sh
+          ! grep -Eiq 'qwen/qwen3\.8-max|max-0902' .github/workflows/opencode.yml .github/scripts/*.sh
+          grep -q 'actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode.yml
+          grep -q 'actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode-cache.yml
+          grep -q 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/opencode.yml
+          grep -q 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/enterprise-agent-validation.yml
+
+      - name: Audit application packaging and reproducibility
+        shell: bash
+        run: |
+          set -u
+          if node -e 'const fs=require("fs"); const p=require("./package.json"); const s=p.scripts?.start||""; const m=s.match(/node\s+([A-Za-z0-9._\/-]+\.js)/); if (m && !fs.existsSync(m[1])) process.exit(2)' 2>/dev/null; then
+            echo "Start entrypoint exists."
+          else
+            echo "::warning title=Application packaging finding::package.json may reference a start-time JavaScript file that is absent from the repository tree."
+          fi
+          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+            echo "npm lockfile present."
+          else
+            echo "::warning title=No npm lockfile::Dependency installation is not fully reproducible yet."
+          fi
+          if node -e 'const p=require("./package.json"); process.exit(p.scripts?.test ? 0 : 1)' 2>/dev/null; then
+            echo "Automated test script present."
+          else
+            echo "::warning title=No automated test script::Repository validation cannot claim a project test suite."
+          fi
+
+      - name: Audit main governance visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -u
+          if gh api "repos/$GITHUB_REPOSITORY/branches/main/protection" >/dev/null 2>&1; then
+            echo "main branch protection is visible."
+          else
+            echo "::warning title=Main branch protection unavailable::Repository governance must be configured deliberately in GitHub settings."
+          fi
