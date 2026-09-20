@@ -36,6 +36,7 @@ test -f .github/scripts/publish-opencode-change.sh
 test -f .github/scripts/validate-application.sh
 
 grep -q 'opencode run --standalone --auto --agent' .github/scripts/run-opencode-council-stage.sh
+! grep -R -q 'opencode agent list' .github/scripts .github/workflows
 grep -q 'COUNCIL_STAGE_COMPLETE=' .github/scripts/run-opencode-council-stage.sh
 grep -q 'COUNCIL_DECISION=' .github/scripts/run-opencode-attempt.sh
 grep -q 'COUNCIL_VERDICT=' .github/scripts/run-opencode-attempt.sh
@@ -56,5 +57,15 @@ bash -n .github/scripts/validate-application.sh
 ! grep -q '^      id-token: write$' .github/workflows/opencode.yml
 ! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
 ! grep -q '^\s*GITHUB_TOKEN:' .github/workflows/opencode.yml
+
+# OpenCode 2.x exposes custom agents from repository markdown frontmatter; do not use the removed V1-style
+# `opencode agent list` positional command here. The actual agent executors perform the authoritative
+# runtime smoke/council stages and emit completion markers.
+grep -R -q '^mode: primary
+ .opencode/agents
+grep -q '^model: opencode/big-pickle
+ .opencode/agents/architect-reviewer.md
+grep -q '^model: opencode/mimo-v2.5-free
+ .opencode/agents/adversarial-reviewer.md
 
 echo "Enterprise council validation: PASS"
