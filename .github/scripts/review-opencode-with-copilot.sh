@@ -146,7 +146,7 @@ set +e
 exit_code=$?
 set -e
 sanitize "$raw_log" "$safe_log"
-printf 'exit_code=%s\n' "$exit_code" >> "$safe_log"
+echo "Copilot peer review exit code: $exit_code"
 cat "$safe_log"
 if [[ "$exit_code" -eq 0 ]] && awk 'NF {last=$0} END {exit !(last=="COPILOT_REVIEW=PASS")}' "$safe_log"; then
   echo 'Copilot peer review: PASS'
