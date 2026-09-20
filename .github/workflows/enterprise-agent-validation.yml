@@ -91,8 +91,10 @@ jobs:
           assert "Replay safety gate" not in wf
           assert "steps.replay_2" not in wf
           assert "steps.replay_3" not in wf
-          assert "if: steps.classify_1.outcome == 'success'" in wf
-          assert "if: steps.classify_2.outcome == 'success'" in wf
+          assert "steps.agent_1.outcome == 'failure'" in wf
+          assert "steps.agent_2.outcome == 'failure'" in wf
+          assert "steps.classify_1.outcome == 'success'" in wf
+          assert "steps.classify_2.outcome == 'success'" in wf
           assert "advance_route" in Path(".github/scripts/classify-provider-failure.sh").read_text()
           assert "termination_reason" in runner
           assert "evidence ledger" in ins
