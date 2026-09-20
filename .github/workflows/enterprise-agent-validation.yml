@@ -50,7 +50,7 @@ jobs:
           grep -q 'OPENCODE_API_KEY' .github/workflows/opencode.yml
           grep -q 'OPENCODE_ZEN_FREE_MODELS' .github/workflows/opencode.yml
           grep -q 'COMPOSIO_API_KEY' .github/workflows/opencode.yml
-          grep -q 'COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}' .github/workflows/opencode.yml
+          grep -q 'COMPOSIO_USER_ID:' .github/workflows/opencode.yml
           grep -q 'prepare-composio-mcp.sh' .github/workflows/opencode.yml
           grep -q 'cleanup-composio-mcp.sh' .github/workflows/opencode.yml
           ! grep -A4 'Bootstrap Composio session MCP' .github/workflows/opencode.yml | grep -q 'continue-on-error: true'
