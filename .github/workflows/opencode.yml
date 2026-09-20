@@ -462,6 +462,10 @@ jobs:
           P1: ${{ steps.publish_1.outcome }}
           P2: ${{ steps.publish_2.outcome }}
           P3: ${{ steps.publish_3.outcome }}
+          V1: ${{ steps.verify_1.outputs.verified }}
+          V2: ${{ steps.verify_2.outputs.verified }}
+          V3: ${{ steps.verify_3.outputs.verified }}
+
         run: |
           set -euo pipefail
           success=false
