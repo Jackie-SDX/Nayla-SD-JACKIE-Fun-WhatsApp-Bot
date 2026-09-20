@@ -53,12 +53,19 @@ jobs:
       - name: Resolve and verify OpenCode release
         id: opencode_release
         shell: bash
+        env:
+          OPENCODE_VERSION_PIN: ${{ vars.OPENCODE_VERSION || '' }}
         run: |
           set -euo pipefail
           json="$(mktemp)"
           trap 'rm -f "$json"' EXIT
-          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
-            https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
+          if [[ -n "$OPENCODE_VERSION_PIN" ]]; then
+            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+              "https://api.github.com/repos/anomalyco/opencode/releases/tags/v$OPENCODE_VERSION_PIN" -o "$json"
+          else
+            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+              https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
+          fi
           tag="$(jq -r '.tag_name' "$json")"
           version="${tag#v}"
           url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"

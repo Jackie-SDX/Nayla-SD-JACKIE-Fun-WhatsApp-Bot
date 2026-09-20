@@ -22,6 +22,14 @@ reject_sensitive_publication() {
       .npmrc|id_rsa|id_ed25519|*.pem|*.key|*.p12|*.pfx)
         echo "::error title=Sensitive publication path blocked::Refusing to publish a secret-bearing file."; return 1
         ;;
+      creds.json|auth_info*|*.session|*.session-*)
+        echo "::error title=Sensitive publication path blocked::Refusing to publish WhatsApp/device session credentials."; return 1
+        ;;
+    esac
+    case "$path" in
+      *session_auth/*|*/auth_info/*|*/auth_info-*/*)
+        echo "::error title=Sensitive publication path blocked::Refusing to publish inside a WhatsApp session directory."; return 1
+        ;;
     esac
   done < <(git ls-files -m -o --exclude-standard)
   git add -A

@@ -42,6 +42,11 @@ jobs:
           bash -n .github/scripts/classify-provider-failure.sh
           bash -n .github/scripts/prepare-composio-mcp.sh
           bash -n .github/scripts/cleanup-composio-mcp.sh
+          jq empty package.json
+
+      - name: Run application test suite
+        shell: bash
+        run: npm test
 
       - name: Validate hybrid architecture
         shell: bash
