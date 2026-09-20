@@ -1,157 +1,295 @@
 # Enterprise OpenCode Agent Audit
 
-Repository: Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot
+Repository: `Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot`
 
 Main baseline at audit start:
-93780b5201d613da04072524d8aa84710dbafdf5
+`93780b5201d613da04072524d8aa84710dbafdf5`
 
-This work is staged on an isolated audit branch. Main is not part of the implementation.
+This work is staged on the isolated branch `audit/enterprise-opencode`. No implementation commit from this audit has been written to `main`.
 
-## Confirmed findings
+## 1. Confirmed cache finding
 
-1. Interactive cache writes were denied.
+The original interactive OpenCode path used GitHub Actions cache behavior that could restore but could not reliably write on the low-trust `issue_comment` path.
 
-The completed OpenCode run reported "Cache mode: read".
+Observed evidence from a real OpenCode run included:
 
-The OpenCode cache key was opencode-Linux-X64-v1.18.31.
+- cache mode: read;
+- cache miss for the versioned OpenCode key;
+- cache reservation failure because the token had no writable cache scope.
 
-The primary and fallback restore operations both reported a cache miss.
+Conclusion: the interactive issue-comment path must not own cache population.
 
-Post-job saves were rejected with "cache write denied: token has no writable scopes".
+The hardened architecture therefore separates cache restore from cache population.
 
-Conclusion: the interactive path cannot be the cache writer. The enterprise design therefore separates cache restore from cache population.
+Interactive workflow:
 
-2. Gemini 3.8 retry behavior consumed excessive time.
+- restores a versioned OpenCode cache;
+- continues on a cache miss;
+- verifies and installs the official release artifact when necessary;
+- never performs `actions/cache/save`.
 
-The observed run returned repeated HTTP 503 responses and repeated HTTP 429 quota failures.
+Trusted cache workflow:
 
-The final quota response identified the free-tier generate-content request limit for gemini-3.8-flash.
+- runs on pushes to `main`, manual dispatch, and a daily schedule;
+- obtains official OpenCode release metadata;
+- verifies the published SHA-256 digest for the Linux x64 archive;
+- verifies the installed executable version;
+- saves the versioned cache;
+- treats cache-save failure as non-fatal.
 
-The primary OpenCode invocation ran for approximately 194 seconds before failure, after which the Gemini 3.6 fallback ran for approximately 134 seconds and succeeded.
+## 2. Model and quota architecture
 
-Conclusion: provider selection must happen before a full agent run whenever possible, and a failed route must rotate rather than repeatedly hammer the same provider.
+The previous Gemini model identifiers were retired. The hardened configuration uses the currently configured Gemini generation ladder and does not depend on the retired 2.5 identifiers.
 
-3. The previous workflow wired only one Gemini key.
+The interactive route selector supports five Gemini credential slots:
 
-The hardened workflow supports:
+1. `GEMINI_API_KEY`
+2. `GEMINI_API_KEY_2`
+3. `GEMINI_API_KEY_3`
+4. `GEMINI_API_KEY_4`
+5. `GEMINI_API_KEY_5`
 
-GEMINI_API_KEY
-GEMINI_API_KEY_2
-GEMINI_API_KEY_3
+The current route order is model-major, then credential-major:
 
-Secondary and tertiary aliases are also exposed for compatibility with the supplied blueprint.
+- Gemini 3.8 Flash + key slots 1→5
+- Gemini 3.7 Flash + key slots 1→5
+- Gemini 3.6 Flash + key slots 1→5
+- Gemini 3.5 Flash + key slots 1→5
+- Gemini 3.5 Flash-Lite + key slots 1→5
+- OpenRouter `openrouter/free`
 
-Multiple keys are not treated as unlimited capacity; quota isolation depends on provider project/account arrangements.
+With all five Gemini slots configured, this produces 26 theoretical route candidates: 25 Gemini model/key combinations plus the OpenRouter free router.
 
-4. The previous OpenRouter fallback hard-coded a transient model.
+With three Gemini keys configured today, it produces 16 theoretical candidates: 15 Gemini combinations plus OpenRouter.
 
-The hardened path uses openrouter/free instead.
+The selector performs a small live provider probe before a full OpenCode invocation. HTTP 401/403, 429, and common 5xx provider failures cause the selector to advance without retrying the failed route repeatedly.
 
-OpenRouter documents openrouter/free as a free router that filters for request capabilities such as tool calling and structured output.
+Important quota constraint: multiple keys are not unlimited quota. They are useful only when they represent credentials/projects/accounts that the human is authorized to use and whose provider quota accounting is actually isolated. A provider-level restriction, suspension, or organization-wide limit must not be bypassed with key rotation.
 
-5. Composio credential propagation was proven, but actual tool execution was not.
+## 3. OpenRouter behavior
 
-The previous GitHub run showed COMPOSIO_API_KEY reaching OpenCode and fetched Composio documentation.
+The configuration uses the OpenRouter model ID `openrouter/free`.
 
-It did not demonstrate a successful Tavily or E2B tool invocation.
+That identifier is a free routing macro, not a deterministic promise that one named model will receive every request. The workflow therefore reports the route as `openrouter/free` unless runtime telemetry provides the underlying model.
 
-Therefore the previous run proves credential delivery, not end-to-end Composio tool integration.
+The repository deliberately does not hard-code Qwen3.8 Max into the zero-cost lane. The currently documented OpenRouter Qwen3.8 Max route is paid, so silently selecting it would violate the project's zero-cost requirement.
 
-6. The supplied MCP URL was wrong.
+A future paid-model lane can be added as an explicitly authorized, opt-in path, separate from the free route circuit.
 
-The supplied blueprint used https://composio.dev.
+## 4. Recovery and forensic debugging
 
-The verified Connect MCP endpoint is https://connect.composio.dev/mcp.
+There are two independent recovery budgets.
 
-7. Main has no visible branch protection/rules.
+### Provider/agent attempt budget
 
-The audit connection reports main as unprotected and no rules are visible.
+One GitHub trigger allows up to three full OpenCode agent invocations.
 
-This is repository governance, not an OpenCode config problem. Governance settings are intentionally not modified by this audit.
+Each retry begins from the next untried route. Before retrying, the workflow inspects:
 
-8. package.json has an application packaging inconsistency.
+- repository status;
+- diff check;
+- diff summary;
+- the preceding attempt's sanitized log.
 
-The current package start script contains node server.js, but server.js is absent from the repository tree.
+This is replay-aware: a provider failure is never treated as evidence that no repository or GitHub-side mutation occurred.
 
-This is recorded and surfaced by validation; it is not silently changed by the agent-infrastructure work.
+After three failed full-agent attempts, the workflow posts sanitized findings to the triggering Issue or Pull Request and terminates.
 
-9. The project has no npm lockfile and no automated test script.
+### Forensic debugging budget
 
-The repository tree contains no package-lock.json or npm-shrinkwrap.json, and package.json has no test script.
+The agent instructions allow up to five total evidence-based forensic recovery cycles inside a coding task.
 
-The validation workflow therefore performs deterministic syntax/configuration checks and reports the reproducibility/test-suite gap instead of pretending a test suite exists.
+Every cycle must:
 
-10. Third-party Action version drift was present.
+1. read the actual failure evidence;
+2. form a concrete fault hypothesis;
+3. make the smallest relevant correction;
+4. rerun the most informative validation.
 
-The previous workflow used anomalyco/opencode/github@latest.
+Three consecutive failures of the same unresolved fault trigger the three-strike circuit breaker. The agent stops rather than burning resources on repeated identical hypotheses.
 
-The enterprise branch removes the floating Action and runs the pinned OpenCode v1.18.31 CLI directly.
+## 5. Evidence gate
 
-Checkout/cache Actions are pinned to immutable commit SHAs.
+The agent uses a practical 90%-evidence gate before a substantive mutation is treated as ready for commit/PR handoff.
 
-## Enterprise architecture
+This is a qualitative engineering threshold, not a measured probability.
 
-Interactive agent:
+Required convergence includes:
 
-owner-only /oc or /opencode comment
-→ per-issue/PR concurrency
-→ checkout
-→ versioned verified OpenCode cache restore
-→ verified release install on cache miss
-→ credential/config preflight
-→ lightweight model/key probe
-→ OpenCode CLI execution
-→ bounded route re-selection on failure
-→ routing summary
-→ explicit final status
+- the relevant static/runtime/test evidence that is actually available;
+- changed-file scope matches the intended fix;
+- the diff has been reviewed;
+- no known correctness or security blocker remains.
 
-Trusted cache:
+The agent must report evidence gaps instead of converting incomplete verification into a success claim.
 
-push to main or manual/scheduled cache workflow
-→ official OpenCode release metadata
-→ official Linux x64 artifact
-→ published SHA-256 verification
-→ executable verification
-→ versioned cache save
+## 6. Public-repository secret controls
 
-This deliberately avoids making the low-trust interactive workflow a cache writer.
+The repository is public.
 
-## Current connected integrations audited
+The OpenCode configuration and workflow use environment-backed credentials only.
 
-GitHub: active through the Jackie-SDX connection.
+The agent is explicitly prohibited from:
 
-Tavily MCP: active; live search succeeded during this audit.
+- hard-coding API keys;
+- hard-coding GitHub tokens;
+- hard-coding WhatsApp session or API credentials;
+- hard-coding database credentials;
+- echoing the environment wholesale;
+- putting secrets into caches, artifacts, issue comments, commits, test fixtures, or diagnostics.
 
-E2B: active; health check, sandbox creation, connection, and state inspection succeeded.
+The OpenCode permission model denies reads of:
 
-OpenRouter connector: active; model catalog endpoint and credit endpoint responded. The user-facing GitHub workflow still requires OPENROUTER_API_KEY if that route is to be used.
+- `.env`;
+- `.env.*`;
+- `*.env`;
+- credential-bearing `.npmrc`.
 
-The currently discovered E2B connector surface did not expose a direct sandbox command-execution action in this environment. Therefore no E2B runtime test is claimed.
+The attempt wrapper redacts configured credentials and common credential formats before diagnostic output is emitted.
 
-## Manual governance required
+## 7. Git mutation boundaries
 
-To actually enforce enterprise branch governance, repository and organization settings still need deliberate configuration:
+The agent is not allowed to use shell commands for:
 
-- require pull requests before main;
-- require relevant status checks;
-- prohibit force-push/delete;
-- require appropriate CODEOWNERS review;
-- restrict who can approve/merge;
-- least-privilege Actions policy;
-- protected environments for privileged deployment secrets;
-- secret scanning/push protection;
-- organization Actions allowlists;
-- signed-commit policy when required.
+- `git commit`;
+- `git push`;
+- `git reset`;
+- `git clean`;
+- local branch deletion.
 
-Those settings are intentionally outside this branch implementation because changing them is repository governance, not a safe side effect of an agent config patch.
+The OpenCode GitHub integration is responsible for the GitHub-side branch/PR workflow.
 
-## Acceptance gate
+`main` is treated as protected by policy even though the current repository settings do not enforce branch protection.
 
-Before merging this branch:
+## 8. OpenCode security controls
 
-1. enterprise-agent-validation workflow must pass;
-2. owner supplies the additional Gemini/OpenRouter secrets they choose to use;
-3. a real /oc run demonstrates route selection;
-4. when Composio use is requested, the run must show an actual tool invocation and successful result;
-5. diff and branch state are reviewed;
-6. only then should a human choose whether to merge into main.
+The staged configuration includes:
+
+- sharing disabled;
+- external-directory access denied;
+- doom-loop protection denied;
+- destructive Git operations denied;
+- immutable GitHub Action references;
+- release-artifact SHA-256 verification;
+- `persist-credentials: false` on checkout;
+- no OIDC `id-token: write` permission;
+- no interactive cache save.
+
+OpenCode is invoked as the pinned/current CLI path rather than using a floating `@latest` GitHub Action reference.
+
+The current source release reference audited during this work is OpenCode v1.18.31.
+
+## 9. Composio integration audit
+
+The verified Composio MCP endpoint for this repository is:
+
+`https://connect.composio.dev/mcp`
+
+with the credential supplied through:
+
+`x-consumer-api-key: {env:COMPOSIO_API_KEY}`
+
+Live connected-tool checks performed during this audit:
+
+- Tavily: a real current web search succeeded;
+- E2B: API health check succeeded.
+
+The available E2B Composio surface in this environment did not expose a direct arbitrary command/code-execution operation. Therefore this audit does not claim an E2B runtime build/test. GitHub Actions remains the verifiable project execution environment for repository changes.
+
+A configured connector or successful health check is not treated as proof that every higher-level tool operation works.
+
+## 10. Validation evidence
+
+The final enterprise validation workflow on the isolated audit branch passed all implemented checks.
+
+Latest validation run:
+
+- run ID: `35477793625`
+- head SHA: `b3c5b1acfcb1b2b5f5562c8b2da58aaca5e3cffe`
+- workflow: `enterprise-agent-validation`
+- result: success
+
+Validated categories included:
+
+- required-file presence;
+- JSON/YAML syntax;
+- shell/application syntax;
+- model/key routing invariants;
+- bounded recovery invariants;
+- security invariants;
+- secret-disclosure guard;
+- cache architecture references;
+- application packaging/reproducibility audit;
+- main governance visibility audit.
+
+## 11. Existing application findings
+
+These are pre-existing project findings surfaced by validation and deliberately not hidden by the agent-infrastructure work:
+
+### Start entrypoint
+
+`package.json` references `server.js` from the start command, while `server.js` is absent from the repository tree examined by the validator.
+
+### Reproducibility
+
+No `package-lock.json` or `npm-shrinkwrap.json` is present.
+
+### Automated tests
+
+`package.json` does not currently define an npm `test` script.
+
+These remain warnings until the application itself is intentionally repaired.
+
+## 12. Manual enterprise governance gate
+
+Repository governance is separate from OpenCode configuration.
+
+Current live GitHub inspection reports:
+
+- `main` is not protected;
+- required status checks are not configured at the repository branch-protection level.
+
+The staged branch does include:
+
+- `.github/CODEOWNERS` with `* @Jackie-SDX`;
+- Dependabot configuration for GitHub Actions and npm updates.
+
+Before integrating this branch, repository settings should deliberately enforce:
+
+- pull-request review before `main`;
+- required validation status checks;
+- no force-push;
+- no direct branch deletion;
+- restricted merge authority;
+- appropriate secret/environment protection for privileged deployment jobs;
+- organization/repository Actions allowlists where appropriate.
+
+Those settings were intentionally not changed by this audit.
+
+## 13. Current acceptance gate
+
+The isolated implementation is ready for human review when all of the following are satisfied:
+
+1. enterprise validation remains green;
+2. the human supplies whichever of `GEMINI_API_KEY_4` and `GEMINI_API_KEY_5` they actually want to use;
+3. additional Gemini credentials are independently quota-isolated and authorized;
+4. `OPENROUTER_API_KEY` is present when OpenRouter fallback is desired;
+5. a real `/oc` run is executed after the workflow reaches the default branch or an otherwise supported test entrypoint;
+6. when Composio is requested during the run, the logs show an actual tool invocation and result;
+7. the final diff and branch state are reviewed;
+8. the human decides whether the branch should be merged into `main`.
+
+No claim of full end-to-end `/oc` execution is made for the current audit branch because GitHub's `issue_comment` workflow resolves from the default branch, and this audit deliberately did not modify `main`.
+
+## Final staged state
+
+Audit branch:
+`audit/enterprise-opencode`
+
+Current audit head:
+`b3c5b1acfcb1b2b5f5562c8b2da58aaca5e3cffe`
+
+Main baseline:
+`93780b5201d613da04072524d8aa84710dbafdf5`
+
+Main was not modified by this audit.
