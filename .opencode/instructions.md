@@ -79,61 +79,34 @@ Do not reintroduce a documented bug merely because a new abstraction looks clean
 
 Verify anything that can change:
 
-- model IDs and retirement;
-- quota and rate-limit behavior;
+- OpenCode Zen model IDs and free/paid status;
 - OpenCode configuration schema;
 - GitHub Actions behavior;
 - Action versions;
 - Composio endpoints;
-- OpenRouter free routing.
+- Copilot CLI availability and credit controls.
 
 Prefer first-party documentation.
 
 Use Tavily through Composio when discovery or recency is useful, then verify consequential details against the authoritative source.
 
-Never hard-code a temporary free-model catalog when a stable provider router exists.
+Do not perform inference health probes during route selection.
 
 ## Zero-cost model ladder
 
-The zero-cost route order is:
+The primary zero-cost runtime is OpenCode Zen.
 
-1. OpenRouter primary free model: qwen/qwen3.8-27b:free
-2. Gemini 3.8 Flash + key slots 1→5
-3. Gemini 3.7 Flash + key slots 1→5
-4. Gemini 3.6 Flash + key slots 1→5
-5. Gemini 3.5 Flash + key slots 1→5
-6. Gemini 3.5 Flash-Lite + key slots 1→5
-7. OpenRouter global free router: openrouter/free
+Default route order:
 
-The workflow supports five Gemini credential slots. Empty slots are skipped.
+1. OpenCode Zen: opencode/big-pickle
+2. OpenCode Zen: opencode/mimo-v2.5-free
+3. GitHub Copilot CLI automatic-model fallback
 
-The requested qwen/qwen3.6-plus-preview:free identifier was live-tested through the connected OpenRouter account during this change and returned HTTP 404 with No endpoints found. It is not used as the production primary.
+The workflow reads OPENCODE_ZEN_FREE_MODELS as a comma-separated repository variable. Only Big Pickle or model IDs ending in -free are accepted in the zero-cost lane.
 
-The operational replacement is qwen/qwen3.8-27b:free, currently exposed by OpenRouter as a free endpoint with tool calling and a 262K context window. The primary model is configurable through the repository variable OPENROUTER_PRIMARY_MODEL, but the routing script refuses any value that is not explicitly suffixed :free.
+The Zen free catalog is time-limited and can change. The real OpenCode agent invocation is the authoritative provider test; the selector performs no inference health probe.
 
-Use OpenCode's Google high variant for the Gemini routes where supported.
-
-Do not put paid Qwen models into the zero-cost path. A paid model requires explicit human authorization and must be implemented as a separate opt-in lane.
-
-openrouter/free is a router, not a deterministic promise of one underlying model. Never claim which model it selected unless runtime telemetry reports it.
-
-## Multi-key rotation
-
-A 429, quota error, provider saturation, or transient provider failure is a route failure.
-
-On such a failure:
-
-- stop hammering the failed route;
-- classify the observed failure;
-- exclude a provider for the remainder of the task when the evidence is provider/account-wide;
-- move to the next untried credential/model route;
-- prefer an independent credential/project where available;
-- never expose the key value;
-- never imply that multiple keys create unlimited quota.
-
-Credential rotation is valid only for credentials/accounts/projects the human is authorized to use and only where the provider's quota model actually isolates usage.
-
-Do not use extra keys to bypass a provider-level restriction, policy, account suspension, or organization-wide quota.
+The Copilot fallback is optional and bounded by COPILOT_MAX_AI_CREDITS. It is used only when the preceding attempt fails and replay-safety checks show that no prior local or remote mutation needs human inspection.
 
 ## Recovery architecture
 
@@ -141,7 +114,7 @@ There are two separate recovery budgets.
 
 ### Provider route budget
 
-The GitHub workflow makes at most three full OpenCode agent invocations for one trigger.
+The GitHub workflow makes at most three full agent invocations for one trigger.
 
 Each new invocation uses a route that the selector has not previously used for that trigger.
 
@@ -251,7 +224,7 @@ Do not fail the engineering task over non-critical optional failures.
 Examples:
 
 - cache miss → install and continue;
-- absent optional OpenRouter key → skip;
+- absent optional Copilot credential → skip the fallback lane;
 - absent optional Composio credential → continue without Composio tools;
 - unavailable formatter/linter → use the strongest deterministic checks available and report the gap;
 - unavailable E2B command execution → use real GitHub Actions execution instead.
@@ -286,8 +259,8 @@ The repository is public.
 
 Never hard-code:
 
-- Gemini keys;
-- OpenRouter keys;
+- OpenCode Zen credentials are stored only in OPENCODE_API_KEY;
+- Copilot fallback credentials are stored only in COPILOT_GITHUB_TOKEN;
 - Composio keys;
 - GitHub tokens;
 - WhatsApp tokens;
@@ -348,7 +321,7 @@ Direct destructive or irreversible Git shell mutations are blocked for the agent
 - `git clean`
 - local branch deletion
 
-The OpenCode GitHub integration remains responsible for branch/PR workflow operations using the GitHub token and repository permissions.
+OpenCode's GitHub integration is responsible for its branch/commit/push/PR lifecycle through the installed OpenCode GitHub App. The separate Copilot fallback is published by the outer workflow only after replay safety is proven.
 
 Never force-push or rewrite history.
 
