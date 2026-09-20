@@ -28,261 +28,138 @@ jobs:
       pull-requests: write
     env:
       GITHUB_TOKEN: ${{ github.token }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
-      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
-      GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
-      GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
-      GEMINI_API_KEY_SECONDARY: ${{ secrets.GEMINI_API_KEY_2 }}
-      GEMINI_API_KEY_TERTIARY: ${{ secrets.GEMINI_API_KEY_3 }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      OPENROUTER_PRIMARY_MODEL: ${{ vars.OPENROUTER_PRIMARY_MODEL || 'qwen/qwen3.8-27b:free' }}
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-      FORENSIC_RECOVERY_MAX: "5"
-      FORENSIC_FAILURE_STRIKE_MAX: "3"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Resolve OpenCode release
-        id: opencode_release
+      - name: Create isolated agent branch
+        id: agent_branch
         shell: bash
+        env:
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: |
           set -euo pipefail
-          json="$(mktemp)"
-          trap 'rm -f "$json"' EXIT
-          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
-            https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
-          tag="$(jq -r '.tag_name' "$json")"
-          version="${tag#v}"
-          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
-          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "::error title=Invalid OpenCode release::Unexpected release tag: $tag"
-            exit 1
-          }
-          [[ -n "$url" && "$url" != "null" ]] || {
-            echo "::error title=Missing OpenCode release asset::Linux x64 archive was not published."
-            exit 1
-          }
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-            echo "::error title=Missing OpenCode release digest::Cannot verify the OpenCode archive."
-            exit 1
-          }
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "OpenCode release: $version"
+          branch="oc/$TARGET_NUMBER-$GITHUB_RUN_ID"
+          git switch -c "$branch"
+          echo "name=$branch" >> "$GITHUB_OUTPUT"
+          echo "Created isolated agent branch: $branch"
 
-      - name: Restore verified OpenCode cache
-        id: cache_restore
-        continue-on-error: true
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      - name: Set up Node.js for GitHub Copilot CLI
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          path: ~/.opencode/bin
-          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.opencode_release.outputs.version }}
+          node-version: 22
 
-      - name: Install OpenCode on cache miss
-        if: steps.cache_restore.outputs.cache-hit != 'true'
+      - name: Install pinned GitHub Copilot CLI
         shell: bash
         run: |
           set -euo pipefail
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 \
-            "${{ steps.opencode_release.outputs.url }}" -o "$tmp/opencode.tar.gz"
-          digest="${{ steps.opencode_release.outputs.digest }}"
-          digest="${digest#sha256:}"
-          echo "$digest  $tmp/opencode.tar.gz" | sha256sum --check -
-          mkdir -p "$tmp/extract"
-          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
-          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
-          [[ -n "$binary" ]] || {
-            echo "::error title=Invalid OpenCode archive::Verified archive does not contain an executable named opencode."
-            exit 1
-          }
-          install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
-          "$HOME/.opencode/bin/opencode" --version
-
-      - name: Add OpenCode to PATH
-        shell: bash
-        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          npm install --global --no-audit --no-fund @github/copilot@1.0.86
+          copilot --version
 
       - name: Preflight credentials
         shell: bash
         run: |
           set -euo pipefail
-          gemini_count=0
-          for key_name in GEMINI_API_KEY GEMINI_API_KEY_2 GEMINI_API_KEY_3 GEMINI_API_KEY_4 GEMINI_API_KEY_5; do
-            if [[ -n "${!key_name:-}" ]]; then
-              gemini_count=$((gemini_count + 1))
-            fi
-          done
-          echo "Gemini key slots available: $gemini_count/5"
-          [[ -n "${OPENROUTER_API_KEY:-}" ]] && echo "OpenRouter free fallback: configured" || echo "OpenRouter free fallback: optional/unconfigured"
-          [[ -n "${COMPOSIO_API_KEY:-}" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured; the agent will continue without Composio tools."
-          if (( gemini_count == 0 )) && [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-            echo "::error title=No model credentials::No Gemini or OpenRouter credential is configured."
+          if [[ -z "$COPILOT_GITHUB_TOKEN" ]]; then
+            echo "::error title=GitHub Copilot credential missing::Add the COPILOT_GITHUB_TOKEN repository secret using a fine-grained token with Copilot Requests permission."
             exit 1
           fi
+          if [[ -n "$COMPOSIO_API_KEY" ]]; then
+            echo "Composio MCP credential: configured"
+          else
+            echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured; the agent will continue without Composio tools."
+          fi
+          echo "GitHub Copilot model route: auto"
 
       - name: Select first configured route
         id: route_1
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
-      - name: Run OpenCode attempt 1
+      - name: Run GitHub Copilot attempt
         id: agent_1
         if: steps.route_1.outputs.selected == 'true'
         continue-on-error: true
         shell: bash
-        run: |
-          set -u
-          export MODEL="$OPENCODE_SELECTED_MODEL"
-          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
-          export SHARE="false"
-          export USE_GITHUB_TOKEN="true"
-          export AGENT="build"
-          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
-            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
-          else
-            export GEMINI_API_KEY=""
-          fi
-          bash .github/scripts/run-opencode-attempt.sh 1
+        run: bash .github/scripts/run-copilot-attempt.sh 1
 
-      - name: Inspect state before reroute 2
-        if: always() && steps.agent_1.outcome == 'failure'
-        continue-on-error: true
+      - name: Inspect state after agent attempt
+        if: always() && steps.agent_1.outcome == 'success'
         shell: bash
         run: |
+          set -euo pipefail
           git status --short
           git diff --check
           git diff --stat
 
-      - name: Classify provider failure after attempt 1
-        id: classify_1
+      - name: Publish verified agent changes
+        id: publish
+        if: steps.agent_1.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$(git status --short)" ]]; then
+            echo "Agent completed successfully with no repository changes."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --check
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          title="$(jq -r '.issue.title // .pull_request.title // "OpenCode task"' "$GITHUB_EVENT_PATH" | tr '\n' ' ' | cut -c1-72)"
+          git commit -m "oc: $title"
+          gh auth setup-git
+          git push --set-upstream origin "$(git branch --show-current)"
+          pr_body="$(printf '%s\n\n%s\n%s\n\n%s' \
+            "Automated /oc task from issue or pull-request comment #$TARGET_NUMBER." \
+            "Model execution: GitHub Copilot CLI with automatic model selection." \
+            "The agent ran on an isolated branch and was prohibited from Git commit/push/reset/clean and GitHub CLI mutations." \
+            "Review the resulting diff and CI checks before merging.")"
+          pr_url="$(gh pr create --base "$BASE_REF" --head "$(git branch --show-current)" --title "oc: $title" --body "$pr_body")"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "pull_request_url=$pr_url" >> "$GITHUB_OUTPUT"
+          echo "Published verified agent changes as: $pr_url"
+
+      - name: Post human handoff after failed agent attempt
         if: always() && steps.agent_1.outcome == 'failure'
         env:
-          CURRENT_PROVIDER: ${{ steps.route_1.outputs.provider }}
+          GH_TOKEN: ${{ github.token }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
           SAFE_LOG: ${{ steps.agent_1.outputs.safe_log_path }}
         shell: bash
-        run: bash .github/scripts/classify-provider-failure.sh
-
-      - name: Select second route after agent failure
-        id: route_2
-        if: steps.route_1.outputs.selected == 'true' && steps.agent_1.outcome == 'failure'
-        shell: bash
-        run: bash .github/scripts/select-opencode-route.sh
-
-      - name: Run OpenCode attempt 2
-        id: agent_2
-        if: steps.route_2.outputs.selected == 'true'
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -u
-          export MODEL="$OPENCODE_SELECTED_MODEL"
-          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
-          export SHARE="false"
-          export USE_GITHUB_TOKEN="true"
-          export AGENT="build"
-          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
-            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
-          else
-            export GEMINI_API_KEY=""
-          fi
-          bash .github/scripts/run-opencode-attempt.sh 2
-
-      - name: Inspect state before reroute 3
-        if: always() && steps.agent_2.outcome == 'failure'
-        continue-on-error: true
-        shell: bash
-        run: |
-          git status --short
-          git diff --check
-          git diff --stat
-
-      - name: Classify provider failure after attempt 2
-        id: classify_2
-        if: always() && steps.agent_2.outcome == 'failure'
-        env:
-          CURRENT_PROVIDER: ${{ steps.route_2.outputs.provider }}
-          SAFE_LOG: ${{ steps.agent_2.outputs.safe_log_path }}
-        shell: bash
-        run: bash .github/scripts/classify-provider-failure.sh
-
-      - name: Select third route after agent failure
-        id: route_3
-        if: steps.route_1.outputs.selected == 'true' && steps.agent_1.outcome == 'failure' && steps.agent_2.outcome == 'failure'
-        shell: bash
-        run: bash .github/scripts/select-opencode-route.sh
-
-      - name: Run OpenCode attempt 3
-        id: agent_3
-        if: steps.route_3.outputs.selected == 'true'
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -u
-          export MODEL="$OPENCODE_SELECTED_MODEL"
-          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
-          export SHARE="false"
-          export USE_GITHUB_TOKEN="true"
-          export AGENT="build"
-          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
-            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
-          else
-            export GEMINI_API_KEY=""
-          fi
-          bash .github/scripts/run-opencode-attempt.sh 3
-
-      - name: Post human handoff after 3 failed agent attempts
-        if: always() && steps.agent_1.outcome == 'failure' && steps.agent_2.outcome == 'failure' && steps.agent_3.outcome == 'failure'
-        shell: bash
-        env:
-          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
-          SAFE_LOG: ${{ steps.agent_3.outputs.safe_log_path }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           findings="$(tail -n 100 "$SAFE_LOG" 2>/dev/null || printf '%s' 'No sanitized attempt log was available.')"
-          body="$(printf 'OpenCode reached the 3-strike agent-attempt circuit breaker. No success is claimed; human guidance is required before another run.\\n\\nSanitized findings from the final attempt:\\n\\n```text\\n%s\\n```' "$findings")"
-          payload="$(jq -n --arg body "$body" '{body:$body}')"
-          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
-            -X POST \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'Content-Type: application/json' \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${TARGET_NUMBER}/comments" \
-            -d "$payload" >/dev/null
-          echo "Human handoff posted to issue/PR #${TARGET_NUMBER}."
+          body="$(printf 'GitHub Copilot agent attempt failed. No success is claimed. The isolated branch was preserved for inspection.\n\nSanitized findings:\n\n%s' "$findings")"
+          gh issue comment "$TARGET_NUMBER" --body "$body"
 
       - name: Routing summary
         if: always()
         shell: bash
         env:
           R1: ${{ steps.route_1.outputs.route }}
-          R2: ${{ steps.route_2.outputs.route }}
-          R3: ${{ steps.route_3.outputs.route }}
           A1: ${{ steps.agent_1.outcome }}
-          A2: ${{ steps.agent_2.outcome }}
-          A3: ${{ steps.agent_3.outcome }}
           E1: ${{ steps.agent_1.outputs.exit_code }}
-          E2: ${{ steps.agent_2.outputs.exit_code }}
-          E3: ${{ steps.agent_3.outputs.exit_code }}
+          PUBLISH: ${{ steps.publish.outcome }}
         run: |
           {
-            echo "### OpenCode routing"
+            echo "### GitHub-native agent routing"
             echo ""
-            echo "| Attempt | Route | Result | Exit |"
-            echo "|---|---|---|---|"
-            echo "| 1 | ${R1:-not selected} | ${A1:-not run} | ${E1:-n/a} |"
-            echo "| 2 | ${R2:-not selected} | ${A2:-not run} | ${E2:-n/a} |"
-            echo "| 3 | ${R3:-not selected} | ${A3:-not run} | ${E3:-n/a} |"
+            echo "| Attempt | Route | Agent result | Exit | Publish |"
+            echo "|---|---|---|---|---|"
+            echo "| 1 | $R1 | $A1 | $E1 | $PUBLISH |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Final status
@@ -290,20 +167,12 @@ jobs:
         shell: bash
         env:
           A1: ${{ steps.agent_1.outcome }}
-          A2: ${{ steps.agent_2.outcome }}
-          A3: ${{ steps.agent_3.outcome }}
-          R1: ${{ steps.route_1.outputs.selected }}
-          R2: ${{ steps.route_2.outputs.selected }}
-          R3: ${{ steps.route_3.outputs.selected }}
+          P1: ${{ steps.publish.outcome }}
         run: |
           set -euo pipefail
-          if [[ "$A1" == "success" || "$A2" == "success" || "$A3" == "success" ]]; then
-            echo "OpenCode completed successfully on at least one route."
+          if [[ "$A1" == "success" && "$P1" == "success" ]]; then
+            echo "GitHub Copilot agent completed successfully and any verified changes were published from an isolated branch."
             exit 0
           fi
-          if [[ "$R1" != "true" && "$R2" != "true" && "$R3" != "true" ]]; then
-            echo "::error title=No viable model route::All configured zero-cost model probes failed."
-          else
-            echo "::error title=OpenCode recovery exhausted::Three bounded agent attempts failed; human handoff was requested."
-          fi
+          echo "::error title=GitHub-native agent execution failed::No fully verified agent run was completed."
           exit 1
