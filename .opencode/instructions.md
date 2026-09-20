@@ -465,3 +465,6 @@ Two correction/re-adjudication loops are available when verifier or deterministi
 Do not expose GitHub tokens, Copilot credentials, or Composio project keys to the Build/reviewer processes. Secrets are scoped to the smallest workflow step that requires them.
 
 OpenCode V2 semantics are used for new council configuration: permissions, primary agents, and the subagent action name.
+
+## Pinned runtime
+The GitHub Actions control plane uses OpenCode V2 CLI `opencode2`, pinned to `0.0.0-beta-19723`. Stable `opencode` V1 is intentionally rejected because it is not compatible with the V2 permissions configuration.
