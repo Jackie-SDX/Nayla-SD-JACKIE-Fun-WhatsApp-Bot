@@ -14,7 +14,7 @@
     "dotenv": "^17.0.0",
     "pino": "^8.19.0",
     "ffmpeg-static": "^5.2.0",
-    "sharp": "^0.33.0",
+    "sharp": "^0.35.4",
     "groq-sdk": "^0.9.0",
     "qrcode-terminal": "^0.12.0"
   }
