@@ -86,9 +86,14 @@ jobs:
           jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
-          jq -e '.mcp.composio.url == "{env:COMPOSIO_MCP_URL}"' opencode.json >/dev/null
+          jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
-          jq -e '.mcp.composio.headers | type == "object"' opencode.json >/dev/null
+          jq -e '.mcp.composio.timeout == 20000' opencode.json >/dev/null
+          jq -e '.mcp.composio.command[0] == "npx"' opencode.json >/dev/null
+          jq -e '.mcp.composio.command | index("mcp-remote@0.14.2") != null' opencode.json >/dev/null
+          jq -e '.mcp.composio.command | index("--transport") != null' opencode.json >/dev/null
+          jq -e '.mcp.composio.command | index("http-only") != null' opencode.json >/dev/null
+          jq -e '.mcp.composio.command | index("--header-file") != null' opencode.json >/dev/null
           ! grep -q 'connect.composio.dev/mcp' opencode.json
           grep -q 'backend.composio.dev/api/v3.1/tool_router/session' .github/scripts/prepare-composio-mcp.sh
           grep -q 'x-api-key' .github/scripts/prepare-composio-mcp.sh
