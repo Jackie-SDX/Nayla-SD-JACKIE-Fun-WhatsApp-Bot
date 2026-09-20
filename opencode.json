@@ -6,6 +6,7 @@
     ".opencode/instructions.md"
   ],
   "share": "disabled",
+  "subagent_depth": 2,
   "mcp": {
     "composio": {
       "type": "local",
@@ -23,242 +24,28 @@
       "timeout": 20000
     }
   },
-  "update": "disable",
-  "permissions": [
-    {
-      "action": "read",
-      "resource": "*",
-      "effect": "allow"
+  "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      ".env": "deny",
+      ".npmrc": "deny"
     },
-    {
-      "action": "read",
-      "resource": "*.env",
-      "effect": "deny"
+    "bash": {
+      "*": "allow",
+      "git commit *": "deny",
+      "git commit": "deny",
+      "git push *": "deny",
+      "git push": "deny",
+      "git reset *": "deny",
+      "git clean *": "deny",
+      "git branch -D *": "deny",
+      "git branch -d *": "deny",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny"
     },
-    {
-      "action": "read",
-      "resource": "*.env.*",
-      "effect": "deny"
-    },
-    {
-      "action": "read",
-      "resource": ".env",
-      "effect": "deny"
-    },
-    {
-      "action": "read",
-      "resource": ".npmrc",
-      "effect": "deny"
-    },
-    {
-      "action": "edit",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "edit",
-      "resource": "*.env",
-      "effect": "deny"
-    },
-    {
-      "action": "edit",
-      "resource": "*.env.*",
-      "effect": "deny"
-    },
-    {
-      "action": "edit",
-      "resource": ".env",
-      "effect": "deny"
-    },
-    {
-      "action": "edit",
-      "resource": ".npmrc",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "shell",
-      "resource": "git commit *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git push *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git reset *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git clean *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git branch -d *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git branch -D *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git merge *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git rebase *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git tag *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git update-ref *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git replace *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "git notes *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "gh *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "curl *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "wget *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "ssh *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "scp *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "npm publish *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "docker push *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "env",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "env *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "printenv",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "printenv *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
-      "resource": "set",
-      "effect": "deny"
-    },
-    {
-      "action": "external_directory",
-      "resource": "*",
-      "effect": "deny"
-    },
-    {
-      "action": "subagent",
-      "resource": "*",
-      "effect": "deny"
-    },
-    {
-      "action": "question",
-      "resource": "*",
-      "effect": "deny"
-    },
-    {
-      "action": "doom_loop",
-      "resource": "*",
-      "effect": "deny"
-    },
-    {
-      "action": "websearch",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "webfetch",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "glob",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "grep",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "list",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "todowrite",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "todoread",
-      "resource": "*",
-      "effect": "allow"
-    },
-    {
-      "action": "skill",
-      "resource": "*",
-      "effect": "allow"
-    }
-  ]
+    "external_directory": "deny",
+    "doom_loop": "deny"
+  }
 }

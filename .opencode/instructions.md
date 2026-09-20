@@ -171,16 +171,6 @@ Prefer GitHub Actions as the verifiable execution environment when the change af
 
 If E2B exposes a direct command/code-execution capability, use it for isolated runtime experiments. If the connected E2B surface does not expose command execution, do not claim a sandbox runtime test; use GitHub Actions or another actually executable environment instead.
 
-## Cross-provider collaboration
-
-When OpenCode completes an implementation successfully and a Copilot credential is available, the outer wrapper invokes a separate read-only Copilot peer review against the same unpushed workspace.
-
-- Copilot receives the original task and proposed diff, with only read/search tools; it cannot edit, shell, commit, push, or mutate GitHub.
-- A Copilot PASS permits the OpenCode change to proceed to the existing publisher.
-- A Copilot FAIL fails closed. The existing OpenCode cleanup restores the baseline, and the next controlled route can reuse the sanitized peer-review evidence.
-- A later Copilot implementation is explicitly instructed to verify the handoff findings instead of blindly trusting them.
-- The existing deterministic validation, replay-safety, and sensitive-publication gates remain authoritative.
-
 ## Composio gateway policy
 
 Use Composio as an actual API/tool gateway, not merely as configuration.
@@ -191,7 +181,7 @@ Never send a project API key as `x-consumer-api-key`, never hard-code a `ck_*` c
 
 The MCP session should be as short-lived and scoped as practical. Do not print session URLs, session headers, or API keys.
 The OpenCode workflow requires `COMPOSIO_API_KEY` because Composio is part of its controlled agent gateway. Failure to create or validate the session-backed MCP is a hard failure.
-OpenCode V2 reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. The temporary mode-0600 header file always carries the project `x-api-key` plus any non-duplicate session headers returned by Composio, and is deleted during cleanup. The session URL and ID are masked before entering GitHub Actions environment output.
+OpenCode 1.x reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. The temporary mode-0600 header file always carries the project `x-api-key` plus any non-duplicate session headers returned by Composio, and is deleted during cleanup. The session URL and ID are masked before entering GitHub Actions environment output.
 The session user is the stable external `COMPOSIO_USER_ID` configured by the workflow (defaulting to the repository owner when no repository variable overrides it). Do not substitute another user's private Composio connection. If the requested toolkit has no active connection for that session user, use Composio's connection-management flow to initiate authorization for that same user; never guess or silently cross user boundaries.
 
 ### Capability discovery and routing checklist
@@ -446,40 +436,3 @@ Before reporting success, verify:
 Report exact branch/commit/test evidence.
 
 Never call a partially verified state fully verified.
-
-
-
-## Workflow-enforced agent council
-
-The GitHub Actions workflow is the authoritative council control plane for every non-trivial /oc task.
-
-It executes independent top-level OpenCode sessions in this order:
-
-1. architect-reviewer
-2. adversarial-reviewer
-3. adjudicator
-4. isolated Build agent
-5. deterministic repository validation
-6. fresh verifier
-
-The first two reviewers are independent and use different zero-cost Zen models. The adjudicator receives both reports and resolves them by evidence rather than voting. The verifier is a new top-level session and treats all earlier claims as hypotheses.
-
-The repository deliberately does not rely on OpenCode child-subagent delegation for this control plane. The live validation discovered that free-tier child-subagent requests can fail even when the authenticated top-level OpenCode session succeeds. Top-level sessions avoid that coupling and make each stage independently observable.
-
-The Build agent may edit only the checked-out isolated branch. The outer GitHub workflow owns commit, push, and pull-request creation after the verifier gate.
-
-A successful model response is insufficient evidence. Each stage must exit successfully and emit its required completion contract. Deterministic validation must pass. The verifier must emit COUNCIL_VERDICT=PASS before publication.
-
-Two correction/re-adjudication loops are available when verifier or deterministic validation evidence identifies a material problem. A blocked adjudication or failed final verifier stops publication.
-
-Do not expose GitHub tokens, Copilot credentials, or Composio project keys to the Build/reviewer processes. Secrets are scoped to the smallest workflow step that requires them.
-
-OpenCode V2 semantics are used for new council configuration: permissions, primary agents, and the subagent action name.
-
-## Pinned runtime
-The GitHub Actions control plane uses the OpenCode V2 CLI package `@opencode/cli`, pinned to `2.0.3`, and launches its `opencode` executable.
-
-
-## Provider fallback
-
-A provider/account denial from OpenCode Zen, including the current free-tier client-entitlement error, is classified as provider unavailable and immediately excludes OpenCode for the remainder of that task. The route selector can then promote the GitHub Copilot route instead of wasting the remaining attempt budget on additional Zen models.

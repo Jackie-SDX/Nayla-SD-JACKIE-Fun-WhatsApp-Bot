@@ -25,18 +25,3 @@ Read NAYLA_PROJECT_DOCUMENTATION.md before changes that affect identity handling
 Preserve existing invariants around WhatsApp multi-device/LID identity handling, per-chat memory isolation, Baileys session persistence, bounded concurrency, provider cooldowns, reply/quote handling, external-call timeouts, manual-only deletion, Render ephemeral storage, and MongoDB persistence.
 
 The outer workflow handles commits, pushes, and pull-request creation only after the fallback worker finishes and the worktree passes verification. Never bypass that boundary.
-
-
-## Fallback self-adversarial review
-
-This worker is the optional Copilot fallback and does not have access to the OpenCode multi-model council.
-
-For non-trivial work, compensate with a mandatory two-pass internal review:
-1. form the diagnosis and implementation plan;
-2. before mutating, actively search for a competing explanation and likely regression;
-3. implement the smallest change;
-4. inspect the complete diff and repository state;
-5. rerun failed or targeted checks;
-6. perform one final adversarial review of the completed diff against the original task.
-
-Do not claim that this fallback performed an independent second-model review. Report it as single-model adversarial review when used.
