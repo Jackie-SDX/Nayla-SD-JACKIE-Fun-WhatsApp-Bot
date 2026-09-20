@@ -11,6 +11,16 @@ excluded=",${OPENCODE_EXCLUDED_PROVIDERS:-},"
 models_csv="${OPENCODE_ZEN_FREE_MODELS:-big-pickle,mimo-v2.5-free}"
 IFS=',' read -r -a models <<< "$models_csv"
 
+opencode_available="${HAS_OPENCODE_CREDENTIAL:-}"
+copilot_available="${HAS_COPILOT_CREDENTIAL:-}"
+
+if [[ -z "$opencode_available" ]]; then
+  [[ -n "${OPENCODE_API_KEY:-}" ]] && opencode_available=true || opencode_available=false
+fi
+if [[ -z "$copilot_available" ]]; then
+  [[ -n "${COPILOT_GITHUB_TOKEN:-}" ]] && copilot_available=true || copilot_available=false
+fi
+
 is_free_model() {
   local model="$1"
   [[ "$model" == "big-pickle" || "$model" == *"-free" ]]
@@ -32,7 +42,7 @@ select_route() {
   } >> "$GITHUB_OUTPUT"
 }
 
-if [[ ",$excluded," != *,opencode,* && -n "${OPENCODE_API_KEY:-}" ]]; then
+if [[ ",$excluded," != *,opencode,* && "$opencode_available" == "true" ]]; then
   index=0
   for model in "${models[@]}"; do
     [[ -n "$model" ]] || continue
@@ -56,7 +66,7 @@ else
 fi
 
 copilot_index="$index"
-if (( start <= copilot_index )) && [[ ",$excluded," != *,github-copilot,* ]] && [[ -n "${COPILOT_GITHUB_TOKEN:-}" ]]; then
+if (( start <= copilot_index )) && [[ ",$excluded," != *,github-copilot,* ]] && [[ "$copilot_available" == "true" ]]; then
   select_route "$copilot_index" github-copilot auto github-copilot/auto
   exit 0
 fi
