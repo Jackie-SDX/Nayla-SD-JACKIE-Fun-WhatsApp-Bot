@@ -9,8 +9,10 @@ disable_composio_mcp() {
 
 
 fail_composio_mcp() {
-  echo "::error title=Composio MCP bootstrap failed::COMPOSIO_API_KEY is configured but the session-backed MCP endpoint could not be established or validated."
-  exit 1
+  echo "::warning title=Composio MCP unavailable::Session-backed Composio MCP could not be established; continuing without Composio tools."
+  printf '%s\n' 'COMPOSIO_MCP_URL=' >> "$GITHUB_ENV"
+  printf '%s\n' 'COMPOSIO_MCP_HEADERS_FILE=' >> "$GITHUB_ENV"
+  return 0
 }
 if [[ -z "${COMPOSIO_API_KEY:-}" ]]; then
   disable_composio_mcp
@@ -21,8 +23,9 @@ response="$(mktemp "${RUNNER_TEMP:-/tmp}/composio-session.XXXXXX.json")"
 
 resolved_user_id="${COMPOSIO_USER_ID:-}"
 [[ -n "$resolved_user_id" ]] || {
-  echo "::error title=Composio user ID missing::Set COMPOSIO_USER_ID to the stable external user ID used by this automation."
+  echo "::warning title=Composio user ID missing::COMPOSIO_USER_ID is not configured; continuing without Composio MCP."
   fail_composio_mcp
+  exit 0
 }
 payload="$(jq -cn --arg user_id "$resolved_user_id" '{user_id:$user_id,mcp:true}')"
 
@@ -67,8 +70,9 @@ printf 'session_id=%s\n' "$session_id" >> "$GITHUB_OUTPUT"
 printf 'headers_file=%s\n' "$headers_file" >> "$GITHUB_OUTPUT"
 
 if ! npx --yes --package="mcp-remote@0.14.2" mcp-remote --help >/dev/null; then
-  echo "::error title=MCP bridge unavailable::Pinned mcp-remote@0.14.2 could not be installed/started."
+  echo "::warning title=MCP bridge unavailable::Pinned mcp-remote@0.14.2 could not be installed/started; continuing without Composio tools."
   fail_composio_mcp
+  exit 0
 fi
 
 echo "Composio session-backed MCP endpoint and pinned stdio bridge prepared."
