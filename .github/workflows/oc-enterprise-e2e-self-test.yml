@@ -1,0 +1,44 @@
+name: oc-enterprise-e2e-self-test
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: oc-enterprise-e2e-self-test-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    name: self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+
+      - name: Run repository test suite
+        run: npm test
+
+      - name: Assert expected repository invariant
+        run: |
+          set -euo pipefail
+          # Permanent regression-harness invariant: the top-level package name
+          # must stay 'whatsapp-vibe-moderator' so the harness guards the repo
+          # identity against accidental renames.
+          expected="whatsapp-vibe-moderator"
+          actual="$(node -e "process.stdout.write(require('./package.json').name)")"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error title=Repository invariant mismatch::expected package.json name '${expected}' but got '${actual}'"
+            exit 1
+          fi
