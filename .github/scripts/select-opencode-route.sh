@@ -8,7 +8,14 @@ if [[ "$route_index" =~ ^[0-9]+$ ]]; then
 fi
 
 excluded=",${OPENCODE_EXCLUDED_PROVIDERS:-},"
-models_csv="${OPENCODE_ZEN_FREE_MODELS:-big-pickle,mimo-v2.5-free}"
+
+# OpenCode Zen free models are not valid direct inference routes from GitHub Actions.
+# CI only uses an explicitly configured OpenCode model; otherwise it falls back to Copilot.
+if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  models_csv="${OPENCODE_CI_MODELS:-}"
+else
+  models_csv="${OPENCODE_ZEN_FREE_MODELS:-big-pickle,mimo-v2.5-free}"
+fi
 IFS=',' read -r -a models <<< "$models_csv"
 
 opencode_available="${HAS_OPENCODE_CREDENTIAL:-}"
@@ -43,10 +50,16 @@ select_route() {
 }
 
 if [[ ",$excluded," != *,opencode,* && "$opencode_available" == "true" ]]; then
+  if [[ "${GITHUB_ACTIONS:-false}" == "true" && -z "$models_cv" ]]; then
+    echo "::notice title=OpenCode CI model not configured::Skipping OpenCode Zen free models in GitHub Actions; configure OPENCODE_CI_MODELSs with a CI-supported OpenCode model to enable the OpenCode route."
+  fi
   index=0
   for model in "${models[@]}"; do
     [[ -n "$model" ]] || continue
-    if ! is_free_model "$model"; then
+    if [[ "${GITHUB_ACTIONS:-false}" == "true" && -z "${OPENCODE_CI_MODELS:-}" ]] && is_free_model "$model"; then
+      continue
+    fi
+    if [[ "${GITHUB_ACTIONS:-false}" != "true" ]] && ! is_free_model "$model"; then
       echo "::warning title=Rejected non-free Zen model::Ignoring configured model '$model'."
       continue
     fi
