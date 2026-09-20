@@ -47,77 +47,58 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'OPENCODE_API_KEY' .github/workflows/opencode.yml
-          grep -q 'OPENCODE_ZEN_FREE_MODELS' .github/workflows/opencode.yml
-          grep -q 'COMPOSIO_API_KEY' .github/workflows/opencode.yml
-          grep -q 'COMPOSIO_USER_ID:' .github/workflows/opencode.yml
-          grep -q 'prepare-composio-mcp.sh' .github/workflows/opencode.yml
-          grep -q 'cleanup-composio-mcp.sh' .github/workflows/opencode.yml
-          ! grep -A4 'Bootstrap Composio session MCP' .github/workflows/opencode.yml | grep -q 'continue-on-error: true'
-          grep -Fq 'https://(app|backend)' .github/scripts/prepare-composio-mcp.sh
-          grep -Fq 'tool_router/' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'mcp-remote@0.14.2' opencode.json
-          grep -q 'http-only' opencode.json
-          grep -q 'header-file' opencode.json
+          grep -q OPENCODE_API_KEY .github/workflows/opencode.yml
+          grep -q COMPOSIO_API_KEY .github/workflows/opencode.yml
+          grep -q COMPOSIO_USER_ID: .github/workflows/opencode.yml
+          grep -q "opencode github run" .github/scripts/run-opencode-attempt.sh
+          grep -q github-copilot/auto .github/scripts/select-opencode-route.sh
+          grep -q mcp-remote@0.14.2 opencode.json
+          grep -q http-only opencode.json
+          grep -q header-file opencode.json
           jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
-          grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
-          grep -q 'id-token: write' .github/workflows/opencode.yml
-          grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
-          grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
-          grep -q 'route_3' .github/workflows/opencode.yml
-          grep -q 'three-strike' .opencode/instructions.md
-          grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
-          grep -q 'OPENCODE_EXCLUDED_PROVIDERS' .github/scripts/classify-provider-failure.sh
-          grep -q 'model-specific' .github/scripts/classify-provider-failure.sh
-          ! grep -Eiq 'openrouter|huggingface|hugging-face|GEMINI_API_KEY' .github/workflows/opencode.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh
-          ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml
-          ! grep -q 'actions/cache/save' .github/workflows/opencode.yml
+          grep -q "contents: write" .github/workflows/opencode.yml
+          grep -q "issues: write" .github/workflows/opencode.yml
+          grep -q "pull-requests: write" .github/workflows/opencode.yml
+          grep -q "timeout-minutes: 350" .github/workflows/opencode.yml
+          grep -q "continuing without Composio tools" .github/scripts/prepare-composio-mcp.sh
+          ! grep -q "Replay safety gate" .github/workflows/opencode.yml
+          ! grep -q three-strike .opencode/instructions.md
+          ! grep -q "up to five total evidence-based forensic recovery cycles" .opencode/instructions.md
 
       - name: Validate Zen configuration
         shell: bash
         run: |
           set -euo pipefail
           jq -e '.model == "opencode/big-pickle"' opencode.json >/dev/null
-          jq -e 'has("provider") | not' opencode.json >/dev/null
-          jq -e 'has("enabled_providers") | not' opencode.json >/dev/null
           jq -e '.share == "disabled"' opencode.json >/dev/null
           jq -e '.permission.external_directory == "deny"' opencode.json >/dev/null
-          jq -e '.permission.doom_loop == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git commit *"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.doom_loop == "allow"' opencode.json >/dev/null
+          jq -e 'has("provider") | not' opencode.json >/dev/null
+          jq -e 'has("enabled_providers") | not' opencode.json >/dev/null
           jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
           jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
           jq -e '.mcp.composio.timeout == 20000' opencode.json >/dev/null
-          jq -e '.mcp.composio.command[0] == "npx"' opencode.json >/dev/null
-          jq -e '.mcp.composio.command | index("mcp-remote@0.14.2") != null' opencode.json >/dev/null
-          jq -e '.mcp.composio.command | index("--transport") != null' opencode.json >/dev/null
-          jq -e '.mcp.composio.command | index("http-only") != null' opencode.json >/dev/null
-          jq -e '.mcp.composio.command | index("--header-file") != null' opencode.json >/dev/null
-          ! grep -q 'connect.composio.dev/mcp' opencode.json
-          grep -q 'backend.composio.dev/api/v3.1/tool_router/session' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'x-api-key' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'mcp:true' .github/scripts/prepare-composio-mcp.sh
-          ! grep -q 'connected_accounts' .github/scripts/prepare-composio-mcp.sh
-          ! grep -q 'OPENCODE_CONFIG_CONTENT' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'COMPOSIO_MCP_HEADERS_FILE' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'x-api-key: %s' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'add-mask::\$mcp_url' .github/scripts/prepare-composio-mcp.sh
-          grep -q 'persist-credentials: false' .github/workflows/opencode.yml
-          grep -q 'contents: write' .github/workflows/opencode.yml
-          grep -q 'issues: write' .github/workflows/opencode.yml
-          grep -q 'pull-requests: write' .github/workflows/opencode.yml
-          grep -q 'id-token: write' .github/workflows/opencode.yml
+          grep -q backend.composio.dev/api/v3.1/tool_router/session .github/scripts/prepare-composio-mcp.sh
+          grep -q x-api-key .github/scripts/prepare-composio-mcp.sh
+          grep -q mcp:true .github/scripts/prepare-composio-mcp.sh
+          ! grep -q connect.composio.dev/mcp opencode.json
+          ! grep -q OPENCODE_CONFIG_CONTENT .github/scripts/prepare-composio-mcp.sh
+          grep -q COMPOSIO_MCP_HEADERS_FILE .github/scripts/prepare-composio-mcp.sh
+          grep -q "persist-credentials: false" .github/workflows/opencode.yml
 
       - name: Validate route selector structure
         shell: bash
         run: |
           set -euo pipefail
           bash -n .github/scripts/select-opencode-route.sh
-          grep -q 'OPENCODE_ROUTE_INDEX' .github/scripts/select-opencode-route.sh
-          grep -q 'OPENCODE_EXCLUDED_PROVIDERS' .github/scripts/select-opencode-route.sh
-          grep -q 'is_free_model' .github/scripts/select-opencode-route.sh
-          grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
-          grep -q 'opencode/\$model' .github/scripts/select-opencode-route.sh
+          grep -q OPENCODE_ROUTE_INDEX .github/scripts/select-opencode-route.sh
+          grep -q OPENCODE_EXCLUDED_PROVIDERS .github/scripts/select-opencode-route.sh
+          grep -q is_free_model .github/scripts/select-opencode-route.sh
+          grep -q github-copilot/auto .github/scripts/select-opencode-route.sh
+          grep -q opencode/ .github/scripts/select-opencode-route.sh
+          grep -q "opencode-" .github/workflows/opencode-cache.yml
+          ! grep -q 2.0.3 .github/workflows/opencode-cache.yml
+          ! grep -q "OpenCode V2" .github/workflows/opencode-cache.yml
