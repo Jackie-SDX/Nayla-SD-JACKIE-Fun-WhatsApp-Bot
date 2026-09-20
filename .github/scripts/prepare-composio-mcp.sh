@@ -2,7 +2,7 @@
 set -euo pipefail
 
 disable_composio_mcp() {
-  echo "::warning title=Composio MCP unavailable::The project API key could not bootstrap a session-backed MCP endpoint; continuing without Composio MCP."
+  echo "::warning title=Composio optional integration unavailable::COMPOSIO_API_KEY is not configured; continuing without Composio MCP."
   printf 'COMPOSIO_MCP_URL=\n' >> "$GITHUB_ENV"
   {
     echo 'OPENCODE_CONFIG_CONTENT<<COMPOSIO_CONFIG_EOF'
@@ -11,6 +11,11 @@ disable_composio_mcp() {
   } >> "$GITHUB_ENV"
 }
 
+
+fail_composio_mcp() {
+  echo "::error title=Composio MCP bootstrap failed::COMPOSIO_API_KEY is configured but the session-backed MCP endpoint could not be established or validated."
+  exit 1
+}
 if [[ -z "${COMPOSIO_API_KEY:-}" ]]; then
   disable_composio_mcp
   exit 0
@@ -26,26 +31,26 @@ if ! curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
   -H "x-api-key: $COMPOSIO_API_KEY" \
   -H "Content-Type: application/json" \
   --data "$payload" -o "$response"; then
-  disable_composio_mcp
+  fail_composio_mcp
   exit 0
 fi
 
 session_id="$(jq -er '.session_id // empty' "$response")" || {
-  disable_composio_mcp
+  fail_composio_mcp
   exit 0
 }
 mcp_url="$(jq -er '.mcp.url // empty' "$response")" || {
-  disable_composio_mcp
+  fail_composio_mcp
   exit 0
 }
 headers="$(jq -ec '.mcp.headers // {} | if type == "object" then . else error("mcp.headers is not an object") end' "$response")" || {
-  disable_composio_mcp
+  fail_composio_mcp
   exit 0
 }
 
-[[ "$mcp_url" =~ ^https://app\.composio\.dev/tool_router/ ]] || {
+[[ "$mcp_url" =~ ^https://backend\.composio\.dev/tool_router/[^/]+/mcp$ ]] || {
   echo "::warning title=Unexpected Composio MCP endpoint::Refusing an MCP URL outside Composio's hosted Tool Router domain."
-  disable_composio_mcp
+  fail_composio_mcp
   exit 0
 }
 

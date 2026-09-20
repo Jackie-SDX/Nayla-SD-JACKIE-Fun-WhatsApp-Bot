@@ -180,6 +180,7 @@ This repository uses Composio's current session-backed MCP architecture. The Git
 Never send a project API key as `x-consumer-api-key`, never hard-code a `ck_*` consumer key, and never use the legacy `connect.composio.dev/mcp` endpoint. A configured MCP endpoint is not evidence of connectivity; `opencode mcp list` and an actual tool call are the runtime evidence.
 
 The MCP session should be as short-lived and scoped as practical. Do not print session URLs, session headers, or API keys.
+When `COMPOSIO_API_KEY` is configured, failure to create or validate the session-backed MCP is a hard failure; only an absent optional credential may disable the integration and continue.
 
 ### Tavily
 

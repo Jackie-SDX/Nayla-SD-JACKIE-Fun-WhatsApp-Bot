@@ -52,6 +52,8 @@ jobs:
           grep -q 'COMPOSIO_API_KEY' .github/workflows/opencode.yml
           grep -q 'prepare-composio-mcp.sh' .github/workflows/opencode.yml
           grep -q 'cleanup-composio-mcp.sh' .github/workflows/opencode.yml
+          ! grep -A4 'Bootstrap Composio session MCP' .github/workflows/opencode.yml | grep -q 'continue-on-error: true'
+          grep -q 'backend\\.composio\\.dev/tool_router/' .github/scripts/prepare-composio-mcp.sh
           grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
           grep -q 'id-token: write' .github/workflows/opencode.yml
           grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
