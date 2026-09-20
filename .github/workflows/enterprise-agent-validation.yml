@@ -6,6 +6,7 @@ on:
       - 'audit/**'
       - 'feature/**'
       - 'fix/**'
+      - 'oc/**'
   pull_request:
   workflow_dispatch:
 
