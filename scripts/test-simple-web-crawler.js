@@ -12,6 +12,7 @@ const fixture = `<!doctype html>
 <body>
   <h1>Hello</h1>
   <a href="/about">About us</a>
+  <a href="/about">About us (duplicate)</a>
   <a href="https://opencode.ai/docs/zen/">Zen docs</a>
   <a href="mailto:test@example.com">mail link (ignored)</a>
   <a href="#section">anchor (ignored)</a>
@@ -106,6 +107,11 @@ async function main() {
     assert.ok(result.linkCount >= 2, `expected >=2 links, got ${result.linkCount}`);
     const hrefs = result.links.map((link) => link.href);
     assert.ok(hrefs.includes(`${fixtureUrl}/about`), "absolute link resolved");
+    assert.strictEqual(
+      hrefs.filter((href) => href === `${fixtureUrl}/about`).length,
+      1,
+      "duplicate links are reported once",
+    );
     assert.ok(hrefs.includes("https://opencode.ai/docs/zen/"), "external link kept");
     assert.ok(!hrefs.some((href) => href.startsWith("mailto:") || href.endsWith("#section")), "ignored links present");
     assert.ok(result.bytes > 0, `expected positive byte count, got ${result.bytes}`);
