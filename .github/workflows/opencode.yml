@@ -122,15 +122,11 @@ jobs:
           git commit -m "oc: $title"
           gh auth setup-git
           git push --set-upstream origin "$(git branch --show-current)"
-          pr_body="$(cat <<EOF
-Automated /oc task from issue or pull-request comment #$TARGET_NUMBER.
-
-Model execution: GitHub Copilot CLI with automatic model selection.
-The agent ran on an isolated branch and was prohibited from Git commit/push/reset/clean and GitHub CLI mutations.
-
-Review the resulting diff and CI checks before merging.
-EOF
-          )"
+          pr_body="$(printf '%s\n\n%s\n%s\n\n%s' \
+            "Automated /oc task from issue or pull-request comment #$TARGET_NUMBER." \
+            "Model execution: GitHub Copilot CLI with automatic model selection." \
+            "The agent ran on an isolated branch and was prohibited from Git commit/push/reset/clean and GitHub CLI mutations." \
+            "Review the resulting diff and CI checks before merging.")"
           pr_url="$(gh pr create --base "$BASE_REF" --head "$(git branch --show-current)" --title "oc: $title" --body "$pr_body")"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "pull_request_url=$pr_url" >> "$GITHUB_OUTPUT"
