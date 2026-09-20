@@ -1,7 +1,13 @@
 const http = require("node:http");
 const assert = require("node:assert");
 
-const { crawl, MAX_RESPONSE_BYTES } = require("./simple-web-crawler");
+const {
+  crawl,
+  parseArgs,
+  DEFAULT_URL,
+  DEFAULT_TIMEOUT_MS,
+  MAX_RESPONSE_BYTES,
+} = require("./simple-web-crawler");
 
 const fixture = `<!doctype html>
 <html lang="en">
@@ -92,6 +98,18 @@ async function expectRejects(fn, pattern, label) {
 }
 
 async function main() {
+  assert.deepStrictEqual(
+    parseArgs(["node", "simple-web-crawler.js"]),
+    { url: DEFAULT_URL, timeoutMs: DEFAULT_TIMEOUT_MS },
+    "parseArgs supplies documented defaults",
+  );
+  assert.deepStrictEqual(
+    parseArgs(["node", "simple-web-crawler.js", "https://example.test/page", "2500"]),
+    { url: "https://example.test/page", timeoutMs: 2500 },
+    "parseArgs accepts a URL and numeric timeout",
+  );
+  console.log("PASS argument parsing: defaults and overrides");
+
   const fixtureServer = serverForFixture();
   const hangServer = serverThatHangs();
   const fixtureUrl = await listen(fixtureServer);

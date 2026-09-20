@@ -275,4 +275,4 @@ if (typeof module !== "undefined" && require.main === module) {
   });
 }
 
-module.exports = { crawl, DEFAULT_URL, DEFAULT_TIMEOUT_MS, MAX_RESPONSE_BYTES };
+module.exports = { crawl, parseArgs, DEFAULT_URL, DEFAULT_TIMEOUT_MS, MAX_RESPONSE_BYTES };
