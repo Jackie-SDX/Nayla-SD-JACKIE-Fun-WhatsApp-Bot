@@ -10,12 +10,10 @@
   "mcp": {
     "composio": {
       "type": "remote",
-      "url": "https://connect.composio.dev/mcp",
+      "url": "{env:COMPOSIO_MCP_URL}",
       "enabled": true,
       "oauth": false,
-      "headers": {
-        "x-consumer-api-key": "{env:COMPOSIO_API_KEY}"
-      }
+      "headers": {}
     }
   },
   "permission": {

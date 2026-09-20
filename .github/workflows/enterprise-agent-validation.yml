@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -40,6 +40,8 @@ jobs:
           bash -n .github/scripts/run-copilot-attempt.sh
           bash -n .github/scripts/publish-copilot-change.sh
           bash -n .github/scripts/classify-provider-failure.sh
+          bash -n .github/scripts/prepare-composio-mcp.sh
+          bash -n .github/scripts/cleanup-composio-mcp.sh
 
       - name: Validate hybrid architecture
         shell: bash
@@ -47,6 +49,9 @@ jobs:
           set -euo pipefail
           grep -q 'OPENCODE_API_KEY' .github/workflows/opencode.yml
           grep -q 'OPENCODE_ZEN_FREE_MODELS' .github/workflows/opencode.yml
+          grep -q 'COMPOSIO_API_KEY' .github/workflows/opencode.yml
+          grep -q 'prepare-composio-mcp.sh' .github/workflows/opencode.yml
+          grep -q 'cleanup-composio-mcp.sh' .github/workflows/opencode.yml
           grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
           grep -q 'id-token: write' .github/workflows/opencode.yml
           grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
@@ -74,8 +79,16 @@ jobs:
           jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
-          grep -q 'connect.composio.dev/mcp' opencode.json
+          jq -e '.mcp.composio.url == "{env:COMPOSIO_MCP_URL}"' opencode.json >/dev/null
+          jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
+          jq -e '.mcp.composio.headers | type == "object"' opencode.json >/dev/null
+          ! grep -q 'connect.composio.dev/mcp' opencode.json
+          grep -q 'backend.composio.dev/api/v3.1/tool_router/session' .github/scripts/prepare-composio-mcp.sh
+          grep -q 'x-api-key' .github/scripts/prepare-composio-mcp.sh
+          grep -q 'mcp:true' .github/scripts/prepare-composio-mcp.sh
+          grep -q 'OPENCODE_CONFIG_CONTENT' .github/scripts/prepare-composio-mcp.sh
           grep -q 'persist-credentials: false' .github/workflows/opencode.yml
+          grep -q 'COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}' .github/workflows/opencode.yml
           grep -q 'contents: write' .github/workflows/opencode.yml
           grep -q 'issues: write' .github/workflows/opencode.yml
           grep -q 'pull-requests: write' .github/workflows/opencode.yml

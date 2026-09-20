@@ -33,6 +33,7 @@ jobs:
       OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free' }}
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+      COMPOSIO_USER_ID: ${{ github.repository_owner }}
       COPILOT_MAX_AI_CREDITS: "60"
 
     steps:
@@ -115,6 +116,12 @@ jobs:
           }
           [[ -n "$COMPOSIO_API_KEY" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured."
           echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
+
+      - name: Bootstrap Composio session MCP
+        id: composio_session
+        continue-on-error: true
+        shell: bash
+        run: bash .github/scripts/prepare-composio-mcp.sh
 
       - name: Select route 1
         id: route_1
@@ -400,3 +407,9 @@ jobs:
           fi
           echo "::error title=Hybrid agent recovery exhausted or blocked::No fully verified agent run was completed."
           exit 1
+      - name: Clean up Composio session MCP
+        if: always()
+        continue-on-error: true
+        env:
+          SESSION_ID: ${{ steps.composio_session.outputs.session_id }}
+        run: bash .github/scripts/cleanup-composio-mcp.sh
