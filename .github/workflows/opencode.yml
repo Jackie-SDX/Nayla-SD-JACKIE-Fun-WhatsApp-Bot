@@ -15,11 +15,7 @@ jobs:
     if: |
       github.event.comment.user.login == github.repository_owner &&
       (
-        github.event.comment.body == '/oc' ||
-        startsWith(github.event.comment.body, '/oc ') ||
         startsWith(github.event.comment.body, '/oc') ||
-        github.event.comment.body == '/opencode' ||
-        startsWith(github.event.comment.body, '/opencode ') ||
         startsWith(github.event.comment.body, '/opencode')
       )
     runs-on: ubuntu-latest
@@ -28,15 +24,10 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      id-token: write
     env:
-      GITHUB_TOKEN: ${{ github.token }}
-      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-      OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free' }}
-      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-      COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-      COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
       COPILOT_MAX_AI_CREDITS: "60"
+      OPENCODE_V2_VERSION: "2.0.3"
+      OPENCODE_ZEN_FREE_MODELS: "big-pickle,mimo-v2.5-free,ling-3.0-flash-fin-free,nemotron-3-ultra-free,nemotron-3.5-lightning-free,muse-spark-1.3-contributor-free,jev-1.13-free,deepseek-v4-flash-free"
 
     steps:
       - name: Checkout repository
@@ -44,6 +35,20 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Validate command gate
+        id: command_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(jq -r '.comment.body // empty' "$GITHUB_EVENT_PATH")"
+          if [[ "$body" =~ ^/(oc|opencode)([[:space:]]|$) ]]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo "Accepted /oc or /opencode command prefix."
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "Comment is not a valid /oc command; no agent work will run."
+          fi
 
       - name: Capture initial state
         id: initial_state
@@ -54,60 +59,41 @@ jobs:
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
           echo "Initial checkout SHA: $sha"
 
-      - name: Resolve and verify OpenCode release
+      - name: Verify pinned OpenCode V2 runtime
         id: opencode_release
         shell: bash
         run: |
           set -euo pipefail
-          json="$(mktemp)"
-          trap 'rm -f "$json"' EXIT
-          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
-            https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
-          tag="$(jq -r '.tag_name' "$json")"
-          version="${tag#v}"
-          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
-          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-          [[ -n "$url" && "$url" != "null" ]] || exit 1
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "Verified OpenCode release: $version"
+          [[ "$OPENCODE_V2_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          npm view "@opencode/cli@${OPENCODE_V2_VERSION}" version --json | jq -e --arg v "$OPENCODE_V2_VERSION" '. == $v' >/dev/null
+          echo "version=$OPENCODE_V2_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Restore verified OpenCode cache
+      - name: Restore verified OpenCode V2 cache
         id: cache_restore
         continue-on-error: true
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.opencode/bin
-          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.opencode_release.outputs.version }}
+          path: ~/.opencode
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ env.OPENCODE_V2_VERSION }}
 
-      - name: Install OpenCode on cache miss
+      - name: Install OpenCode V2 on cache miss
         if: steps.cache_restore.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 \
-            "${{ steps.opencode_release.outputs.url }}" -o "$tmp/opencode.tar.gz"
-          digest="${{ steps.opencode_release.outputs.digest }}"
-          digest="${digest#sha256:}"
-          echo "$digest  $tmp/opencode.tar.gz" | sha256sum --check -
-          mkdir -p "$tmp/extract"
-          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
-          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
-          [[ -n "$binary" ]] || exit 1
-          install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
-          "$HOME/.opencode/bin/opencode" --version
+          rm -rf "$HOME/.opencode"
+          npm install --prefix "$HOME/.opencode" --no-audit --no-fund --prefer-online --save-exact "@opencode/cli@${OPENCODE_V2_VERSION}"
+          test -x "$HOME/.opencode/node_modules/.bin/opencode"
+          actual="$("$HOME/.opencode/node_modules/.bin/opencode" --version)"
+          echo "OpenCode V2 runtime: $actual"
+          [[ "$actual" == *"$OPENCODE_V2_VERSION"* ]]
 
-      - name: Add OpenCode to PATH
+      - name: Add OpenCode V2 to PATH
         shell: bash
-        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-
+        run: echo "$HOME/.opencode/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Validate OpenCode agent council
         id: agent_council
+        if: steps.command_gate.outputs.valid == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -121,31 +107,60 @@ jobs:
             }
           done
 
-      - name: Preflight credentials
+      - name: Resolve credential availability
+        id: credentials
+        if: steps.command_gate.outputs.valid == 'true'
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "$OPENCODE_API_KEY" ]] && echo "OpenCode Zen credential: configured" || echo "::warning title=OpenCode Zen unavailable::OPENCODE_API_KEY is not configured."
-          [[ -n "$COPILOT_GITHUB_TOKEN" ]] && echo "Copilot fallback credential: configured" || echo "Copilot fallback credential: optional/unconfigured"
-          [[ -n "$OPENCODE_API_KEY" || -n "$COPILOT_GITHUB_TOKEN" ]] || {
-            echo "::error title=No agent credential::Configure OPENCODE_API_KEY or COPILOT_GITHUB_TOKEN."
-            exit 1
-          }
-          [[ -n "$COMPOSIO_API_KEY" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured."
-          echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
-
-      - name: Bootstrap Composio session MCP
-        id: composio_session
-        shell: bash
-        run: bash .github/scripts/prepare-composio-mcp.sh
+          [[ -n "$OPENCODE_API_KEY" ]] && echo "opencode=true" >> "$GITHUB_OUTPUT" || echo "opencode=false" >> "$GITHUB_OUTPUT"
+          [[ -n "$COPILOT_GITHUB_TOKEN" ]] && echo "copilot=true" >> "$GITHUB_OUTPUT" || echo "copilot=false" >> "$GITHUB_OUTPUT"
+          [[ -n "$COMPOSIO_API_KEY" ]] && echo "composio=true" >> "$GITHUB_OUTPUT" || echo "composio=false" >> "$GITHUB_OUTPUT"
 
       - name: Select route 1
         id: route_1
+        if: steps.command_gate.outputs.valid == 'true'
+        env:
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          OPENCODE_ZEN_FREE_MODELS: ${{ env.OPENCODE_ZEN_FREE_MODELS }}
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
+      - name: Preflight credentials
+        if: steps.command_gate.outputs.valid == 'true'
+        env:
+          ROUTE_PROVIDER: ${{ steps.route_1.outputs.provider }}
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          HAS_COMPOSIO_CREDENTIAL: ${{ steps.credentials.outputs.composio }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$ROUTE_PROVIDER" in
+            opencode) [[ "$HAS_OPENCODE_CREDENTIAL" == "true" ]] || exit 1 ;;
+            github-copilot) [[ "$HAS_COPILOT_CREDENTIAL" == "true" ]] || exit 1 ;;
+            *) echo "::error title=No usable agent route::No valid provider was selected."; exit 1 ;;
+          esac
+          [[ "$HAS_COMPOSIO_CREDENTIAL" == "true" ]] || echo "::warning title=Composio unavailable::Continuing without optional Composio MCP."
+          echo "Credential availability gate passed for: $ROUTE_PROVIDER"
+
+      - name: Bootstrap Composio session MCP
+        id: composio_session
+        if: steps.command_gate.outputs.valid == 'true' && steps.credentials.outputs.composio == 'true'
+        env:
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
+        shell: bash
+        run: bash .github/scripts/prepare-composio-mcp.sh
+
+
       - name: Prepare Copilot branch for attempt 1
-        if: steps.route_1.outputs.provider == 'github-copilot'
+        if: steps.command_gate.outputs.valid == 'true' && steps.route_1.outputs.provider == 'github-copilot'
         shell: bash
         env:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -156,11 +171,18 @@ jobs:
 
       - name: Run agent attempt 1
         id: agent_1
-        if: steps.route_1.outputs.selected == 'true'
+        if: steps.command_gate.outputs.valid == 'true' && steps.route_1.outputs.selected == 'true'
         continue-on-error: true
         shell: bash
         env:
           SELECTED_PROVIDER: ${{ steps.route_1.outputs.provider }}
+          OPENCODE_API_KEY: ${{ steps.route_1.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.route_1.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
+          COMPOSIO_MCP_URL: ${{ env.COMPOSIO_MCP_URL }}
+          COMPOSIO_MCP_HEADERS_FILE: ${{ env.COMPOSIO_MCP_HEADERS_FILE }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
         run: |
           set -u
           case "$SELECTED_PROVIDER" in
@@ -179,9 +201,22 @@ jobs:
               ;;
           esac
 
+      - name: Publish OpenCode attempt 1
+        id: opencode_publish_1
+        if: steps.command_gate.outputs.valid == 'true' && steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'opencode'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          OPENCODE_BRANCH: ${{ steps.agent_1.outputs.branch }}
+          COUNCIL_EVIDENCE_DIR: ${{ steps.agent_1.outputs.evidence_dir }}
+        run: bash .github/scripts/publish-opencode-change.sh
+
       - name: Publish Copilot attempt 1
         id: publish_1
-        if: steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'github-copilot'
+        if: steps.command_gate.outputs.valid == 'true' && steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'github-copilot'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -191,7 +226,7 @@ jobs:
 
       - name: Replay safety gate before attempt 2
         id: replay_2
-        if: always() && steps.agent_1.outcome == 'failure'
+        if: always() && steps.command_gate.outputs.valid == 'true' && steps.agent_1.outcome == 'failure'
         continue-on-error: true
         shell: bash
         env:
@@ -205,8 +240,8 @@ jobs:
             exit 1
           }
           [[ -z "$(git status --porcelain)" ]] || exit 1
-          if git ls-remote --heads origin "refs/heads/opencode/issue$TARGET_NUMBER-*" | grep -q .; then
-            echo "::error title=Unsafe replay::An OpenCode branch already exists for this target; preserving it."
+          if git ls-remote --heads origin "refs/heads/opencode/issue$TARGET_NUMBER-*" | grep -q . || git ls-remote --heads origin "refs/heads/opencode/council-issue$TARGET_NUMBER-*" | grep -q .; then
+            echo "::error title=Unsafe replay::An existing OpenCode branch already exists for this target; preserving it."
             exit 1
           fi
 
@@ -221,12 +256,16 @@ jobs:
 
       - name: Select route 2
         id: route_2
-        if: steps.replay_2.outcome == 'success'
+        if: steps.command_gate.outputs.valid == 'true' && steps.replay_2.outcome == 'success'
+        env:
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          OPENCODE_ZEN_FREE_MODELS: ${{ env.OPENCODE_ZEN_FREE_MODELS }}
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
       - name: Prepare Copilot branch for attempt 2
-        if: steps.route_2.outputs.provider == 'github-copilot'
+        if: steps.command_gate.outputs.valid == 'true' && steps.route_2.outputs.provider == 'github-copilot'
         shell: bash
         env:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -237,11 +276,18 @@ jobs:
 
       - name: Run agent attempt 2
         id: agent_2
-        if: steps.route_2.outputs.selected == 'true'
+        if: steps.command_gate.outputs.valid == 'true' && steps.route_2.outputs.selected == 'true'
         continue-on-error: true
         shell: bash
         env:
           SELECTED_PROVIDER: ${{ steps.route_2.outputs.provider }}
+          OPENCODE_API_KEY: ${{ steps.route_2.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.route_2.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
+          COMPOSIO_MCP_URL: ${{ env.COMPOSIO_MCP_URL }}
+          COMPOSIO_MCP_HEADERS_FILE: ${{ env.COMPOSIO_MCP_HEADERS_FILE }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
         run: |
           set -u
           case "$SELECTED_PROVIDER" in
@@ -260,9 +306,22 @@ jobs:
               ;;
           esac
 
+      - name: Publish OpenCode attempt 2
+        id: opencode_publish_2
+        if: steps.command_gate.outputs.valid == 'true' && steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'opencode'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          OPENCODE_BRANCH: ${{ steps.agent_2.outputs.branch }}
+          COUNCIL_EVIDENCE_DIR: ${{ steps.agent_2.outputs.evidence_dir }}
+        run: bash .github/scripts/publish-opencode-change.sh
+
       - name: Publish Copilot attempt 2
         id: publish_2
-        if: steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'github-copilot'
+        if: steps.command_gate.outputs.valid == 'true' && steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'github-copilot'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -272,7 +331,7 @@ jobs:
 
       - name: Replay safety gate before attempt 3
         id: replay_3
-        if: always() && steps.agent_2.outcome == 'failure'
+        if: always() && steps.command_gate.outputs.valid == 'true' && steps.agent_2.outcome == 'failure'
         continue-on-error: true
         shell: bash
         env:
@@ -302,12 +361,16 @@ jobs:
 
       - name: Select route 3
         id: route_3
-        if: steps.replay_3.outcome == 'success'
+        if: steps.command_gate.outputs.valid == 'true' && steps.replay_3.outcome == 'success'
+        env:
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          OPENCODE_ZEN_FREE_MODELS: ${{ env.OPENCODE_ZEN_FREE_MODELS }}
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
       - name: Prepare Copilot branch for attempt 3
-        if: steps.route_3.outputs.provider == 'github-copilot'
+        if: steps.command_gate.outputs.valid == 'true' && steps.route_3.outputs.provider == 'github-copilot'
         shell: bash
         env:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -318,11 +381,18 @@ jobs:
 
       - name: Run agent attempt 3
         id: agent_3
-        if: steps.route_3.outputs.selected == 'true'
+        if: steps.command_gate.outputs.valid == 'true' && steps.route_3.outputs.selected == 'true'
         continue-on-error: true
         shell: bash
         env:
           SELECTED_PROVIDER: ${{ steps.route_3.outputs.provider }}
+          OPENCODE_API_KEY: ${{ steps.route_3.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.route_3.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
+          COMPOSIO_MCP_URL: ${{ env.COMPOSIO_MCP_URL }}
+          COMPOSIO_MCP_HEADERS_FILE: ${{ env.COMPOSIO_MCP_HEADERS_FILE }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
         run: |
           set -u
           case "$SELECTED_PROVIDER" in
@@ -340,9 +410,22 @@ jobs:
               ;;
           esac
 
+      - name: Publish OpenCode attempt 3
+        id: opencode_publish_3
+        if: steps.command_gate.outputs.valid == 'true' && steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'opencode'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          OPENCODE_BRANCH: ${{ steps.agent_3.outputs.branch }}
+          COUNCIL_EVIDENCE_DIR: ${{ steps.agent_3.outputs.evidence_dir }}
+        run: bash .github/scripts/publish-opencode-change.sh
+
       - name: Publish Copilot attempt 3
         id: publish_3
-        if: steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'github-copilot'
+        if: steps.command_gate.outputs.valid == 'true' && steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'github-copilot'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -361,7 +444,7 @@ jobs:
           git log -1 --oneline
 
       - name: Human handoff after exhausted or blocked recovery
-        if: always() && steps.agent_1.outcome == 'failure' && (steps.agent_3.outcome != 'success')
+        if: always() && steps.command_gate.outputs.valid == 'true' && steps.agent_1.outcome == 'failure' && (steps.agent_3.outcome != 'success')
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -373,6 +456,14 @@ jobs:
           body="$(printf 'Agent recovery stopped without a fully verified success. No success is claimed.\n\nSanitized findings:\n\n%s' "$findings")"
           gh issue comment "$TARGET_NUMBER" --body "$body"
 
+      - name: Upload OpenCode council evidence
+        if: always() && steps.command_gate.outputs.valid == 'true' && (steps.agent_1.outputs.evidence_dir != '' || steps.agent_2.outputs.evidence_dir != '' || steps.agent_3.outputs.evidence_dir != '')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: opencode-council-${{ github.run_id }}
+          path: ${{ steps.agent_3.outputs.evidence_dir || steps.agent_2.outputs.evidence_dir || steps.agent_1.outputs.evidence_dir }}
+          retention-days: 14
+          if-no-files-found: warn
       - name: Routing summary
         if: always()
         env:
@@ -385,15 +476,18 @@ jobs:
           P1: ${{ steps.publish_1.outcome }}
           P2: ${{ steps.publish_2.outcome }}
           P3: ${{ steps.publish_3.outcome }}
+          OP1: ${{ steps.opencode_publish_1.outcome }}
+          OP2: ${{ steps.opencode_publish_2.outcome }}
+          OP3: ${{ steps.opencode_publish_3.outcome }}
         run: |
           {
             echo "### /oc hybrid agent routing"
             echo ""
-            echo "| Attempt | Route | Agent | Copilot publish |"
+            echo "| Attempt | Route | Agent | OpenCode publish | Copilot publish |"
             echo "|---|---|---|---|"
-            echo "| 1 | ${R1:-not selected} | ${A1:-not run} | ${P1:-n/a} |"
-            echo "| 2 | ${R2:-not selected} | ${A2:-not run} | ${P2:-n/a} |"
-            echo "| 3 | ${R3:-not selected} | ${A3:-not run} | ${P3:-n/a} |"
+            echo "| 1 | ${R1:-not selected} | ${A1:-not run} | ${OP1:-n/a} | ${P1:-n/a} |"
+            echo "| 2 | ${R2:-not selected} | ${A2:-not run} | ${OP2:-n/a} | ${P2:-n/a} |"
+            echo "| 3 | ${R3:-not selected} | ${A3:-not run} | ${OP3:-n/a} | ${P3:-n/a} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Final status
@@ -408,12 +502,20 @@ jobs:
           P1: ${{ steps.publish_1.outcome }}
           P2: ${{ steps.publish_2.outcome }}
           P3: ${{ steps.publish_3.outcome }}
+          OP1: ${{ steps.opencode_publish_1.outcome }}
+          OP2: ${{ steps.opencode_publish_2.outcome }}
+          OP3: ${{ steps.opencode_publish_3.outcome }}
+          COMMAND_VALID: ${{ steps.command_gate.outputs.valid }}
         run: |
           set -euo pipefail
+          if [[ "$COMMAND_VALID" != "true" ]]; then
+            echo "Comment did not contain an accepted command token; no agent work was executed."
+            exit 0
+          fi
           success=false
-          if [[ "$A1" == "success" && "$R1" == "opencode" ]]; then success=true; fi
-          if [[ "$A2" == "success" && "$R2" == "opencode" ]]; then success=true; fi
-          if [[ "$A3" == "success" && "$R3" == "opencode" ]]; then success=true; fi
+          if [[ "$A1" == "success" && "$R1" == "opencode" && "$OP1" == "success" ]]; then success=true; fi
+          if [[ "$A2" == "success" && "$R2" == "opencode" && "$OP2" == "success" ]]; then success=true; fi
+          if [[ "$A3" == "success" && "$R3" == "opencode" && "$OP3" == "success" ]]; then success=true; fi
           if [[ "$A1" == "success" && "$R1" == "github-copilot" && "$P1" == "success" ]]; then success=true; fi
           if [[ "$A2" == "success" && "$R2" == "github-copilot" && "$P2" == "success" ]]; then success=true; fi
           if [[ "$A3" == "success" && "$R3" == "github-copilot" && "$P3" == "success" ]]; then success=true; fi
@@ -429,4 +531,5 @@ jobs:
         env:
           SESSION_ID: ${{ steps.composio_session.outputs.session_id }}
           HEADERS_FILE: ${{ steps.composio_session.outputs.headers_file }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         run: bash .github/scripts/cleanup-composio-mcp.sh

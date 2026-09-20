@@ -1,65 +1,97 @@
-# OpenCode Agent Council
+# Enterprise OpenCode Agent Council
 
-## Purpose
+This repository treats the agent council as an executable CI control plane, not as a documentation-only convention.
 
-This repository uses a multi-model council around the OpenCode primary build agent to reduce single-model blind spots.
+## Control flow
 
-The council does not fuse model weights. It fuses independent evidence and reasoning at explicit gates.
+`trigger -> command gate -> independent architecture review -> independent adversarial review -> evidence adjudication -> isolated build -> deterministic validation -> fresh verifier -> correction/re-adjudication (max 2) -> verified publication`
 
-## Roles
+The GitHub Actions workflow is authoritative. No pull request is published from an OpenCode task before the verifier gate passes.
 
-| Agent | Model | Role | Mutation |
+## Council stages
+
+| Stage | Agent | Model | Mutation |
 |---|---|---|---|
-| architect-reviewer | opencode/big-pickle | Architecture, correctness, state, performance, maintainability | Read-only |
-| adversarial-reviewer | opencode/mimo-v2.5-free | Security, reliability, edge cases, resource/failure analysis | Read-only |
-| adjudicator | opencode/mimo-v2.5-free | Evidence reconciliation and decision ledger | Read-only |
-| verifier | opencode/big-pickle | Fresh post-change verification / second-pass audit | No tracked edits |
+| 1 | `architect-reviewer` | `opencode/big-pickle` | none |
+| 2 | `adversarial-reviewer` | `opencode/mimo-v2.5-free` | none |
+| 3 | `adjudicator` | `opencode/big-pickle` | none |
+| 4 | `build` | selected zero-cost route | isolated branch only |
+| 5 | deterministic validation | shell/test tooling | controlled test execution |
+| 6 | `verifier` | `opencode/mimo-v2.5-free` | none |
 
-OpenCode supports project-local Markdown agents under .opencode/agents/, and the primary agent can invoke them as subagents.
+The council agents are configured as OpenCode V2 primary agents and are launched as separate top-level CLI sessions. This is intentional: a live repository validation reproduced a free-tier entitlement failure for nested custom subagents while the normal top-level OpenCode session succeeded.
 
-## Coding-task lifecycle
+Official OpenCode V2 documents define primary/custom agents, ordered `permissions` rules, `opencode run --agent`, and `--standalone` for private CI execution. citeturn332002search0turn242236search0turn242236search5
 
-task -> Brain A -> Brain B -> adjudication -> implementation -> deterministic validation -> fresh verifier -> correction loop if needed -> final CI -> PR
+## Evidence contract
 
-The two first reviewers are independent. Brain B does not receive Brain A's report before its own inspection.
+Reviewer stages emit:
 
-The adjudicator does not use majority voting. It resolves claims by evidence quality and requests reproduction/research where required.
+`COUNCIL_STAGE_COMPLETE=architect-reviewer`
 
-The verifier is a fresh context. A passing test suite alone is not sufficient for final acceptance.
+`COUNCIL_STAGE_COMPLETE=adversarial-reviewer`
 
-## Audit lifecycle
+The adjudicator emits:
 
-audit -> Brain A -> Brain B -> adjudication -> fresh second-pass verifier -> final report
+`COUNCIL_STAGE_COMPLETE=adjudicator`
 
-The verifier treats the first audit as a hypothesis set and actively searches for missed findings and unsupported conclusions.
+and one of:
 
-## Confidence rules
+`COUNCIL_DECISION=READY`
 
-Use explicit statuses:
-- CONFIRMED — directly established from repository/runtime evidence.
-- REPRODUCED — failure or behavior reproduced by execution.
-- SUPPORTED — strong evidence but not fully reproduced.
-- UNVERIFIED — plausible but missing decisive evidence.
-- REJECTED — evidence contradicts the claim.
+`COUNCIL_DECISION=BLOCKED`
 
-Never treat model agreement as proof.
+The final verifier emits:
 
-## Recovery budget
+`COUNCIL_STAGE_COMPLETE=verifier`
 
-A normal council run allows two independent reviews, one adjudication, one verifier, and up to two correction/re-adjudication loops.
+and one of:
 
-If a high-impact disagreement remains unresolved after reasonable evidence gathering, stop at the evidence boundary and report the uncertainty.
+`COUNCIL_VERDICT=PASS`
 
-## Provider policy
+`COUNCIL_VERDICT=FAIL`
 
-The council uses currently configured free OpenCode Zen models by default. The repository's existing Copilot path remains the fallback route, but Copilot fallback is explicitly not represented as independent two-model evidence.
+Finding statuses are:
 
-The free Zen catalog is time-limited and may change, so CI validates the agent configuration and runtime discovery before an OpenCode task runs.
+`CONFIRMED / REPRODUCED / SUPPORTED / UNVERIFIED / REJECTED`
+
+Model agreement is never proof. Reproduced behavior, primary documentation, repository state, and deterministic execution outrank model confidence.
 
 ## Security boundary
 
-Reviewers do not receive edit permission. The verifier may use shell inspection/testing but is instructed not to mutate tracked files or GitHub state. The primary Build agent remains the only worker authorized to implement changes through the repository's existing guarded workflow.
+Reviewer and verifier agents cannot edit repository files or launch child agents.
+
+The Build process does not receive `GITHUB_TOKEN`, Copilot credentials, or the Composio project API key. It receives only the OpenCode model credential and the already-established short-lived Composio session endpoint/header file when those are required.
+
+The outer workflow alone owns commit, push, and pull-request publication. It receives `github.token` only for publication/handoff steps.
+
+OIDC write permission is not required for this token-based GitHub integration.
+
+## Recovery
+
+The outer workflow supports up to three provider attempts. Inside a successful OpenCode attempt, the council supports up to two verifier-driven correction loops.
+
+Every retry is preceded by repository-state and remote-branch safety checks. A provider failure is never treated as proof that the previous attempt caused no mutation.
+
+## Copilot fallback
+
+Copilot remains a valid fallback route. It is bounded by the configured AI-credit limit and receives its own adversarial review instructions.
+
+Copilot fallback is not described as independent multi-model council evidence. It is a provider fallback with deterministic publication controls.
 
 ## Maintenance
 
-When OpenCode changes agent configuration syntax, model availability, or Task/subagent semantics, update the council files and validation checks together. Revalidate with the OpenCode agent list command and a real controlled /oc task.
+When OpenCode changes agent configuration semantics, model availability, CLI flags, or permission behavior, update the council configuration and CI validation together.
+
+At minimum validate:
+
+`opencode agent list`
+
+`opencode run --help`
+
+JSON/YAML/shell syntax, repository-specific tests, complete diff, exact head SHA, and final CI state.
+
+Never claim the council is proven merely because configuration parsing succeeds.
+
+## Runtime
+CI uses the OpenCode V2 CLI executable `opencode`, pinned to `2.0.3`. Upgrades are explicit, reviewed, and runtime-validated rather than floating to latest.

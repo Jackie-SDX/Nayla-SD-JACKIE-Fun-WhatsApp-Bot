@@ -181,7 +181,7 @@ Never send a project API key as `x-consumer-api-key`, never hard-code a `ck_*` c
 
 The MCP session should be as short-lived and scoped as practical. Do not print session URLs, session headers, or API keys.
 The OpenCode workflow requires `COMPOSIO_API_KEY` because Composio is part of its controlled agent gateway. Failure to create or validate the session-backed MCP is a hard failure.
-OpenCode 1.x reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. The temporary mode-0600 header file always carries the project `x-api-key` plus any non-duplicate session headers returned by Composio, and is deleted during cleanup. The session URL and ID are masked before entering GitHub Actions environment output.
+OpenCode V2 reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. The temporary mode-0600 header file always carries the project `x-api-key` plus any non-duplicate session headers returned by Composio, and is deleted during cleanup. The session URL and ID are masked before entering GitHub Actions environment output.
 The session user is the stable external `COMPOSIO_USER_ID` configured by the workflow (defaulting to the repository owner when no repository variable overrides it). Do not substitute another user's private Composio connection. If the requested toolkit has no active connection for that session user, use Composio's connection-management flow to initiate authorization for that same user; never guess or silently cross user boundaries.
 
 ### Capability discovery and routing checklist
@@ -438,114 +438,38 @@ Report exact branch/commit/test evidence.
 Never call a partially verified state fully verified.
 
 
-## MANDATORY AGENT COUNCIL — MULTI-MODEL DELIBERATION
 
-For any non-trivial task, the primary Build agent is an orchestrator, not the sole source of truth.
+## Workflow-enforced agent council
 
-### What counts as non-trivial
+The GitHub Actions workflow is the authoritative council control plane for every non-trivial /oc task.
 
-Use the full council whenever the task:
-- changes application source, tests, CI/CD, dependencies, security, persistence, concurrency, configuration, or runtime behavior;
-- touches more than one file;
-- asks for an audit, review, diagnosis, architecture assessment, hardening, or root-cause analysis;
-- could cause production behavior, data, authentication, deployment, or repository-state changes.
+It executes independent top-level OpenCode sessions in this order:
 
-A purely cosmetic, one-file, behavior-preserving formatting change may use the normal fast path.
+1. architect-reviewer
+2. adversarial-reviewer
+3. adjudicator
+4. isolated Build agent
+5. deterministic repository validation
+6. fresh verifier
 
-Do not downgrade a task to trivial merely to avoid the council.
+The first two reviewers are independent and use different zero-cost Zen models. The adjudicator receives both reports and resolves them by evidence rather than voting. The verifier is a new top-level session and treats all earlier claims as hypotheses.
 
-### Council roles
+The repository deliberately does not rely on OpenCode child-subagent delegation for this control plane. The live validation discovered that free-tier child-subagent requests can fail even when the authenticated top-level OpenCode session succeeds. Top-level sessions avoid that coupling and make each stage independently observable.
 
-The council consists of four independent specialist subagents:
+The Build agent may edit only the checked-out isolated branch. The outer GitHub workflow owns commit, push, and pull-request creation after the verifier gate.
 
-1. architect-reviewer — architecture, correctness, data flow, state, performance, maintainability.
-2. adversarial-reviewer — security, edge cases, races, failure modes, resource exhaustion, hidden assumptions, documentation/code contradictions.
-3. adjudicator — reconciles the independent reports and produces the evidence-backed canonical decision ledger.
-4. verifier — fresh-context post-implementation verifier; for audit-only work it becomes a second-pass red-team auditor.
+A successful model response is insufficient evidence. Each stage must exit successfully and emit its required completion contract. Deterministic validation must pass. The verifier must emit COUNCIL_VERDICT=PASS before publication.
 
-The two independent reviewers use different free OpenCode Zen models. Do not replace independent reasoning with one model asked to simulate another.
+Two correction/re-adjudication loops are available when verifier or deterministic validation evidence identifies a material problem. A blocked adjudication or failed final verifier stops publication.
 
-### Mandatory sequence
+Do not expose GitHub tokens, Copilot credentials, or Composio project keys to the Build/reviewer processes. Secrets are scoped to the smallest workflow step that requires them.
 
-For a coding task:
+OpenCode V2 semantics are used for new council configuration: permissions, primary agents, and the subagent action name.
 
-1. Build agent reads the original task and repository.
-2. Invoke architect-reviewer in a fresh subagent context.
-3. Invoke adversarial-reviewer in a fresh subagent context.
-4. Do NOT give reviewer B reviewer A's report. Their analysis must be independent.
-5. Give both reports plus the original acceptance criteria to adjudicator.
-6. Adjudicator separates confirmed defects, supported risks, uncertain claims, and rejected findings; it must not use majority vote.
-7. Only then implement the accepted plan.
-8. Run deterministic validation.
-9. Invoke verifier in a fresh context. Give it the original task, accepted plan, changed-file summary, and relevant validation evidence.
-10. Verifier must treat the implementation as untrusted and look specifically for regressions, incomplete fixes, invariant violations, and evidence gaps.
-11. If verifier finds a material problem, do not declare success. Return to the smallest correction needed, re-test, and re-run the verifier.
-12. Do not create or publish a PR until the verifier is satisfied and deterministic validation is green.
+## Pinned runtime
+The GitHub Actions control plane uses the OpenCode V2 CLI package `@opencode/cli`, pinned to `2.0.3`, and launches its `opencode` executable.
 
-For an audit/review task with no intended code mutation:
 
-1. architect-reviewer independently audits the repository.
-2. adversarial-reviewer independently audits the repository from scratch.
-3. adjudicator produces the first canonical audit.
-4. verifier performs a fresh second-pass audit, using the canonical findings only as hypotheses to attack — never as established truth.
-5. The final report must include what the second pass added, rejected, or left uncertain.
+## Provider fallback
 
-### Independence rules
-
-- Reviewer A and Reviewer B must start from the same task but separate reasoning contexts.
-- Reviewer B must not be shown Reviewer A's conclusions before completing its own inspection.
-- The verifier must use a fresh context and must not inherit the implementer's confidence.
-- A finding supported by execution or primary-source evidence outranks a finding supported only by model agreement.
-- Never average model opinions.
-- Never say two models agree, therefore it is true.
-- When the reviewers disagree materially, reproduce or research the disputed claim.
-- When evidence remains insufficient, mark the claim UNVERIFIED rather than choosing a winner.
-
-### Evidence contract
-
-Each specialist report must identify findings with:
-- finding ID;
-- status: CONFIRMED / REPRODUCED / SUPPORTED / UNVERIFIED / REJECTED;
-- severity;
-- file(s) and line/range where practical;
-- observed behavior;
-- evidence;
-- impact;
-- recommended action;
-- remaining uncertainty.
-
-For implementation work, retain:
-- the original acceptance criteria;
-- the adjudicated plan;
-- exact changed files;
-- validation commands and real results;
-- verifier findings;
-- final repository/CI state.
-
-Do not turn a hypothesis into a bug merely because it sounds plausible.
-
-### Council budget and recovery
-
-The normal council is capped at:
-- 2 independent reviews;
-- 1 adjudication;
-- 1 post-change verifier;
-- up to 2 correction/re-adjudication loops when the verifier finds a material issue.
-
-Do not repeatedly invoke the same reviewer for the same unchanged hypothesis.
-
-If a specialist is unavailable because its configured model cannot be executed, say so explicitly. Do not pretend that a same-model rerun provides independent evidence. The primary OpenCode route may still use its existing provider fallback policy, but independence must be reported honestly.
-
-If the council reaches an unresolved high-impact disagreement after reasonable reproduction/research, stop at the evidence boundary and report the disagreement rather than guessing.
-
-### No premature success
-
-The primary Build agent MUST NOT declare a non-trivial task fully complete until:
-- the independent review stage was performed;
-- the adjudication stage was performed;
-- implementation validation passed;
-- the fresh verifier stage was performed;
-- all material verifier findings were resolved or explicitly reported as unresolved;
-- final repository state was inspected.
-
-This council is an engineering control, not a ceremony. Skip no stage merely because the first model appears confident.
+A provider/account denial from OpenCode Zen, including the current free-tier client-entitlement error, is classified as provider unavailable and immediately excludes OpenCode for the remainder of that task. The route selector can then promote the GitHub Copilot route instead of wasting the remaining attempt budget on additional Zen models.
