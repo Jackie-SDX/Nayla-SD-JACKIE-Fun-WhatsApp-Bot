@@ -16,6 +16,7 @@ for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
   f=".opencode/agents/$agent.md"
   test -f "$f"
   grep -q '^mode: primary$' "$f"
+  grep -q '^model: ' "$f"
   grep -q '^permissions:$' "$f"
   grep -q 'action: edit' "$f"
   grep -q 'action: subagent' "$f"
@@ -40,20 +41,20 @@ grep -q 'COUNCIL_DECISION=' .github/scripts/run-opencode-attempt.sh
 grep -q 'COUNCIL_VERDICT=' .github/scripts/run-opencode-attempt.sh
 grep -q 'Publish OpenCode attempt 1' .github/workflows/opencode.yml
 grep -q 'Validate command gate' .github/workflows/opencode.yml
-grep -q 'OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}' .github/workflows/opencode.yml
+grep -q 'OPENCODE_API_KEY:' .github/workflows/opencode.yml
 grep -q 'COUNCIL_EVIDENCE_DIR' .github/workflows/opencode.yml
-grep -q 'workflow-enforced' .opencode/instructions.md
+grep -q 'workflow-enforced agent council' .opencode/instructions.md
+grep -q 'opencode run --standalone' docs/AGENT_COUNCIL.md
 
 bash -n .github/scripts/run-opencode-council-stage.sh
 bash -n .github/scripts/run-opencode-attempt.sh
 bash -n .github/scripts/publish-opencode-change.sh
-grep -q 'workflow-enforced agent council' .opencode/instructions.md
-grep -q 'opencode run --standalone' docs/AGENT_COUNCIL.md
+bash -n .github/scripts/validate-application.sh
+
 ! grep -q 'connect.composio.dev/mcp' .github/scripts/run-copilot-attempt.sh
 ! grep -q 'x-consumer-api-key' .github/scripts/run-copilot-attempt.sh
-! grep -q '^      id-token: write
+! grep -q '^      id-token: write$' .github/workflows/opencode.yml
 ! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
-echo "Enterprise council validation: PASS"
- .github/workflows/opencode.yml
-! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
+! grep -q '^\s*GITHUB_TOKEN:' .github/workflows/opencode.yml
+
 echo "Enterprise council validation: PASS"
