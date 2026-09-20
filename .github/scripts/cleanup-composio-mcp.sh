@@ -2,6 +2,10 @@
 set -euo pipefail
 
 session_id="${SESSION_ID:-}"
+headers_file="${HEADERS_FILE:-}"
+if [[ -n "$headers_file" ]]; then
+  rm -f -- "$headers_file"
+fi
 if [[ -z "$session_id" || -z "${COMPOSIO_API_KEY:-}" ]]; then
   exit 0
 fi

@@ -411,4 +411,5 @@ jobs:
         continue-on-error: true
         env:
           SESSION_ID: ${{ steps.composio_session.outputs.session_id }}
+          HEADERS_FILE: ${{ steps.composio_session.outputs.headers_file }}
         run: bash .github/scripts/cleanup-composio-mcp.sh
