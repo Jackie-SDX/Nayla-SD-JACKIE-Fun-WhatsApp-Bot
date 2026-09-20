@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          branch="${git branch --show-current}"
+          branch="$(git branch --show-current)"
           printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
           echo "Initial branch: $branch"
 
@@ -56,14 +56,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          json="${mktemp}"
+          json="$(mktemp)"
           trap 'rm -f "$json"' EXIT
           curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
             https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
-          tag="${jq -r '.tag_name' "$json"}"
+          tag="$(jq -r '.tag_name' "$json")"
           version="${tag#v}"
-          url="${jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json"}"
-          digest="${jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json"}"
+          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
+          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           [[ -n "$url" && "$url" != "null" ]] || exit 1
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
@@ -85,7 +85,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tmp="${mktemp -d}"
+          tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 \
             "${{ steps.opencode_release.outputs.url }}" -o "$tmp/opencode.tar.gz"
@@ -94,7 +94,7 @@ jobs:
           echo "$digest  $tmp/opencode.tar.gz" | sha256sum --check -
           mkdir -p "$tmp/extract"
           tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
-          binary="${find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1}"
+          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
           [[ -n "$binary" ]] || exit 1
           install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
           "$HOME/.opencode/bin/opencode" --version
@@ -176,9 +176,9 @@ jobs:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: |
           set -euo pipefail
-          current="${git branch --show-current}"
+          current="$(git branch --show-current)"
           [[ "$current" == "$INITIAL_BRANCH" ]] || exit 1
-          [[ -z "${git status --porcelain}" ]] || exit 1
+          [[ -z "$(git status --porcelain)" ]] || exit 1
           if git ls-remote --heads origin "refs/heads/opencode/issue$TARGET_NUMBER-*" | grep -q .; then
             echo "::error title=Unsafe replay::An OpenCode branch already exists for this target; preserving it."
             exit 1
@@ -340,8 +340,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          findings="${tail -n 100 "$SAFE_LOG" 2>/dev/null || printf '%s' 'No sanitized agent log was available.'}"
-          body="${printf 'Agent recovery stopped without a fully verified success. No success is claimed.\n\nSanitized findings:\n\n%s' "$findings"}"
+          findings="$(tail -n 100 "$SAFE_LOG" 2>/dev/null || printf '%s' 'No sanitized agent log was available.')"
+          body="$(printf 'Agent recovery stopped without a fully verified success. No success is claimed.\n\nSanitized findings:\n\n%s' "$findings")"
           gh issue comment "$TARGET_NUMBER" --body "$body"
 
       - name: Routing summary
