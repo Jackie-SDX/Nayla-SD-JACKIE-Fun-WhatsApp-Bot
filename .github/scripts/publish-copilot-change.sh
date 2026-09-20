@@ -7,8 +7,34 @@ if [[ -z "$(git status --short)" ]]; then
   exit 1
 fi
 
+
+reject_sensitive_publication() {
+  local path base
+  while IFS= read -r path; do
+    base="${path##*/}"
+    case "$base" in
+      .env|.env.*)
+        case "$base" in
+          .env.example|.env.sample) ;;
+          *) echo "::error title=Sensitive publication path blocked::Refusing to publish a secret-bearing file."; return 1 ;;
+        esac
+        ;;
+      .npmrc|id_rsa|id_ed25519|*.pem|*.key|*.p12|*.pfx)
+        echo "::error title=Sensitive publication path blocked::Refusing to publish a secret-bearing file."; return 1
+        ;;
+    esac
+  done < <(git ls-files -m -o --exclude-standard)
+  git add -A
+  if git diff --cached --binary | grep -Eiq "(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[A-Za-z0-9_-]{20,}|-----BEGIN (OPENSSH |RSA |EC |DSA )?PRIVATE KEY-----)"; then
+    echo "::error title=Secret material detected::Refusing to publish a staged diff containing a high-confidence credential pattern."
+    git reset >/dev/null
+    return 1
+  fi
+}
+
+reject_sensitive_publication
+
 git diff --check
-git add -A
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 title="$(jq -r '.issue.title // .pull_request.title // "OpenCode task"' "$GITHUB_EVENT_PATH" | tr '\n' ' ' | cut -c1-72)"
