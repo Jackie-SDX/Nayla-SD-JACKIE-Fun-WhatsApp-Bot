@@ -68,7 +68,7 @@ jobs:
           assert cfg["mcp"]["composio"]["type"]=="local"
           assert cfg["mcp"]["composio"]["enabled"] is True
           assert "mcp-remote@0.14.2" in cfg["mcp"]["composio"]["command"]
-                              assert "continuing without Composio tools" in prep
+          assert "continuing without Composio tools" in prep
           assert "Replay safety gate" not in wf
           assert "three-strike" not in ins
           assert "up to five total evidence-based forensic recovery cycles" not in ins
