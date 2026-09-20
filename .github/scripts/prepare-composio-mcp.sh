@@ -5,11 +5,6 @@ disable_composio_mcp() {
   echo "::warning title=Composio optional integration unavailable::COMPOSIO_API_KEY is not configured; continuing without Composio MCP."
   printf 'COMPOSIO_MCP_URL=\n' >> "$GITHUB_ENV"
   printf 'COMPOSIO_MCP_HEADERS_FILE=\n' >> "$GITHUB_ENV"
-  {
-    echo 'OPENCODE_CONFIG_CONTENT<<COMPOSIO_CONFIG_EOF'
-    echo '{"mcp":{"composio":{"type":"local","enabled":false}}}'
-    echo 'COMPOSIO_CONFIG_EOF'
-  } >> "$GITHUB_ENV"
 }
 
 
@@ -65,11 +60,6 @@ jq -r 'to_entries[] | "\(.key): \(.value)"' <<<"$headers" > "$headers_file"
 
 printf 'COMPOSIO_MCP_URL=%s\n' "$mcp_url" >> "$GITHUB_ENV"
 printf 'COMPOSIO_MCP_HEADERS_FILE=%s\n' "$headers_file" >> "$GITHUB_ENV"
-{
-  echo 'OPENCODE_CONFIG_CONTENT<<COMPOSIO_CONFIG_EOF'
-  echo "$config"
-  echo 'COMPOSIO_CONFIG_EOF'
-} >> "$GITHUB_ENV"
 printf 'session_id=%s\n' "$session_id" >> "$GITHUB_OUTPUT"
 printf 'headers_file=%s\n' "$headers_file" >> "$GITHUB_OUTPUT"
 
