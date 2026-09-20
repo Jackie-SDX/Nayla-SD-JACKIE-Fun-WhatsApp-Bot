@@ -50,7 +50,8 @@ headers="$(jq -ec '.mcp.headers // {} | if type == "object" then . else error("m
 
 headers_file="$(mktemp "${RUNNER_TEMP:-/tmp}/composio-mcp-headers.XXXXXX")"
 chmod 600 "$headers_file"
-jq -r 'to_entries[] | "\(.key): \(.value)"' <<<"$headers" > "$headers_file"
+printf 'x-api-key: %s\n' "$COMPOSIO_API_KEY" > "$headers_file"
+jq -r 'to_entries[] | select((.key | ascii_downcase) != "x-api-key") | "\(.key): \(.value)"' <<<"$headers" >> "$headers_file"
 
 [[ "$mcp_url" =~ ^https://(app|backend)\.composio\.dev/tool_router/(v[0-9]+/)?[^/]+/mcp$ ]] || {
   echo "::warning title=Unexpected Composio MCP endpoint::Refusing an MCP URL outside Composio's hosted Tool Router domain."
@@ -58,6 +59,8 @@ jq -r 'to_entries[] | "\(.key): \(.value)"' <<<"$headers" > "$headers_file"
   exit 0
 }
 
+echo "::add-mask::$session_id"
+echo "::add-mask::$mcp_url"
 printf 'COMPOSIO_MCP_URL=%s\n' "$mcp_url" >> "$GITHUB_ENV"
 printf 'COMPOSIO_MCP_HEADERS_FILE=%s\n' "$headers_file" >> "$GITHUB_ENV"
 printf 'session_id=%s\n' "$session_id" >> "$GITHUB_OUTPUT"
