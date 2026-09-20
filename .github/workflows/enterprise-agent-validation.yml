@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/workflows/oc-control.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -44,6 +44,7 @@ jobs:
           bash -n .github/scripts/cleanup-composio-mcp.sh
           bash -n .github/scripts/post-oc-continuation.sh
           bash -n .github/scripts/reconcile-opencode-result.sh
+          bash -n .github/scripts/verify-agent-result.sh
           jq empty package.json
 
       - name: Run application test suite
@@ -168,3 +169,24 @@ jobs:
           print("routing/cache contract: OK")
           print("model ladder (big-pickle->mimo->copilot->none): OK")
           PY
+
+      - name: Validate enterprise recovery controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/oc-control.yml
+          test -f .github/scripts/retry-oc-failed-jobs.sh
+          test -f .github/scripts/verify-agent-result.sh
+          grep -Fq 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/oc-control.yml
+          grep -Fq 'rerun-failed-jobs' .github/scripts/retry-oc-failed-jobs.sh
+          grep -Fq 'already received a selective failed-job rerun' .github/scripts/retry-oc-failed-jobs.sh
+          grep -Fq "!startsWith(github.event.comment.body, '/oc retry failed jobs')" .github/workflows/opencode.yml
+          grep -Fq "!startsWith(github.event.comment.body, '/opencode retry failed jobs')" .github/workflows/opencode.yml
+          grep -Fq 'oc-run-id' .github/workflows/opencode.yml
+          grep -Fq 'OC_RUN_START_ISO' .github/workflows/opencode.yml
+          grep -Fq 'commits/$head_sha/check-runs' .github/scripts/verify-agent-result.sh
+          grep -Fq 'OC_CI_VERIFY_WAIT_MINUTES' .github/scripts/verify-agent-result.sh
+          grep -Fq 'OPENCODE_RETRY_CURRENT_ROUTE' .github/scripts/select-opencode-route.sh
+          grep -Fq 'zero process exit' .opencode/instructions.md
+          echo 'enterprise recovery controls: OK'
+
