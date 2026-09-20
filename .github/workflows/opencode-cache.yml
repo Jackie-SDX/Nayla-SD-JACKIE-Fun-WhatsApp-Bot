@@ -46,8 +46,8 @@ jobs:
           set -euo pipefail
           rm -rf "$HOME/.opencode"
           npm install --prefix "$HOME/.opencode" --no-audit --no-fund --prefer-online --save-exact "@opencode/cli@${OPENCODE_V2_VERSION}"
-          test -x "$HOME/.opencode/bin/opencode"
-          actual="$("$HOME/.opencode/bin/opencode" --version)"
+          test -x "$HOME/.opencode/node_modules/.bin/opencode"
+          actual="$("$HOME/.opencode/node_modules/.bin/opencode" --version)"
           echo "OpenCode V2 runtime: $actual"
           [[ "$actual" == *"$OPENCODE_V2_VERSION"* ]]
 

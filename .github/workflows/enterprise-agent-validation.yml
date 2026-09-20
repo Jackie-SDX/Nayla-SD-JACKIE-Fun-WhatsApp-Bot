@@ -144,18 +144,18 @@ jobs:
             tail -120 "$install_log" || true
             exit 1
           fi
-          test -x "$tmp/opencode/bin/opencode" || {
-            echo "::error title=OpenCode binary missing::Expected $tmp/opencode/bin/opencode after npm install."
+          test -x "$tmp/opencode/node_modules/.bin/opencode" || {
+            echo "::error title=OpenCode binary missing::Expected $tmp/opencode/node_modules/.bin/opencode after npm install."
             find "$tmp/opencode" -maxdepth 3 \( -type f -o -type l \) | head -120 || true
             exit 1
           }
-          if ! "$tmp/opencode/bin/opencode" --version >"$tmp/version.log" 2>&1; then
+          if ! "$tmp/opencode/node_modules/.bin/opencode" --version >"$tmp/version.log" 2>&1; then
             echo "::error title=OpenCode runtime failed::opencode --version exited non-zero."
             cat "$tmp/version.log" || true
             exit 1
           fi
           cat "$tmp/version.log"
-          if ! timeout 30s "$tmp/opencode/bin/opencode" run --help >"$tmp/run-help.log" 2>&1; then
+          if ! timeout 30s "$tmp/opencode/node_modules/.bin/opencode" run --help >"$tmp/run-help.log" 2>&1; then
             echo "::error title=OpenCode run command failed::opencode run --help did not complete successfully."
             cat "$tmp/run-help.log" || true
             exit 1
@@ -163,7 +163,7 @@ jobs:
           grep -q -- "--agent" "$tmp/run-help.log"
           grep -q -- "--model" "$tmp/run-help.log"
           grep -q -- "--standalone" "$tmp/run-help.log"
-          if ! agents="$(timeout 30s "$tmp/opencode/bin/opencode" agent list 2>&1)"; then
+          if ! agents="$(timeout 30s "$tmp/opencode/node_modules/.bin/opencode" agent list 2>&1)"; then
             echo "::error title=OpenCode agent discovery failed::agent list exited non-zero."
             printf "%s\n" "$agents" || true
             exit 1
