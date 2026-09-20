@@ -13,6 +13,7 @@ concurrency:
 jobs:
   opencode:
     if: |
+      github.event.comment.user.type == 'User' &&
       github.event.comment.user.login == github.repository_owner &&
       (
         startsWith(github.event.comment.body, '/oc') ||
