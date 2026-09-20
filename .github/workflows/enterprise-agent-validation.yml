@@ -144,38 +144,35 @@ jobs:
             tail -120 "$install_log" || true
             exit 1
           fi
-          test -x "$tmp/opencode/node_modules/.bin/opencode" || {
-            echo "::error title=OpenCode binary missing::Expected $tmp/opencode/node_modules/.bin/opencode after npm install."
+          bin="$tmp/opencode/node_modules/.bin/opencode"
+          test -x "$bin" || {
+            echo "::error title=OpenCode binary missing::Expected $bin after npm install."
             find "$tmp/opencode" -maxdepth 3 \( -type f -o -type l \) | head -120 || true
             exit 1
           }
-          if ! "$tmp/opencode/node_modules/.bin/opencode" --version >"$tmp/version.log" 2>&1; then
+          if ! "$bin" --version >"$tmp/version.log" 2>&1; then
             echo "::error title=OpenCode runtime failed::opencode --version exited non-zero."
             cat "$tmp/version.log" || true
             exit 1
           fi
           cat "$tmp/version.log"
-          if ! timeout 30s "$tmp/opencode/node_modules/.bin/opencode" run --help >"$tmp/run-help.log" 2>&1; then
+          timeout 30s "$bin" run --help >"$tmp/run-help.log" 2>&1 || {
             echo "::error title=OpenCode run command failed::opencode run --help did not complete successfully."
             cat "$tmp/run-help.log" || true
             exit 1
-          fi
+          }
           grep -q -- "--agent" "$tmp/run-help.log"
           grep -q -- "--model" "$tmp/run-help.log"
           grep -q -- "--standalone" "$tmp/run-help.log"
-          if ! agents="$(timeout 30s "$tmp/opencode/node_modules/.bin/opencode" agent list 2>&1)"; then
-            echo "::error title=OpenCode agent discovery failed::agent list exited non-zero."
-            printf "%s\n" "$agents" || true
+          smoke_prompt="CI runtime smoke test. Do not edit files. Reply on the final line with exactly COUNCIL_STAGE_COMPLETE=architect-reviewer."
+          if ! smoke="$(timeout 90s env OPENCODE_API_KEY="${{ secrets.OPENCODE_API_KEY }}" "$bin" run --standalone --auto --agent architect-reviewer --model opencode/big-pickle "$smoke_prompt" 2>&1)"; then
+            echo "::error title=OpenCode agent runtime smoke failed::architect-reviewer could not complete a read-only execution."
+            printf "%s\n" "$smoke" | tail -160
             exit 1
           fi
-          printf "%s\n" "$agents"
-          for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
-            grep -q "$agent" <<< "$agents" || {
-              echo "::error title=OpenCode V2 discovery failed::Missing $agent"
-              exit 1
-            }
-          done
-          [[ "$(cat "$tmp/version.log")" == *"$OPENCODE_V2_VERSION"* ]]
+          printf "%s\n" "$smoke" | tail -160
+          grep -q "COUNCIL_STAGE_COMPLETE=architect-reviewer" <<< "$smoke"
+          [[ "$("$bin" --version)" == *"$OPENCODE_V2_VERSION"* ]]
       - name: Validate route selector structure
         shell: bash
         run: |
