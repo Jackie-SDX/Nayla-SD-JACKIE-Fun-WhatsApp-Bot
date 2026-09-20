@@ -106,7 +106,7 @@ jobs:
           ! grep -q 'id-token: write' .github/workflows/opencode.yml
           ! grep -q 'actions/cache/save' .github/workflows/opencode.yml
           ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml
-          ! grep -Eiq 'echo .*GEMINI_API_KEY|echo .*OPENROUTER_API_KEY|echo .*COMPOSIO_API_KEY|printf .*GEMINI_API_KEY' .github/workflows/opencode.yml .github/scripts/*.sh
+          ! grep -Eiq '(^|[^[:alnum:]_])(echo|printf)[^\n]*\$\{?(GEMINI_API_KEY|OPENROUTER_API_KEY|COMPOSIO_API_KEY)' .github/workflows/opencode.yml .github/scripts/*.sh
           ! grep -Eiq 'qwen/qwen3\\.8-max' .github/workflows/opencode.yml .github/scripts/*.sh
           grep -q 'actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode.yml
           grep -q 'actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode-cache.yml
