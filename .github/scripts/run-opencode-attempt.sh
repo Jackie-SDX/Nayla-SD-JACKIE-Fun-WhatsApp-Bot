@@ -18,12 +18,6 @@ set -e
 safe_contents="$(cat "$raw_log")"
 
 for secret in \
-  "${GEMINI_API_KEY:-}" \
-  "${GEMINI_API_KEY_2:-}" \
-  "${GEMINI_API_KEY_3:-}" \
-  "${GEMINI_API_KEY_4:-}" \
-  "${GEMINI_API_KEY_5:-}" \
-  "${OPENROUTER_API_KEY:-}" \
   "${COMPOSIO_API_KEY:-}" \
   "${OPENCODE_API_KEY:-}" \
   "${GITHUB_TOKEN:-}" \
