@@ -94,4 +94,4 @@ JSON/YAML/shell syntax, repository-specific tests, complete diff, exact head SHA
 Never claim the council is proven merely because configuration parsing succeeds.
 
 ## Runtime
-CI uses the OpenCode V2 CLI executable `opencode2`, pinned to `0.0.0-beta-19723`. Upgrades are explicit, reviewed, and runtime-validated rather than floating to latest.
+CI uses the OpenCode V2 CLI executable `opencode`, pinned to `2.0.3`. Upgrades are explicit, reviewed, and runtime-validated rather than floating to latest.

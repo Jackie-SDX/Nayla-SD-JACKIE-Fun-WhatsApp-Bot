@@ -181,7 +181,7 @@ Never send a project API key as `x-consumer-api-key`, never hard-code a `ck_*` c
 
 The MCP session should be as short-lived and scoped as practical. Do not print session URLs, session headers, or API keys.
 The OpenCode workflow requires `COMPOSIO_API_KEY` because Composio is part of its controlled agent gateway. Failure to create or validate the session-backed MCP is a hard failure.
-OpenCode 1.x reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. The temporary mode-0600 header file always carries the project `x-api-key` plus any non-duplicate session headers returned by Composio, and is deleted during cleanup. The session URL and ID are masked before entering GitHub Actions environment output.
+OpenCode V2 reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. The temporary mode-0600 header file always carries the project `x-api-key` plus any non-duplicate session headers returned by Composio, and is deleted during cleanup. The session URL and ID are masked before entering GitHub Actions environment output.
 The session user is the stable external `COMPOSIO_USER_ID` configured by the workflow (defaulting to the repository owner when no repository variable overrides it). Do not substitute another user's private Composio connection. If the requested toolkit has no active connection for that session user, use Composio's connection-management flow to initiate authorization for that same user; never guess or silently cross user boundaries.
 
 ### Capability discovery and routing checklist
@@ -467,4 +467,4 @@ Do not expose GitHub tokens, Copilot credentials, or Composio project keys to th
 OpenCode V2 semantics are used for new council configuration: permissions, primary agents, and the subagent action name.
 
 ## Pinned runtime
-The GitHub Actions control plane uses OpenCode V2 CLI `opencode2`, pinned to `0.0.0-beta-19723`. Stable `opencode` V1 is intentionally rejected because it is not compatible with the V2 permissions configuration.
+The GitHub Actions control plane uses the OpenCode V2 CLI package `@opencode/cli`, pinned to `2.0.3`, and launches its `opencode` executable.

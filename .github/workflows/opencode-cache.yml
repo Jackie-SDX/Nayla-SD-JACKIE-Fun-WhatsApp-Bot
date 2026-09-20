@@ -22,11 +22,11 @@ jobs:
       - name: Verify pinned OpenCode V2 package
         id: runtime
         env:
-          OPENCODE_V2_VERSION: "0.0.0-beta-19723"
+          OPENCODE_V2_VERSION: "2.0.3"
         shell: bash
         run: |
           set -euo pipefail
-          npm view "@opencode-ai/cli@${OPENCODE_V2_VERSION}" version --json | jq -e --arg v "$OPENCODE_V2_VERSION" '. == $v' >/dev/null
+          npm view "@opencode/cli@${OPENCODE_V2_VERSION}" version --json | jq -e --arg v "$OPENCODE_V2_VERSION" '. == $v' >/dev/null
           echo "Verified OpenCode V2 package: $OPENCODE_V2_VERSION"
 
       - name: Restore OpenCode V2 cache
@@ -34,20 +34,20 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.opencode2
-          key: opencode2-${{ runner.os }}-${{ runner.arch }}-0.0.0-beta-19723
+          path: ~/.opencode
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-2.0.3
 
       - name: Install OpenCode V2 on cache miss
         if: steps.cache_restore.outputs.cache-hit != 'true'
         env:
-          OPENCODE_V2_VERSION: "0.0.0-beta-19723"
+          OPENCODE_V2_VERSION: "2.0.3"
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf "$HOME/.opencode2"
-          npm install --prefix "$HOME/.opencode2" --no-audit --no-fund --prefer-online --save-exact "@opencode-ai/cli@${OPENCODE_V2_VERSION}"
-          test -x "$HOME/.opencode2/bin/opencode2"
-          actual="$("$HOME/.opencode2/bin/opencode2" --version)"
+          rm -rf "$HOME/.opencode"
+          npm install --prefix "$HOME/.opencode" --no-audit --no-fund --prefer-online --save-exact "@opencode/cli@${OPENCODE_V2_VERSION}"
+          test -x "$HOME/.opencode/bin/opencode"
+          actual="$("$HOME/.opencode/bin/opencode" --version)"
           echo "OpenCode V2 runtime: $actual"
           [[ "$actual" == *"$OPENCODE_V2_VERSION"* ]]
 
@@ -56,5 +56,5 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.opencode2
-          key: opencode2-${{ runner.os }}-${{ runner.arch }}-0.0.0-beta-19723
+          path: ~/.opencode
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-2.0.3

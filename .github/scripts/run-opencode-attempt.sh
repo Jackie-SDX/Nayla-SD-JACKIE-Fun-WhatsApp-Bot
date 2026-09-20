@@ -76,7 +76,7 @@ run_build() {
   local prompt_file="$1" output_file="$2" raw
   raw="$(mktemp "${RUNNER_TEMP:-/tmp}/opencode-build-raw.XXXXXX")"
   set +e
-  opencode2 run --standalone --auto --agent build --model "$model" "$(cat "$prompt_file")" >"$raw" 2>&1
+  opencode run --standalone --auto --agent build --model "$model" "$(cat "$prompt_file")" >"$raw" 2>&1
   local rc=$?
   set -e
   python3 - "$raw" "$output_file" <<'PY'

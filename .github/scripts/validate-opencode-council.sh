@@ -35,7 +35,7 @@ test -f .github/scripts/run-opencode-attempt.sh
 test -f .github/scripts/publish-opencode-change.sh
 test -f .github/scripts/validate-application.sh
 
-grep -q 'opencode2 run --standalone --auto --agent' .github/scripts/run-opencode-council-stage.sh
+grep -q 'opencode run --standalone --auto --agent' .github/scripts/run-opencode-council-stage.sh
 grep -q 'COUNCIL_STAGE_COMPLETE=' .github/scripts/run-opencode-council-stage.sh
 grep -q 'COUNCIL_DECISION=' .github/scripts/run-opencode-attempt.sh
 grep -q 'COUNCIL_VERDICT=' .github/scripts/run-opencode-attempt.sh
