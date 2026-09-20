@@ -36,7 +36,10 @@ test -f .github/scripts/publish-opencode-change.sh
 test -f .github/scripts/validate-application.sh
 
 grep -q 'opencode run --standalone --auto --agent' .github/scripts/run-opencode-council-stage.sh
-! grep -R -q 'opencode agent list' .github/scripts .github/workflows
+if grep -q 'opencode agent list' .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/run-opencode-council-stage.sh .github/scripts/run-opencode-attempt.sh; then
+  echo "::error title=Legacy OpenCode V1 command detected::Production automation contains removed opencode agent list invocation."
+  exit 1
+fi
 grep -q 'COUNCIL_STAGE_COMPLETE=' .github/scripts/run-opencode-council-stage.sh
 grep -q 'COUNCIL_DECISION=' .github/scripts/run-opencode-attempt.sh
 grep -q 'COUNCIL_VERDICT=' .github/scripts/run-opencode-attempt.sh
