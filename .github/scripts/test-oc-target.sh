@@ -246,5 +246,58 @@ else
   ok "controller worktree is free of .octmp fixtures after the contract tests"
 fi
 
-printf '\nremote-target contract tests: %s passed, %s failed\n' "$PASS" "$FAIL"
+pr# ---------------------------------------------------------------------------
+# 4. remote verifier exact-head regression tests
+# ---------------------------------------------------------------------------
+VERIFY_WS="$TESTS/verify-target"
+FAKE_BIN="$TESTS/fake-bin"
+mkdir -p "$VERIFY_WS" "$FAKE_BIN"
+git -C "$VERIFY_WS" init -q -b main
+git -C "$VERIFY_WS" config user.name "fixture"
+git -C "$VERIFY_WS" config user.email "fixture@example.com"
+printf 'workspace base\n' > "$VERIFY_WS/base.txt"
+git -C "$VERIFY_WS" add base.txt
+git -C "$VERIFY_WS" commit -qm base
+LOCAL_VERIFY_SHA="$(git -C "$VERIFY_WS" rev-parse HEAD)"
+EXPECTED_VERIFY_SHA="2222222222222222222222222222222222222222"
+
+cat > "$FAKE_BIN/gh" <<'FAKEGH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *"pr list"*)
+    printf '%s\n' '[{"number":1,"url":"https://github.com/fixture/target/pull/1","state":"OPEN","mergedAt":null,"headRefOid":"2222222222222222222222222222222222222222"}]'
+    ;;
+  *"/git/ref/heads/"*)
+    printf '%s\n' '{"object":{"sha":"2222222222222222222222222222222222222222"}}'
+    ;;
+  *"/commits/"*"/check-runs"*)
+    if [[ "${FAKE_GH_FAIL:-0}" == "1" ]]; then
+      printf '%s\n' '{"check_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"failure"}]}'
+    else
+      printf '%s\n' '{"check_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"skipped"}]}'
+    fi
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+FAKEGH
+chmod +x "$FAKE_BIN/gh"
+
+new_output_files verifier-head-mismatch
+if PATH="$FAKE_BIN:$PATH"    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=0 BASE_REF="main"    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT"    OC_TARGET_MODE="remote" OC_TARGET_REPO="fixture/target" OC_TARGET_BASE="main"    OC_TARGET_BRANCH="oc/test" OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA"    OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1; then
+  ok "remote verifier accepts exact target PR/check head when local workspace SHA differs"
+else
+  bad "remote verifier accepts exact target PR/check head when local workspace SHA differs"
+fi
+
+new_output_files verifier-failure
+if PATH="$FAKE_BIN:$PATH" FAKE_GH_FAIL=1    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=0 BASE_REF="main"    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT"    OC_TARGET_MODE="remote" OC_TARGET_REPO="fixture/target" OC_TARGET_BASE="main"    OC_TARGET_BRANCH="oc/test" OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA"    OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1; then
+  bad "remote verifier rejects any failed check-run even when another check is green"
+else
+  ok "remote verifier rejects any failed check-run even when another check is green"
+fi
+
+intf '\nremote-target contract tests: %s passed, %s failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
