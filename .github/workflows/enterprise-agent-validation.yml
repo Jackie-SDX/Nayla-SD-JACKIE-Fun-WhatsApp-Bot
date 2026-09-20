@@ -20,6 +20,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      OPENCODE_V2_VERSION: "2.0.3"
+      COPILOT_CLI_VERSION: "1.0.86"
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -198,3 +201,24 @@ jobs:
           grep -qx 'provider=github-copilot' "$tmp/route_output"
           grep -qx 'OPENCODE_SELECTED_PROVIDER=github-copilot' "$tmp/route_env"
           echo "Provider failover classifier and route transition: PASS"
+
+      - name: Validate Copilot CLI runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COPILOT_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          npm view "@github/copilot@${COPILOT_CLI_VERSION}" version --json | jq -e --arg v "$COPILOT_CLI_VERSION" '. == $v' >/dev/null
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          npm install --prefix "$tmp/copilot" --no-audit --no-fund --prefer-online --save-exact "@github/copilot@${COPILOT_CLI_VERSION}" >/tmp/copilot-install.log 2>&1
+          bin="$tmp/copilot/node_modules/.bin/copilot"
+          test -x "$bin"
+          actual="$("$bin" --version)"
+          echo "$actual"
+          [[ "$actual" == *"$COPILOT_CLI_VERSION"* ]]
+          "$bin" --help 2>&1 | grep -q -- '--prompt'
+          "$bin" --help 2>&1 | grep -q -- '--additional-mcp-config'
+          "$bin" --help 2>&1 | grep -q -- '--allow-tool'
+          "$bin" --help 2>&1 | grep -q -- '--deny-tool'
+          "$bin" --help 2>&1 | grep -q -- '--max-ai-credits'
+          echo "Copilot CLI runtime: PASS"

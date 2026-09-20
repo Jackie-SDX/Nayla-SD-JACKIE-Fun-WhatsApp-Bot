@@ -45,13 +45,34 @@ PY
   mcp_args+=(--additional-mcp-config "@$mcp_config" --allow-tool "composio")
 fi
 
+copilot_root="${RUNNER_TEMP:-/tmp}/copilot-cli"
+copilot_bin="$copilot_root/node_modules/.bin/copilot"
+mkdir -p "$copilot_root"
+if [[ ! -x "$copilot_bin" ]]; then
+  npm install --prefix "$copilot_root" --no-audit --no-fund --prefer-online --save-exact "@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}" >"$copilot_root/install.log" 2>&1 || {
+    echo "::error title=GitHub Copilot CLI installation failed::Could not install the pinned @github/copilot package."
+    tail -120 "$copilot_root/install.log" || true
+    exit 1
+  }
+fi
+test -x "$copilot_bin" || {
+  echo "::error title=GitHub Copilot CLI missing::Expected $copilot_bin."
+  exit 1
+}
+copilot_actual="$("$copilot_bin" --version 2>/dev/null)"
+echo "GitHub Copilot CLI: $copilot_actual"
+[[ "$copilot_actual" == *"${COPILOT_CLI_VERSION:-1.0.86}"* ]] || {
+  echo "::error title=GitHub Copilot CLI version mismatch::Expected ${COPILOT_CLI_VERSION:-1.0.86}, got $copilot_actual"
+  exit 1
+}
+
 prompt="$(cat .github/copilot-instructions.md)"
 prompt+=$'\n\n## Current GitHub task\n'
 prompt+="$task"
 prompt+=$'\n\nDo not commit, push, reset, clean, delete branches, or create GitHub-side mutations. Inspect and edit only the checked-out isolated branch. Use Composio MCP when an external tool is actually required.\n'
 
 set +e
-copilot \
+"$copilot_bin" \
   --model auto \
   --max-ai-credits "${COPILOT_MAX_AI_CREDITS:-60}" \
   --no-ask-user \
