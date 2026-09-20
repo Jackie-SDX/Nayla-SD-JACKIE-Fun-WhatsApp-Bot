@@ -56,6 +56,26 @@
       "effect": "allow"
     },
     {
+      "action": "edit",
+      "resource": "*.env",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "*.env.*",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": ".env",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": ".npmrc",
+      "effect": "deny"
+    },
+    {
       "action": "shell",
       "resource": "*",
       "effect": "allow"
