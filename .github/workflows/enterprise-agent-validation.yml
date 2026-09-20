@@ -136,13 +136,38 @@ jobs:
           npm view "@opencode/cli@${OPENCODE_V2_VERSION}" version --json | jq -e --arg v "$OPENCODE_V2_VERSION" '. == $v' >/dev/null
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          npm install --prefix "$tmp/opencode" --no-audit --no-fund --prefer-online --save-exact "@opencode/cli@${OPENCODE_V2_VERSION}" >/tmp/opencode-install.log 2>&1
-          test -x "$tmp/opencode/bin/opencode"
-          "$tmp/opencode/bin/opencode" --version
-          "$tmp/opencode/bin/opencode" run --help | grep -q -- "--agent"
-          "$tmp/opencode/bin/opencode" run --help | grep -q -- "--model"
-          "$tmp/opencode/bin/opencode" run --help | grep -q -- "--standalone"
-          agents="$("$tmp/opencode/bin/opencode" agent list)"
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          install_log="$tmp/install.log"
+          if ! npm install --prefix "$tmp/opencode" --no-audit --no-fund --prefer-online --save-exact "@opencode/cli@${OPENCODE_V2_VERSION}" >"$install_log" 2>&1; then
+            echo "::error title=OpenCode package installation failed::npm could not install @opencode/cli@${OPENCODE_V2_VERSION}"
+            tail -120 "$install_log" || true
+            exit 1
+          fi
+          test -x "$tmp/opencode/bin/opencode" || {
+            echo "::error title=OpenCode binary missing::Expected $tmp/opencode/bin/opencode after npm install."
+            find "$tmp/opencode" -maxdepth 3 \( -type f -o -type l \) | head -120 || true
+            exit 1
+          }
+          if ! "$tmp/opencode/bin/opencode" --version >"$tmp/version.log" 2>&1; then
+            echo "::error title=OpenCode runtime failed::opencode --version exited non-zero."
+            cat "$tmp/version.log" || true
+            exit 1
+          fi
+          cat "$tmp/version.log"
+          if ! timeout 30s "$tmp/opencode/bin/opencode" run --help >"$tmp/run-help.log" 2>&1; then
+            echo "::error title=OpenCode run command failed::opencode run --help did not complete successfully."
+            cat "$tmp/run-help.log" || true
+            exit 1
+          fi
+          grep -q -- "--agent" "$tmp/run-help.log"
+          grep -q -- "--model" "$tmp/run-help.log"
+          grep -q -- "--standalone" "$tmp/run-help.log"
+          if ! agents="$(timeout 30s "$tmp/opencode/bin/opencode" agent list 2>&1)"; then
+            echo "::error title=OpenCode agent discovery failed::agent list exited non-zero."
+            printf "%s\n" "$agents" || true
+            exit 1
+          fi
           printf "%s\n" "$agents"
           for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
             grep -q "$agent" <<< "$agents" || {
@@ -150,7 +175,7 @@ jobs:
               exit 1
             }
           done
-          [[ "$("$tmp/opencode/bin/opencode" --version)" == *"$OPENCODE_V2_VERSION"* ]]
+          [[ "$(cat "$tmp/version.log")" == *"$OPENCODE_V2_VERSION"* ]]
       - name: Validate route selector structure
         shell: bash
         run: |
