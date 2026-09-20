@@ -39,6 +39,7 @@ function serverForFixture() {
   <a data-href="/decoy">fake (ignored)</a>
   <a title="a > b" href="real-link">gt in attr</a>
   <a data-x="c" href="/real-link2">normal</a>
+  <a href="/encoded">Encoded &amp; &lt;text&gt;</a>
   <a href="mailto:x@y.z">mail (ignored)</a>
   <a href="#frag">fragment (ignored)</a>
 </body>
@@ -117,6 +118,11 @@ async function main() {
     const trickyHrefs = tricky.links.map((link) => link.href);
     assert.ok(trickyHrefs.includes("https://example.com/root/real-link"), "link with '>' inside quoted attr kept and resolved against <base>");
     assert.ok(trickyHrefs.includes("https://example.com/real-link2"), "leading-slash href is an absolute-path reference (RFC 3986)");
+    assert.strictEqual(
+      tricky.links.find((link) => link.href === "https://example.com/encoded").text,
+      "Encoded & <text>",
+      "HTML entities in link text are decoded",
+    );
     assert.ok(!trickyHrefs.some((href) => href.endsWith("/decoy")), "data-href must not be treated as a link");
     assert.ok(!trickyHrefs.some((href) => href.startsWith("mailto:") || href.endsWith("#frag")), "mailto: and fragment links still ignored");
     console.log("PASS tricky-html: attribute with '>', apostrophe meta, data-href, '<' in title");
