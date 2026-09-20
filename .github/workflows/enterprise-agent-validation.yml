@@ -222,6 +222,6 @@ jobs:
           "$bin" --help 2>&1 | grep -q -- '--deny-tool'
           "$bin" --help 2>&1 | grep -q -- '--max-ai-credits'
           echo "Copilot CLI runtime: PASS"
+          grep -q '@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}' .github/scripts/run-copilot-attempt.sh
+          grep -q 'allow-tool "write"' .github/scripts/run-copilot-attempt.sh
 
-grep -q '@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}' .github/scripts/run-copilot-attempt.sh
-grep -q 'allow-tool "write"' .github/scripts/run-copilot-attempt.sh
