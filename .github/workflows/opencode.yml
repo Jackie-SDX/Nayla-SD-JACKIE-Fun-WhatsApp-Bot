@@ -17,7 +17,9 @@ jobs:
       (
         startsWith(github.event.comment.body, '/oc') ||
         startsWith(github.event.comment.body, '/opencode')
-      )
+      ) &&
+      !startsWith(github.event.comment.body, '/oc retry failed jobs') &&
+      !startsWith(github.event.comment.body, '/opencode retry failed jobs')
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -54,7 +56,19 @@ jobs:
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          echo "OC_INITIAL_SHA=$sha" >> "$GITHUB_ENV"
+          echo "OC_RUN_START_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           echo "Initial checkout SHA: $sha"
+
+      - name: Register /oc run marker
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_NUMBER" =~ ^[0-9]+$ && "$TARGET_NUMBER" != "0" ]] || exit 0
+          gh issue comment "$TARGET_NUMBER" --body "<!-- oc-run-id:${GITHUB_RUN_ID} issue:${TARGET_NUMBER} sha:${GITHUB_SHA} -->"
 
       - name: Resolve and verify OpenCode release
         id: opencode_release
@@ -184,6 +198,21 @@ jobs:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
 
+      - name: Verify agent attempt 1
+        id: verify_1
+        if: always() && steps.agent_1.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          PROVIDER: ${{ steps.route_1.outputs.provider }}
+          ATTEMPT: "1"
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          OC_CI_VERIFY_WAIT_MINUTES: "20"
+          OC_CI_VERIFY_POLL_SECONDS: "20"
+        run: bash .github/scripts/verify-agent-result.sh
+
       - name: Classify failure after attempt 1
         id: classify_1
         if: always() && steps.agent_1.outcome == 'failure'
@@ -195,7 +224,17 @@ jobs:
 
       - name: Select route 2
         id: route_2
-        if: steps.agent_1.outcome == 'failure' && steps.agent_1.outputs.termination_reason != 'timeout' && steps.classify_1.outcome == 'success'
+        if: |
+          (
+            steps.agent_1.outcome == 'failure' &&
+            steps.agent_1.outputs.termination_reason != 'timeout' &&
+            steps.classify_1.outcome == 'success'
+          ) || (
+            steps.agent_1.outcome == 'success' &&
+            steps.verify_1.outcome == 'failure' &&
+            steps.verify_1.outputs.retryable == 'true' &&
+            steps.verify_1.outputs.timed_out != 'true'
+          )
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -244,6 +283,21 @@ jobs:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
 
+      - name: Verify agent attempt 2
+        id: verify_2
+        if: always() && steps.agent_2.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          PROVIDER: ${{ steps.route_2.outputs.provider }}
+          ATTEMPT: "2"
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          OC_CI_VERIFY_WAIT_MINUTES: "20"
+          OC_CI_VERIFY_POLL_SECONDS: "20"
+        run: bash .github/scripts/verify-agent-result.sh
+
       - name: Classify failure after attempt 2
         id: classify_2
         if: always() && steps.agent_2.outcome == 'failure'
@@ -255,7 +309,17 @@ jobs:
 
       - name: Select route 3
         id: route_3
-        if: steps.agent_2.outcome == 'failure' && steps.agent_2.outputs.termination_reason != 'timeout' && steps.classify_2.outcome == 'success'
+        if: |
+          (
+            steps.agent_2.outcome == 'failure' &&
+            steps.agent_2.outputs.termination_reason != 'timeout' &&
+            steps.classify_2.outcome == 'success'
+          ) || (
+            steps.agent_2.outcome == 'success' &&
+            steps.verify_2.outcome == 'failure' &&
+            steps.verify_2.outputs.retryable == 'true' &&
+            steps.verify_2.outputs.timed_out != 'true'
+          )
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -303,8 +367,23 @@ jobs:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
 
+      - name: Verify agent attempt 3
+        id: verify_3
+        if: always() && steps.agent_3.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          PROVIDER: ${{ steps.route_3.outputs.provider }}
+          ATTEMPT: "3"
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
+          OC_CI_VERIFY_WAIT_MINUTES: "20"
+          OC_CI_VERIFY_POLL_SECONDS: "20"
+        run: bash .github/scripts/verify-agent-result.sh
+
       - name: OpenCode success inspection
-        if: always() && ((steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'opencode') || (steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'opencode') || (steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && ((steps.verify_1.outputs.verified == 'true' && steps.route_1.outputs.provider == 'opencode') || (steps.verify_2.outputs.verified == 'true' && steps.route_2.outputs.provider == 'opencode') || (steps.verify_3.outputs.verified == 'true' && steps.route_3.outputs.provider == 'opencode'))
         shell: bash
         run: |
           set -euo pipefail
@@ -314,7 +393,7 @@ jobs:
           git log -1 --oneline
 
       - name: Reconcile OpenCode publication
-        if: always() && ((steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'opencode') || (steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'opencode') || (steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && ((steps.verify_1.outputs.verified == 'true' && steps.route_1.outputs.provider == 'opencode') || (steps.verify_2.outputs.verified == 'true' && steps.route_2.outputs.provider == 'opencode') || (steps.verify_3.outputs.verified == 'true' && steps.route_3.outputs.provider == 'opencode'))
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
@@ -322,7 +401,7 @@ jobs:
         run: bash .github/scripts/reconcile-opencode-result.sh
 
       - name: Post controlled timeout continuation
-        if: always() && (steps.agent_1.outputs.termination_reason == 'timeout' || steps.agent_2.outputs.termination_reason == 'timeout' || steps.agent_3.outputs.termination_reason == 'timeout')
+        if: always() && (steps.agent_1.outputs.termination_reason == 'timeout' || steps.agent_2.outputs.termination_reason == 'timeout' || steps.agent_3.outputs.termination_reason == 'timeout' || steps.verify_1.outputs.timed_out == 'true' || steps.verify_2.outputs.timed_out == 'true' || steps.verify_3.outputs.timed_out == 'true')
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -356,6 +435,9 @@ jobs:
           P1: ${{ steps.publish_1.outcome }}
           P2: ${{ steps.publish_2.outcome }}
           P3: ${{ steps.publish_3.outcome }}
+          V1: ${{ steps.verify_1.outputs.verified }}
+          V2: ${{ steps.verify_2.outputs.verified }}
+          V3: ${{ steps.verify_3.outputs.verified }}
         run: |
           {
             echo "### /oc hybrid agent routing"
@@ -382,12 +464,9 @@ jobs:
         run: |
           set -euo pipefail
           success=false
-          if [[ "$A1" == "success" && "$R1" == "opencode" ]]; then success=true; fi
-          if [[ "$A2" == "success" && "$R2" == "opencode" ]]; then success=true; fi
-          if [[ "$A3" == "success" && "$R3" == "opencode" ]]; then success=true; fi
-          if [[ "$A1" == "success" && "$R1" == "github-copilot" && "$P1" == "success" ]]; then success=true; fi
-          if [[ "$A2" == "success" && "$R2" == "github-copilot" && "$P2" == "success" ]]; then success=true; fi
-          if [[ "$A3" == "success" && "$R3" == "github-copilot" && "$P3" == "success" ]]; then success=true; fi
+          if [[ "$V1" == "true" || "$V2" == "true" || "$V3" == "true" ]]; then
+            success=true
+          fi
           if [[ "$success" == "true" ]]; then
             echo "Hybrid agent completed successfully."
             exit 0

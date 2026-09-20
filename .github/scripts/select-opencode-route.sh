@@ -6,6 +6,13 @@ start=0
 if [[ "$route_index" =~ ^[0-9]+$ ]]; then
   start=$route_index
 fi
+retry_current="${OPENCODE_RETRY_CURRENT_ROUTE:-0}"
+if [[ "$retry_current" == "1" && "$route_index" =~ ^[0-9]+$ ]]; then
+  start="$route_index"
+  if [[ -n "$GITHUB_ENV" ]]; then
+    echo "OPENCODE_RETRY_CURRENT_ROUTE=0" >> "$GITHUB_ENV"
+  fi
+fi
 
 excluded=",${OPENCODE_EXCLUDED_PROVIDERS:-},"
 models_csv="${OPENCODE_ZEN_FREE_MODELS:-big-pickle,mimo-v2.5-free}"

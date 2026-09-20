@@ -213,7 +213,7 @@ For consequential web claims, do not rely on a single search result. Prefer an a
 
 For implementation claims, do not stop at "the patch looks correct": execute it, inspect the output, and validate the resulting repository state and CI behavior.
 
-When the agent succeeds, retain enough evidence to explain what changed, why it changed, what was tested, and why the remaining state satisfies the requested acceptance criteria. When it cannot establish success, stop at the evidence boundary and report the unresolved gap rather than declaring success.
+When the agent succeeds, retain enough evidence to explain what changed, why it changed, what was tested, and why the remaining state satisfies the requested acceptance criteria. A zero process exit, a generated PR, or a model-written success statement is not sufficient evidence of task success: the workflow independently verifies repository state and the required validate check before it can report success. Pending or failed validation is an unresolved task state, not success. When it cannot establish success, stop at the evidence boundary and report the unresolved gap rather than declaring success.
 
 ### Tavily
 
