@@ -56,18 +56,14 @@ jobs:
           grep -q 'COMPOSIO_USER_ID:' .github/workflows/opencode.yml
           grep -q 'prepare-composio-mcp.sh' .github/workflows/opencode.yml
           grep -q 'cleanup-composio-mcp.sh' .github/workflows/opencode.yml
-          ! grep -A4 'Bootstrap Composio session MCP' .github/workflows/opencode.yml | grep -q 'continue-on-error: true'
-          grep -Fq 'https://(app|backend)' .github/scripts/prepare-composio-mcp.sh
-          grep -Fq 'tool_router/' .github/scripts/prepare-composio-mcp.sh
+          ! grep -A8 'Bootstrap Composio session MCP' .github/workflows/opencode.yml | grep -q 'continue-on-error: true'
+          grep -q 'backend.composio.dev/api/v3.1/tool_router/session' .github/scripts/prepare-composio-mcp.sh
           grep -q 'mcp-remote@0.14.2' opencode.json
           grep -q 'http-only' opencode.json
           grep -q 'header-file' opencode.json
           jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
           grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
-          grep -q 'id-token: write' .github/workflows/opencode.yml
-          grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
-          grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
           grep -q 'route_3' .github/workflows/opencode.yml
           grep -q 'three-strike' .opencode/instructions.md
           grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
@@ -80,6 +76,12 @@ jobs:
           ! grep -q 'x-consumer-api-key' .github/scripts/run-copilot-attempt.sh
           ! grep -q 'id-token: write' .github/workflows/opencode.yml
           ! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
+          grep -q 'Publish OpenCode attempt 1' .github/workflows/opencode.yml
+          grep -q 'Publish OpenCode attempt 2' .github/workflows/opencode.yml
+          grep -q 'Publish OpenCode attempt 3' .github/workflows/opencode.yml
+          grep -q 'command_gate.outputs.valid' .github/workflows/opencode.yml
+          grep -q 'COUNCIL_VERDICT' .github/scripts/run-opencode-attempt.sh
+          grep -q 'git push --set-upstream origin' .github/scripts/publish-opencode-change.sh
 
       - name: Validate Zen configuration
         shell: bash
@@ -99,6 +101,7 @@ jobs:
           jq -e '.permissions[] | select(.action == "shell" and .resource == "git push *" and .effect == "deny")' opencode.json >/dev/null
           jq -e '.permissions[] | select(.action == "shell" and .resource == "git reset *" and .effect == "deny")' opencode.json >/dev/null
           jq -e '.permissions[] | select(.action == "shell" and .resource == "git clean *" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.update == "disable"' opencode.json >/dev/null
           jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
           jq -e '.mcp.composio.timeout == 20000' opencode.json >/dev/null
@@ -120,7 +123,6 @@ jobs:
           grep -q 'contents: write' .github/workflows/opencode.yml
           grep -q 'issues: write' .github/workflows/opencode.yml
           grep -q 'pull-requests: write' .github/workflows/opencode.yml
-          grep -q 'id-token: write' .github/workflows/opencode.yml
 
       - name: Validate agent council
         shell: bash
