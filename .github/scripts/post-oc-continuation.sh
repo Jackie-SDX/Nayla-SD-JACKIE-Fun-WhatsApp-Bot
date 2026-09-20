@@ -22,7 +22,17 @@ open_prs="$(
     ' 2>/dev/null || true
 )"
 
+# Remote-target runs leave a machine-readable durable marker so a bare
+# "/oc continue" can recover the exact target base/branch on a later run.
+target_marker=""
+if [[ "${OC_TARGET_MODE:-local}" == "remote" && -n "${OC_TARGET_REPO:-}" ]]; then
+  oc_branch="$(git -C "${OC_TARGET_WORKSPACE:-.}" branch --show-current 2>/dev/null || printf '%s' 'unknown')"
+  [[ -n "$oc_branch" && "$oc_branch" != "unknown" ]] || oc_branch="${OC_TARGET_BRANCH:-}"
+  target_marker="<!-- oc-target-repo:${OC_TARGET_REPO} base:${OC_TARGET_BASE:-main} branch:${oc_branch:-unknown} -->"
+fi
+
 body="$(cat <<EOF
+$target_marker
 <!-- oc-checkpoint-run-id:$run_id issue:$target -->
 ## /oc execution checkpoint
 
@@ -37,6 +47,7 @@ Execution:
 - runner branch: $branch
 - runner HEAD: $sha
 - last commit: $last_commit
+- execution mode: ${OC_TARGET_MODE:-local}${target_marker:+ (remote target: $OC_TARGET_REPO @ ${OC_TARGET_BASE:-main}, branch: ${OC_TARGET_BRANCH:-})}
 
 Working tree at timeout:
 ${status:-clean}

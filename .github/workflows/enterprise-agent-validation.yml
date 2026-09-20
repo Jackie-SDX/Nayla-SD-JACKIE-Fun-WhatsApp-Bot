@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/workflows/oc-control.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/workflows/oc-control.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -46,6 +46,11 @@ jobs:
           bash -n .github/scripts/post-oc-continuation.sh
           bash -n .github/scripts/reconcile-opencode-result.sh
           bash -n .github/scripts/verify-agent-result.sh
+          bash -n .github/scripts/oc-publish-lib.sh
+          bash -n .github/scripts/resolve-oc-target.sh
+          bash -n .github/scripts/prepare-oc-target.sh
+          bash -n .github/scripts/publish-remote-opencode.sh
+          bash -n .github/scripts/test-oc-target.sh
           jq empty package.json
 
       - name: Run application test suite
@@ -111,6 +116,37 @@ jobs:
           assert "up to five total evidence-based forensic recovery cycles" not in ins
           print("continuous-agent contract: OK")
           PY
+
+      - name: Validate remote-target control plane
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          wf=Path(".github/workflows/opencode.yml").read_text()
+          resolver=Path(".github/scripts/resolve-oc-target.sh").read_text()
+          prepare=Path(".github/scripts/prepare-oc-target.sh").read_text()
+          publisher=Path(".github/scripts/publish-remote-opencode.sh").read_text()
+          verifier=Path(".github/scripts/verify-agent-result.sh").read_text()
+          lib=Path(".github/scripts/oc-publish-lib.sh").read_text()
+          cont=Path(".github/scripts/post-oc-continuation.sh").read_text()
+          runner=Path(".github/scripts/run-opencode-attempt.sh").read_text()
+          assert "resolve-oc-target.sh" in wf
+          assert "id: target" in wf
+          assert "prepare-oc-target.sh" in wf
+          assert "publish-remote-opencode.sh" in wf
+          assert "Clean up remote target workspace" in wf
+          assert "OC_TARGET_MODE" in resolver
+          assert "OPENCODE_EXCLUDED_PROVIDERS" in resolver and "github-copilot" in resolver
+          assert "oc-target-repo:" in cont
+          assert "OC_TARGET_WORKSPACE" in prepare
+          assert "oc_guard_repo_publication" in lib
+          assert "160000" in lib
+          assert "refusing to publish" in lib.lower()
+          assert "opencode github run" in runner
+          print("remote-target contract files: OK")
+          PY
+          bash .github/scripts/test-oc-target.sh
 
       - name: Validate Zen configuration
         shell: bash

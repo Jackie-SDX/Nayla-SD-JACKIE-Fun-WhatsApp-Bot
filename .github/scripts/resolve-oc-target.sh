@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# Resolves the /oc command into either the current controller-repository flow
+# (local mode) or an explicit remote-target flow. Runs once per workflow run,
+# before route selection, and emits OC_TARGET_* state to GITHUB_ENV and
+# GITHUB_OUTPUT.
+#
+# Remote-target syntax (all supported, exactly one target allowed):
+#   /oc <task> https://github.com/OWNER/REPO
+#   /oc <task> github.com/OWNER/REPO
+#   /oc target=OWNER/REPO <task>
+#   /oc repo=OWNER/REPO <task>
+#   /oc repository=OWNER/REPO <task>
+#   /oc --repo OWNER/REPO [--base main] <task>
+#   /oc --target OWNER/REPO [--base main] <task>
+#   /oc --base main --repo OWNER/REPO <task>
+#
+# When the comment is "/oc continue" with no explicit target, the most recent
+# durable target marker (posted by a timed-out remote run's checkpoint) is
+# restored so the exact target base/branch is resumed instead of duplicating
+# work. The target is external/untrusted project input; only the explicit
+# GitHub url and owner/repo forms are accepted, and the rest of the control
+# plane keeps applying controller-owned policy.
+
+set -euo pipefail
+
+emit_env() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_ENV"; }
+emit_out() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
+event_file="${GITHUB_EVENT_PATH:-}"
+controller_repo="${GITHUB_REPOSITORY:-}"
+target_number="${TARGET_NUMBER:-}"
+[[ "$target_number" =~ ^[0-9]+$ ]] || target_number=0
+
+mode="local"
+target_repo=""
+target_base=""
+target_branch=""
+resume="0"
+from_marker="0"
+raw_task=""
+
+if [[ -n "$event_file" && -f "$event_file" ]]; then
+  raw_task="$(jq -r '.comment.body // empty' "$event_file")"
+fi
+raw_task="$(printf '%s' "$raw_task" | sed -E 's#^/[A-Za-z]+[[:space:]]*##')"
+task="$raw_task"
+
+declare -a tokens=()
+while IFS= read -r -d '' tok; do
+  tokens+=("$tok")
+done < <(printf '%s' "$task" | awk '{ for (i = 1; i <= NF; i++) printf "%s\0", $i }')
+
+declare -a kept=()
+clean_arg() { printf '%s' "$1" | sed -E 's#(\.git)?/?$##'; }
+
+valid_repo() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]/[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]$ ]]
+}
+
+valid_ref() {
+  [[ "$1" =~ ^[A-Za-z0-9._/-]+$ ]]
+}
+
+set_target() {
+  local value="$1"
+  local value_clean
+  value_clean="$(clean_arg "$value")"
+  if ! valid_repo "$value_clean"; then
+    echo "::error title=Invalid remote target::Target must be OWNER/REPO (alphanumeric, dash, dot, underscore). Got: $value_clean" >&2
+    exit 2
+  fi
+  if [[ -n "$target_repo" && "$target_repo" != "$value_clean" ]]; then
+    echo "::error title=Conflicting remote targets::More than one distinct target repository was specified." >&2
+    exit 2
+  fi
+  target_repo="$value_clean"
+  mode="remote"
+}
+
+set_base() {
+  local value="$1"
+  if ! valid_ref "$value"; then
+    echo "::error title=Invalid target base::Base must be a valid Git ref name." >&2
+    exit 2
+  fi
+  target_base="$value"
+}
+
+i=0
+while (( i < ${#tokens[@]} )); do
+  tok="${tokens[$i]}"
+  case "$tok" in
+    repo=*|repository=*|target=*)
+      set_target "${tok#*=}"
+      ;;
+    base=*)
+      set_base "${tok#*=}"
+      ;;
+    --repo|--repository|--target)
+      if (( i + 1 >= ${#tokens[@]} )); then
+        echo "::error title=Missing remote target::$tok requires an OWNER/REPO value." >&2
+        exit 2
+      fi
+      set_target "${tokens[$((i + 1))]}"
+      i=$((i + 1))
+      ;;
+    --base)
+      if (( i + 1 >= ${#tokens[@]} )); then
+        echo "::error title=Missing target base::--base requires a branch name." >&2
+        exit 2
+      fi
+      set_base "${tokens[$((i + 1))]}"
+      i=$((i + 1))
+      ;;
+    https://github.com/*|http://github.com/*|github.com/*)
+      value_clean="${tok#https://github.com/}"
+      value_clean="${value_clean#http://github.com/}"
+      value_clean="${value_clean#github.com/}"
+      set_target "$value_clean"
+      ;;
+    *)
+      # A bare OWNER/REPO token is accepted exactly when it is the first
+      # positional token; selectors and URLs are recognized in any position.
+      if (( ${#kept[@]} == 0 )) && valid_repo "$(clean_arg "$tok")"; then
+        set_target "$(clean_arg "$tok")"
+      else
+        if [[ "$tok" == *.github.com/* ]] || [[ "$tok" == *:* ]]; then
+          echo "::error title=Rejected remote target form::Only https://github.com/OWNER/REPO, OWNER/REPO selectors, and owner/repo tokens are accepted." >&2
+          exit 2
+        fi
+        kept+=("$tok")
+      fi
+      ;;
+  esac
+  i=$((i + 1))
+done
+
+task="$(printf '%s' "${kept[*]:-}" | sed -e 's/  */ /g' -e 's/^[[:space:]]//' -e 's/[[:space:]]$//')"
+
+# /oc continue without an explicit target: recover the durable marker left by
+# the previous timed-out remote run instead of starting duplicate work.
+if [[ "$mode" == "local" && "$raw_task" =~ ^continue([[:space:]]|$) ]]; then
+  recover_marker=0
+  comments_file="${OC_TARGET_COMMENTS_FILE:-}"
+  if [[ -n "$comments_file" && -f "$comments_file" ]]; then
+    recover_marker=1
+  elif [[ "$target_number" != "0" && -n "$controller_repo" ]]; then
+    comments="$(gh api --paginate --slurp "/repos/$controller_repo/issues/$target_number/comments?per_page=100" 2>/dev/null | jq 'add // []' 2>/dev/null || true)"
+    if [[ -n "$comments" && "$comments" != "[]" ]]; then
+      printf '%s\n' "$comments" > /tmp/oc-target-comments.json
+      comments_file="/tmp/oc-target-comments.json"
+      recover_marker=1
+    fi
+  fi
+  if [[ "$recover_marker" == "1" ]]; then
+    marker="$(jq -r '[.[] | select((.body // "") | test("<!-- oc-target-repo:[^>]+ -->"; ""))] | sort_by(.created_at) | last | (.body // "")' "$comments_file" 2>/dev/null || true)"
+    if [[ -n "$marker" ]]; then
+      recovered_repo="$(sed -nE 's/.*<!-- oc-target-repo:([^ ]+) base:[^ ]+ branch:[^>]+ -->.*/\1/p' <<<"$marker" | head -n 1)"
+      recovered_base="$(sed -nE 's/.*<!-- oc-target-repo:[^ ]+ base:([^ ]+) branch:[^>]+ -->.*/\1/p' <<<"$marker" | head -n 1)"
+      recovered_branch="$(sed -nE 's/.*<!-- oc-target-repo:[^ ]+ base:[^ ]+ branch:([^>]+) -->.*/\1/p' <<<"$marker" | head -n 1)"
+      if valid_repo "$recovered_repo" && valid_ref "$recovered_base" && valid_ref "$recovered_branch"; then
+        target_repo="$recovered_repo"
+        target_base="$recovered_base"
+        target_branch="$recovered_branch"
+        mode="remote"
+        resume="1"
+        from_marker="1"
+        echo "Recovered durable remote-target marker for /oc continue: $target_repo@$target_base#$target_branch"
+      fi
+    fi
+  fi
+fi
+
+[[ -n "$target_base" ]] || target_base="main"
+[[ -n "$controller_repo" ]] && controller_target_ok=1 || true
+
+emit_env OC_TARGET_MODE "$mode"
+if [[ "$mode" == "remote" ]]; then
+  emit_env OC_TARGET_REPO "$target_repo"
+  emit_env OC_TARGET_BASE "$target_base"
+  emit_env OC_TARGET_BRANCH "$target_branch"
+  emit_env OC_TARGET_RESUME "$resume"
+  emit_env OC_TARGET_FROM_MARKER "$from_marker"
+  emit_env OC_TARGET_TASK "$task"
+  # Remote targets are always published and verified by controller-owned
+  # logic; the controller-repository Copilot publication path stays local-only.
+  if [[ -n "${OPENCODE_EXCLUDED_PROVIDERS:-}" ]]; then
+    emit_env OPENCODE_EXCLUDED_PROVIDERS "${OPENCODE_EXCLUDED_PROVIDERS},github-copilot"
+  else
+    emit_env OPENCODE_EXCLUDED_PROVIDERS "github-copilot"
+  fi
+fi
+
+emit_out mode "$mode"
+emit_out target_repo "$target_repo"
+emit_out target_base "$target_base"
+emit_out target_branch "$target_branch"
+emit_out resume "$resume"
+emit_out from_marker "$from_marker"
+
+if [[ "$mode" == "remote" ]]; then
+  echo "Remote-target mode selected: $target_repo (base=$target_base${target_branch:+ branch=$target_branch})"
+else
+  echo "Local controller-repository mode selected: $controller_repo"
+fi

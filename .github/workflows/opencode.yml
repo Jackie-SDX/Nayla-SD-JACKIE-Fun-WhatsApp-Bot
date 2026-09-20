@@ -71,6 +71,13 @@ jobs:
           [[ "$TARGET_NUMBER" =~ ^[0-9]+$ && "$TARGET_NUMBER" != "0" ]] || exit 0
           gh issue comment "$TARGET_NUMBER" --body "<!-- oc-run-id:${GITHUB_RUN_ID} issue:${TARGET_NUMBER} sha:${GITHUB_SHA} -->"
 
+      - name: Resolve /oc target
+        id: target
+        shell: bash
+        env:
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+        run: bash .github/scripts/resolve-oc-target.sh
+
       - name: Resolve and verify OpenCode release
         id: opencode_release
         shell: bash
@@ -144,6 +151,14 @@ jobs:
           [[ -n "${UNIVERSAL_TOKEN:-}" ]] && echo "Universal GitHub credential: configured" || echo "Universal GitHub credential: not configured; using the workflow GitHub token."
           echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
 
+      - name: Prepare remote target workspace
+        if: steps.target.outputs.mode == 'remote'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          OC_CONTROLLER_ROOT: ${{ github.workspace }}
+        run: bash .github/scripts/prepare-oc-target.sh
+
       - name: Bootstrap Composio session MCP
         id: composio_session
         shell: bash
@@ -198,6 +213,16 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
+
+      - name: Publish remote target attempt 1
+        id: publish_remote_1
+        if: steps.agent_1.outcome == 'success' && steps.target.outputs.mode == 'remote' && steps.route_1.outputs.provider == 'opencode'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          OC_CONTROLLER_ROOT: ${{ github.workspace }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+        run: bash .github/scripts/publish-remote-opencode.sh
 
       - name: Verify agent attempt 1
         id: verify_1
@@ -284,6 +309,16 @@ jobs:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
 
+      - name: Publish remote target attempt 2
+        id: publish_remote_2
+        if: steps.agent_2.outcome == 'success' && steps.target.outputs.mode == 'remote' && steps.route_2.outputs.provider == 'opencode'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          OC_CONTROLLER_ROOT: ${{ github.workspace }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+        run: bash .github/scripts/publish-remote-opencode.sh
+
       - name: Verify agent attempt 2
         id: verify_2
         if: always() && steps.agent_2.outcome == 'success'
@@ -368,6 +403,16 @@ jobs:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/publish-copilot-change.sh
 
+      - name: Publish remote target attempt 3
+        id: publish_remote_3
+        if: steps.agent_3.outcome == 'success' && steps.target.outputs.mode == 'remote' && steps.route_3.outputs.provider == 'opencode'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          OC_CONTROLLER_ROOT: ${{ github.workspace }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+        run: bash .github/scripts/publish-remote-opencode.sh
+
       - name: Verify agent attempt 3
         id: verify_3
         if: always() && steps.agent_3.outcome == 'success'
@@ -394,7 +439,7 @@ jobs:
           git log -1 --oneline
 
       - name: Reconcile OpenCode publication
-        if: always() && ((steps.verify_1.outputs.verified == 'true' && steps.route_1.outputs.provider == 'opencode') || (steps.verify_2.outputs.verified == 'true' && steps.route_2.outputs.provider == 'opencode') || (steps.verify_3.outputs.verified == 'true' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && steps.target.outputs.mode != 'remote' && ((steps.verify_1.outputs.verified == 'true' && steps.route_1.outputs.provider == 'opencode') || (steps.verify_2.outputs.verified == 'true' && steps.route_2.outputs.provider == 'opencode') || (steps.verify_3.outputs.verified == 'true' && steps.route_3.outputs.provider == 'opencode'))
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
@@ -478,6 +523,30 @@ jobs:
           fi
           echo "::error title=Hybrid agent recovery exhausted or blocked::No fully verified agent run was completed."
           exit 1
+      - name: Clean up remote target workspace
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          OC_TARGET_WORKSPACE: ${{ env.OC_TARGET_WORKSPACE }}
+        run: |
+          set -euo pipefail
+          ws="${OC_TARGET_WORKSPACE:-}"
+          if [[ -z "$ws" ]]; then
+            echo "No remote target workspace to clean up."
+            exit 0
+          fi
+          runner_temp="$(mktemp -u 2>/dev/null | sed -E 's#stackheight[^/]*$#x#')"
+          runner_temp="$(printf '%s' "$ws" | sed -nE 's#^(/home/runner/work/_temp/|/tmp/)/.*#\1#p' || true)"
+          if [[ -e "$ws" ]] && [[ "$ws" == /home/runner/work/_temp/* || "$ws" == /tmp/* ]]; then
+            workdir="$(dirname "$ws")"
+            rm -rf "$workdir"
+            echo "Removed remote target workspace: $workdir"
+          else
+            echo "::error title=Remote workspace cleanup skipped::Workspace path $ws is outside the allowed temporary directories."
+            exit 1
+          fi
+
       - name: Clean up Composio session MCP
         if: always()
         continue-on-error: true

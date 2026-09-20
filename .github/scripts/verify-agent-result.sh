@@ -30,6 +30,117 @@ emit timed_out false
 emit pr_url ""
 emit ci_run_id ""
 
+# ---- Remote-target verification -------------------------------------------
+# Remote targets are verified against the target repository's PR/head state
+# and its own observable checks/workflows. No success is claimed when no CI
+# evidence is visible. The controller's own 'validate' check name is never
+# assumed to exist in another repository.
+if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
+  rrepo="${OC_TARGET_REPO:-}"
+  rbase="${OC_TARGET_BASE:-main}"
+  rbranch="${OC_TARGET_BRANCH:-}"
+  rlocal_head="$(git -C "${OC_TARGET_WORKSPACE:-.}" rev-parse HEAD 2>/dev/null || true)"
+  reason=""
+  pr_url=""
+
+  if [[ -z "$rrepo" || -z "$rbranch" ]]; then
+    reason="remote target was not fully resolved"
+  elif ! gh api "/repos/$rrepo" >/dev/null 2>&1; then
+    reason="the available workflow credential cannot read the target repository $rrepo"
+  fi
+
+  find_target_pr() {
+    gh pr list --repo "$rrepo" --head "$rbranch" --base "$rbase" --state all --limit 20 \
+      --json number,url,state,mergedAt,headRefOid 2>/dev/null | jq -r '.[0] // empty' 2>/dev/null || true
+  }
+
+  pr="$(find_target_pr)"
+  if [[ -n "$reason" ]]; then
+    :
+  elif [[ -z "$pr" ]]; then
+    reason="no observable target pull request for $rrepo@$rbranch"
+  else
+    pr_url="$(jq -r '.url // ""' <<<"$pr")"
+    pr_state="$(jq -r '.state // ""' <<<"$pr")"
+    merged_at="$(jq -r '.mergedAt // ""' <<<"$pr")"
+    head_sha="$(jq -r '.headRefOid // ""' <<<"$pr")"
+    pr_number="$(jq -r '.number // ""' <<<"$pr")"
+    if [[ "$pr_state" == "MERGED" || -n "$merged_at" ]]; then
+      verified=true
+      emit verified true
+      emit retryable false
+      emit pr_url "$pr_url"
+      [[ -n "$rlocal_head" ]] && emit ci_run_id "$rlocal_head"
+      echo "Remote target PR verified (merged): $pr_url"
+      exit 0
+    fi
+    if [[ -n "$rlocal_head" && -n "$head_sha" && "$rlocal_head" != "$head_sha" ]]; then
+      reason="target PR head ($head_sha) does not match the policed workspace head ($rlocal_head)"
+    fi
+  fi
+
+  deadline=$((SECONDS + wait_minutes * 60))
+  pending=false
+  while [[ "$verified" != "true" && -z "$reason" ]]; do
+    checks="$(gh api "/repos/$rrepo/commits/$head_sha/check-runs?per_page=100" 2>/dev/null || true)"
+    if [[ -z "$checks" ]]; then
+      checks="$(gh api "/repos/$rrepo/pulls/$pr_number/checks?per_page=100" 2>/dev/null || true)"
+    fi
+    # shellcheck disable=SC2181
+    if [[ -z "$checks" ]]; then
+      reason="target CI evidence is not observable with the available workflow credential"
+      break
+    fi
+    success_count="$(jq '[.check_runs[]? | select(.conclusion == "success")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    if [[ "$success_count" -gt 0 ]]; then
+      verified=true
+      break
+    fi
+    st="$(gh api "/repos/$rrepo/commits/$head_sha/status" 2>/dev/null || printf '%s' '{"state":"pending"}')"
+    if [[ "$(jq -r '.state // ""' <<<"$st")" == "success" ]]; then
+      verified=true
+      break
+    fi
+    states="$(jq -r '[.check_runs[]?.status] | if index("in_progress") or index("queued") then "pending" else "done" end' <<<"$checks" 2>/dev/null || echo done)"
+    if [[ "$states" == "pending" && "$SECONDS" -lt "$deadline" ]]; then
+      pending=true
+      sleep "$poll_seconds"
+      continue
+    fi
+    break
+  done
+
+  if [[ "$verified" == "true" ]]; then
+    emit verified true
+    emit retryable false
+    [[ -n "$pr_url" ]] && emit pr_url "$pr_url"
+    emit ci_run_id "$head_sha"
+    echo "Remote target PR verified: $pr_url"
+    exit 0
+  fi
+  if [[ "$pending" == "true" && "$SECONDS" -ge "$deadline" ]]; then
+    reason="target PR checks remained pending beyond the verification wait window"
+    timed_out=true
+  fi
+  [[ -n "$reason" ]] || reason="remote target could not be verified"
+  retryable=true
+  emit verified false
+  emit retryable true
+  emit timed_out "$timed_out"
+  [[ -n "$pr_url" ]] && emit pr_url "$pr_url"
+  echo "::warning title=Remote target not independently verified::$reason"
+  [[ -n "$target" && "$target" != "0" ]] && gh issue comment "$target" --body "<!-- oc-remote-verify-failed attempt:$attempt repo:$rrepo branch:$rbranch -->
+## /oc remote-target verification did not pass
+
+- Target: $rrepo
+- Branch: $rbranch
+- PR: ${pr_url:-not identified}
+- Reason: $reason
+
+No success is claimed. Inspect the target repository state and continue." 2>/dev/null || true
+  exit 1
+fi
+
 if ! git diff --check >/dev/null 2>&1; then
   retryable=true
   reason="git diff --check failed"

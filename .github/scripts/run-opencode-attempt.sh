@@ -20,7 +20,26 @@ cleanup() {
 trap cleanup EXIT
 
 set +e
-timeout --signal=TERM --kill-after=60s "${agent_timeout_minutes}m" opencode github run >"$raw_log" 2>&1
+agent_cmd=()
+if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
+  ws="${OC_TARGET_WORKSPACE:-}"
+  if [[ -z "$ws" || ! -d "$ws/.git" ]]; then
+    echo "::error title=Remote target workspace missing for attempt ${attempt}::prepare-oc-target.sh must run before the agent attempt." >&2
+    exit 2
+  fi
+  task_prompt="${OC_TARGET_TASK:-}"
+  if [[ -n "${OC_TARGET_TASK_FILE:-}" && -f "${OC_TARGET_TASK_FILE:-}" ]]; then
+    task_prompt="$(cat "$OC_TARGET_TASK_FILE")"
+  fi
+  [[ -n "$task_prompt" ]] || task_prompt="Inspect the target repository workspace and implement the requested change. Do not modify anything outside the workspace."
+  model_name="${MODEL:-opencode/big-pickle}"
+  agent_cmd=(opencode run --dir "$ws" --model "$model_name")
+  [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
+  agent_cmd+=(--agent build --title "oc remote ${OC_TARGET_REPO:-target}" "$task_prompt")
+else
+  agent_cmd=(opencode github run)
+fi
+timeout --signal=TERM --kill-after=60s "${agent_timeout_minutes}m" "${agent_cmd[@]}" >"$raw_log" 2>&1
 exit_code=$?
 set -e
 termination_reason="completed"

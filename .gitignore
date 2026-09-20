@@ -11,6 +11,11 @@ auth_info*/
 *.session
 *.session-*
 
+# Local engineering scratch space (never commit test fixtures, nested repos,
+# or generated target workspaces from here)
+.octmp/
+.oc-tmp/
+
 # Node tooling
 node_modules/
 npm-debug.log*
