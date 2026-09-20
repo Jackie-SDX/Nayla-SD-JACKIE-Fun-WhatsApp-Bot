@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '"model": "google/gemini-3.8-flash"' opencode.json
+          grep -q '"model": "openrouter/qwen/qwen3.8-27b:free"' opencode.json
           grep -q '"gemini-3.7-flash": {}' opencode.json
           grep -q '"gemini-3.6-flash": {}' opencode.json
           grep -q '"gemini-3.5-flash": {}' opencode.json
