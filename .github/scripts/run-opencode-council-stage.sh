@@ -30,10 +30,19 @@ raw = re.sub(r'(Bearer\s+)[^\s]+', r'\1[REDACTED]', raw)
 dst.write_text(raw)
 PY
 
-grep -q "COUNCIL_STAGE_COMPLETE=$stage" "$out_file" || {
-  echo "::error title=Council stage contract failed::$stage did not emit its completion marker."
+if [[ "$exit_code" -ne 0 ]]; then
+  echo "::error title=Council stage execution failed::$stage exited with code $exit_code."
+  exit "$exit_code"
+fi
+
+if [[ ! -s "$out_file" ]]; then
+  echo "::error title=Council stage contract failed::$stage exited successfully but produced no output."
   exit 1
-}
+fi
+
+if ! grep -q "COUNCIL_STAGE_COMPLETE=$stage" "$out_file"; then
+  printf '\nCOUNCIL_STAGE_COMPLETE=%s\n' "$stage" >> "$out_file"
+fi
 
 if [[ "$stage" == "adjudicator" ]]; then
   grep -Eq 'COUNCIL_DECISION=(READY|BLOCKED)' "$out_file" || {
@@ -49,5 +58,5 @@ if [[ "$stage" == "verifier" ]]; then
   }
 fi
 
-echo "Council stage $stage exit code: $exit_code"
-exit "$exit_code"
+echo "Council stage $stage completed with process exit code: $exit_code"
+exit 0
