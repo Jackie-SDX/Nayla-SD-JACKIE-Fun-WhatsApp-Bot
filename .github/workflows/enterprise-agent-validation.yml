@@ -156,20 +156,20 @@ jobs:
           "$bin" run --agent architect-reviewer --model opencode/big-pickle --help >"$tmp/agent-help.log" 2>&1
           ! grep -Eiq "unknown|invalid|not found|Unexpected positional argument" "$tmp/agent-help.log"
           python3 - <<'PY'
-from pathlib import Path
-import re
-agents = ["architect-reviewer", "adversarial-reviewer", "adjudicator", "verifier"]
-for name in agents:
-    p = Path(".opencode/agents") / f"{name}.md"
-    text = p.read_text(encoding="utf-8")
-    if not text.startswith("---\n"): raise SystemExit(f"{name}: missing frontmatter")
-    parts = text.split("---\n", 2)
-    if len(parts) != 3: raise SystemExit(f"{name}: malformed frontmatter")
-    fm = parts[1]
-    if not re.search(r"^mode:\s*primary\s*$", fm, re.M): raise SystemExit(f"{name}: mode must be primary")
-    if not re.search(r"^model:\s*\S+\s*$", fm, re.M): raise SystemExit(f"{name}: model missing")
-print("OpenCode custom-agent frontmatter: PASS")
-PY
+          from pathlib import Path
+          import re
+          agents = ["architect-reviewer", "adversarial-reviewer", "adjudicator", "verifier"]
+          for name in agents:
+              p = Path(".opencode/agents") / f"{name}.md"
+              text = p.read_text(encoding="utf-8")
+              if not text.startswith("---\n"): raise SystemExit(f"{name}: missing frontmatter")
+              parts = text.split("---\n", 2)
+              if len(parts) != 3: raise SystemExit(f"{name}: malformed frontmatter")
+              fm = parts[1]
+              if not re.search(r"^mode:\s*primary\s*$", fm, re.M): raise SystemExit(f"{name}: mode must be primary")
+              if not re.search(r"^model:\s*\S+\s*$", fm, re.M): raise SystemExit(f"{name}: model missing")
+          print("OpenCode custom-agent frontmatter: PASS")
+          PY
       - name: Validate route selector structure
         shell: bash
         run: |
@@ -180,3 +180,20 @@ PY
           grep -q 'is_free_model' .github/scripts/select-opencode-route.sh
           grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
           grep -q 'opencode/\$model' .github/scripts/select-opencode-route.sh
+
+
+      - name: Validate provider failover
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          printf '%s\n' "Error from provider (Console): OpenCode's free tier can only be used from within OpenCode" > "$tmp/failure.log"
+          : > "$tmp/github_env"
+          GITHUB_ENV="$tmp/github_env" CURRENT_PROVIDER=opencode SAFE_LOG="$tmp/failure.log" bash .github/scripts/classify-provider-failure.sh
+          grep -qx 'OPENCODE_EXCLUDED_PROVIDERS=opencode' "$tmp/github_env"
+          : > "$tmp/route_env"
+          : > "$tmp/route_output"
+          GITHUB_ENV="$tmp/route_env" GITHUB_OUTPUT="$tmp/route_output" OPENCODE_EXCLUDED_PROVIDERS=opencode HAS_OPENCODE_CREDENTIAL=true HAS_COPILOT_CREDENTIAL=true bash .github/scripts/select-opencode-route.sh
+          grep -qx 'provider=github-copilot' "$tmp/route_output"
+          echo "Provider failover classifier and route transition: PASS"
