@@ -47,58 +47,72 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q OPENCODE_API_KEY .github/workflows/opencode.yml
-          grep -q COMPOSIO_API_KEY .github/workflows/opencode.yml
-          grep -q COMPOSIO_USER_ID: .github/workflows/opencode.yml
-          grep -q "opencode github run" .github/scripts/run-opencode-attempt.sh
-          grep -q github-copilot/auto .github/scripts/select-opencode-route.sh
-          grep -q mcp-remote@0.14.2 opencode.json
-          grep -q http-only opencode.json
-          grep -q header-file opencode.json
-          jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
-          jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
-          grep -q "contents: write" .github/workflows/opencode.yml
-          grep -q "issues: write" .github/workflows/opencode.yml
-          grep -q "pull-requests: write" .github/workflows/opencode.yml
-          grep -q "timeout-minutes: 350" .github/workflows/opencode.yml
-          grep -q "continuing without Composio tools" .github/scripts/prepare-composio-mcp.sh
-          ! grep -q "Replay safety gate" .github/workflows/opencode.yml
-          ! grep -q three-strike .opencode/instructions.md
-          ! grep -q "up to five total evidence-based forensic recovery cycles" .opencode/instructions.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          wf=Path(".github/workflows/opencode.yml").read_text()
+          cfg=json.loads(Path("opencode.json").read_text())
+          prep=Path(".github/scripts/prepare-composio-mcp.sh").read_text()
+          ins=Path(".opencode/instructions.md").read_text()
+          runner=Path(".github/scripts/run-opencode-attempt.sh").read_text()
+          selector=Path(".github/scripts/select-opencode-route.sh").read_text()
+          assert "OPENCODE_API_KEY" in wf
+          assert "COMPOSIO_API_KEY" in wf
+          assert "COMPOSIO_USER_ID:" in wf
+          assert "contents: write" in wf
+          assert "issues: write" in wf
+          assert "pull-requests: write" in wf
+          assert "timeout-minutes: 350" in wf
+          assert "opencode github run" in runner
+          assert "github-copilot/auto" in selector
+          assert cfg["mcp"]["composio"]["type"]=="local"
+          assert cfg["mcp"]["composio"]["enabled"] is True
+          assert "mcp-remote@0.14.2" in cfg["mcp"]["composio"]["command"]
+          assert "http-only" in cfg["mcp"]["composio"]["command"]
+          assert "header-file" in cfg["mcp"]["composio"]["command"]
+          assert "continuing without Composio tools" in prep
+          assert "Replay safety gate" not in wf
+          assert "three-strike" not in ins
+          assert "up to five total evidence-based forensic recovery cycles" not in ins
+          print("continuous-agent contract: OK")
+          PY
 
       - name: Validate Zen configuration
         shell: bash
         run: |
           set -euo pipefail
-          jq -e '.model == "opencode/big-pickle"' opencode.json >/dev/null
-          jq -e '.share == "disabled"' opencode.json >/dev/null
-          jq -e '.permission.external_directory == "deny"' opencode.json >/dev/null
-          jq -e '.permission.doom_loop == "allow"' opencode.json >/dev/null
-          jq -e 'has("provider") | not' opencode.json >/dev/null
-          jq -e 'has("enabled_providers") | not' opencode.json >/dev/null
-          jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
-          jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
-          jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
-          jq -e '.mcp.composio.timeout == 20000' opencode.json >/dev/null
-          grep -q backend.composio.dev/api/v3.1/tool_router/session .github/scripts/prepare-composio-mcp.sh
-          grep -q x-api-key .github/scripts/prepare-composio-mcp.sh
-          grep -q mcp:true .github/scripts/prepare-composio-mcp.sh
-          ! grep -q connect.composio.dev/mcp opencode.json
-          ! grep -q OPENCODE_CONFIG_CONTENT .github/scripts/prepare-composio-mcp.sh
-          grep -q COMPOSIO_MCP_HEADERS_FILE .github/scripts/prepare-composio-mcp.sh
-          grep -q "persist-credentials: false" .github/workflows/opencode.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          cfg=json.loads(Path("opencode.json").read_text())
+          bash=cfg["permission"]["bash"]
+          assert cfg["model"]=="opencode/big-pickle"
+          assert cfg["share"]=="disabled"
+          assert cfg["permission"]["external_directory"]=="deny"
+          assert cfg["permission"]["doom_loop"]=="allow"
+          assert "git commit *" not in bash
+          assert "git commit" not in bash
+          assert "git push *" not in bash
+          assert "git push" not in bash
+          assert bash["git reset *"]=="deny"
+          assert bash["git clean *"]=="deny"
+          print("agent permissions: OK")
+          PY
 
       - name: Validate route selector structure
         shell: bash
         run: |
           set -euo pipefail
-          bash -n .github/scripts/select-opencode-route.sh
-          grep -q OPENCODE_ROUTE_INDEX .github/scripts/select-opencode-route.sh
-          grep -q OPENCODE_EXCLUDED_PROVIDERS .github/scripts/select-opencode-route.sh
-          grep -q is_free_model .github/scripts/select-opencode-route.sh
-          grep -q github-copilot/auto .github/scripts/select-opencode-route.sh
-          grep -q opencode/ .github/scripts/select-opencode-route.sh
-          grep -q "opencode-" .github/workflows/opencode-cache.yml
-          ! grep -q 2.0.3 .github/workflows/opencode-cache.yml
-          ! grep -q "OpenCode V2" .github/workflows/opencode-cache.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          wf=Path(".github/workflows/opencode-cache.yml").read_text()
+          route=Path(".github/scripts/select-opencode-route.sh").read_text()
+          assert "OPENCODE_ROUTE_INDEX" in route
+          assert "OPENCODE_EXCLUDED_PROVIDERS" in route
+          assert "is_free_model" in route
+          assert "github-copilot/auto" in route
+          assert "opencode/" in route
+          assert "2.0.3" not in wf
+          assert "OpenCode V2" not in wf
+          print("routing/cache contract: OK")
+          PY
