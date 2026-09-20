@@ -468,3 +468,8 @@ OpenCode V2 semantics are used for new council configuration: permissions, prima
 
 ## Pinned runtime
 The GitHub Actions control plane uses the OpenCode V2 CLI package `@opencode/cli`, pinned to `2.0.3`, and launches its `opencode` executable.
+
+
+## Provider fallback
+
+A provider/account denial from OpenCode Zen, including the current free-tier client-entitlement error, is classified as provider unavailable and immediately excludes OpenCode for the remainder of that task. The route selector can then promote the GitHub Copilot route instead of wasting the remaining attempt budget on additional Zen models.

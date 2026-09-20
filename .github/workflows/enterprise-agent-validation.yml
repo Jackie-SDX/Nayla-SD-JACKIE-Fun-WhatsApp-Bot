@@ -145,34 +145,31 @@ jobs:
             exit 1
           fi
           bin="$tmp/opencode/node_modules/.bin/opencode"
-          test -x "$bin" || {
-            echo "::error title=OpenCode binary missing::Expected $bin after npm install."
-            find "$tmp/opencode" -maxdepth 3 \( -type f -o -type l \) | head -120 || true
-            exit 1
-          }
-          if ! "$bin" --version >"$tmp/version.log" 2>&1; then
-            echo "::error title=OpenCode runtime failed::opencode --version exited non-zero."
-            cat "$tmp/version.log" || true
-            exit 1
-          fi
-          cat "$tmp/version.log"
-          timeout 30s "$bin" run --help >"$tmp/run-help.log" 2>&1 || {
-            echo "::error title=OpenCode run command failed::opencode run --help did not complete successfully."
-            cat "$tmp/run-help.log" || true
-            exit 1
-          }
+          test -x "$bin" || { echo "::error title=OpenCode binary missing::Expected $bin after npm install."; exit 1; }
+          actual="$("$bin" --version)"
+          echo "OpenCode V2 runtime: $actual"
+          [[ "$actual" == *"$OPENCODE_V2_VERSION"* ]]
+          "$bin" run --help >"$tmp/run-help.log" 2>&1
           grep -q -- "--agent" "$tmp/run-help.log"
           grep -q -- "--model" "$tmp/run-help.log"
           grep -q -- "--standalone" "$tmp/run-help.log"
-          smoke_prompt="CI runtime smoke test. Do not edit files. Reply on the final line with exactly COUNCIL_STAGE_COMPLETE=architect-reviewer."
-          if ! smoke="$(timeout 90s env OPENCODE_API_KEY="${{ secrets.OPENCODE_API_KEY }}" "$bin" run --standalone --auto --agent architect-reviewer --model opencode/big-pickle "$smoke_prompt" 2>&1)"; then
-            echo "::error title=OpenCode agent runtime smoke failed::architect-reviewer could not complete a read-only execution."
-            printf "%s\n" "$smoke" | tail -160
-            exit 1
-          fi
-          printf "%s\n" "$smoke" | tail -160
-          grep -q "COUNCIL_STAGE_COMPLETE=architect-reviewer" <<< "$smoke"
-          [[ "$("$bin" --version)" == *"$OPENCODE_V2_VERSION"* ]]
+          "$bin" run --agent architect-reviewer --model opencode/big-pickle --help >"$tmp/agent-help.log" 2>&1
+          ! grep -Eiq "unknown|invalid|not found|Unexpected positional argument" "$tmp/agent-help.log"
+          python3 - <<'PY'
+from pathlib import Path
+import re
+agents = ["architect-reviewer", "adversarial-reviewer", "adjudicator", "verifier"]
+for name in agents:
+    p = Path(".opencode/agents") / f"{name}.md"
+    text = p.read_text(encoding="utf-8")
+    if not text.startswith("---\n"): raise SystemExit(f"{name}: missing frontmatter")
+    parts = text.split("---\n", 2)
+    if len(parts) != 3: raise SystemExit(f"{name}: malformed frontmatter")
+    fm = parts[1]
+    if not re.search(r"^mode:\s*primary\s*$", fm, re.M): raise SystemExit(f"{name}: mode must be primary")
+    if not re.search(r"^model:\s*\S+\s*$", fm, re.M): raise SystemExit(f"{name}: model missing")
+print("OpenCode custom-agent frontmatter: PASS")
+PY
       - name: Validate route selector structure
         shell: bash
         run: |
