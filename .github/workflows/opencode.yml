@@ -6,119 +6,284 @@ on:
   pull_request_review_comment:
     types: [created]
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+concurrency:
+  group: opencode-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   opencode:
     if: |
       github.event.comment.user.login == github.repository_owner &&
-      (contains(github.event.comment.body, '/oc') ||
-       contains(github.event.comment.body, '/opencode'))
+      (
+        github.event.comment.body == '/oc' ||
+        startsWith(github.event.comment.body, '/oc ') ||
+        github.event.comment.body == '/opencode' ||
+        startsWith(github.event.comment.body, '/opencode ')
+      )
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     env:
+      GITHUB_TOKEN: ${{ github.token }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+      GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
+      GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
+      GEMINI_API_KEY_SECONDARY: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_TERTIARY: ${{ secrets.GEMINI_API_KEY_3 }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_PRIMARY_MODEL: ${{ vars.OPENROUTER_PRIMARY_MODEL || 'qwen/qwen3.8-27b:free' }}
+      COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+      FORENSIC_RECOVERY_MAX: "5"
+      FORENSIC_FAILURE_STRIKE_MAX: "3"
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Resolve OpenCode release
+        id: opencode_release
+        shell: bash
+        run: |
+          set -euo pipefail
+          json="$(mktemp)"
+          trap 'rm -f "$json"' EXIT
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+            https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
+          tag="$(jq -r '.tag_name' "$json")"
+          version="${tag#v}"
+          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
+          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error title=Invalid OpenCode release::Unexpected release tag: $tag"
+            exit 1
+          }
+          [[ -n "$url" && "$url" != "null" ]] || {
+            echo "::error title=Missing OpenCode release asset::Linux x64 archive was not published."
+            exit 1
+          }
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error title=Missing OpenCode release digest::Cannot verify the OpenCode archive."
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "OpenCode release: $version"
+
+      - name: Restore verified OpenCode cache
+        id: cache_restore
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.opencode_release.outputs.version }}
+
+      - name: Install OpenCode on cache miss
+        if: steps.cache_restore.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 \
+            "${{ steps.opencode_release.outputs.url }}" -o "$tmp/opencode.tar.gz"
+          echo "${{ steps.opencode_release.outputs.digest }}  $tmp/opencode.tar.gz" | sha256sum --check -
+          mkdir -p "$tmp/extract"
+          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
+          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
+          [[ -n "$binary" ]] || {
+            echo "::error title=Invalid OpenCode archive::Verified archive does not contain an executable named opencode."
+            exit 1
+          }
+          install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
+          "$HOME/.opencode/bin/opencode" --version
+
+      - name: Add OpenCode to PATH
+        shell: bash
+        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
       - name: Preflight credentials
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          missing=0
-          if [[ -z "${GEMINI_API_KEY:-}" ]]; then
-            echo "::error title=Missing GEMINI_API_KEY::Add the existing Google AI Studio API key as an Actions secret named GEMINI_API_KEY."
-            missing=1
-          fi
-          if [[ -z "${COMPOSIO_API_KEY:-}" ]]; then
-            echo "::error title=Missing COMPOSIO_API_KEY::Add your Composio Connect consumer key (ck_...) as an Actions secret named COMPOSIO_API_KEY."
-            missing=1
-          fi
-          exit "$missing"
-
-      - name: Run OpenCode - Gemini 3.8 Flash
-        id: gemini_primary
-        continue-on-error: true
-        uses: anomalyco/opencode/github@latest
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          model: google/gemini-3.8-flash
-          use_github_token: true
-          share: false
-
-      - name: Run OpenCode - Gemini 3.6 Flash fallback
-        id: gemini_fallback
-        if: steps.gemini_primary.outcome == 'failure'
-        continue-on-error: true
-        uses: anomalyco/opencode/github@latest
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          model: google/gemini-3.6-flash
-          use_github_token: true
-          share: false
-
-      - name: Run OpenCode - Gemini 3.5 Flash-Lite fallback
-        id: gemini_lite_fallback
-        if: steps.gemini_primary.outcome == 'failure' && steps.gemini_fallback.outcome == 'failure'
-        continue-on-error: true
-        uses: anomalyco/opencode/github@latest
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          model: google/gemini-3.5-flash-lite
-          use_github_token: true
-          share: false
-
-      - name: Run OpenCode - OpenRouter fallback
-        id: openrouter_fallback
-        if: |
-          steps.gemini_primary.outcome == 'failure' &&
-          steps.gemini_fallback.outcome == 'failure' &&
-          steps.gemini_lite_fallback.outcome == 'failure' &&
-          env.OPENROUTER_API_KEY != ''
-        continue-on-error: true
-        uses: anomalyco/opencode/github@latest
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          model: openrouter/google/gemini-3.8-flash
-          use_github_token: true
-          share: false
-
-      - name: Fail if all model attempts failed
-        if: always()
-        env:
-          PRIMARY: ${{ steps.gemini_primary.outcome }}
-          GEMINI_FALLBACK: ${{ steps.gemini_fallback.outcome }}
-          GEMINI_LITE_FALLBACK: ${{ steps.gemini_lite_fallback.outcome }}
-          OPENROUTER_FALLBACK: ${{ steps.openrouter_fallback.outcome }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$PRIMARY" != "success" &&
-                "$GEMINI_FALLBACK" != "success" &&
-                "$GEMINI_LITE_FALLBACK" != "success" &&
-                "$OPENROUTER_FALLBACK" != "success" ]]; then
-            echo "::error title=All OpenCode model attempts failed::Gemini 3.8 Flash, Gemini 3.6 Flash, Gemini 3.5 Flash-Lite, and the optional OpenRouter fallback all failed."
+          gemini_count=0
+          for key_name in GEMINI_API_KEY GEMINI_API_KEY_2 GEMINI_API_KEY_3 GEMINI_API_KEY_4 GEMINI_API_KEY_5; do
+            if [[ -n "${!key_name:-}" ]]; then
+              gemini_count=$((gemini_count + 1))
+            fi
+          done
+          echo "Gemini key slots available: $gemini_count/5"
+          [[ -n "${OPENROUTER_API_KEY:-}" ]] && echo "OpenRouter free fallback: configured" || echo "OpenRouter free fallback: optional/unconfigured"
+          [[ -n "${COMPOSIO_API_KEY:-}" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured; the agent will continue without Composio tools."
+          if (( gemini_count == 0 )) && [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
+            echo "::error title=No model credentials::No Gemini or OpenRouter credential is configured."
             exit 1
           fi
+
+      - name: Select first healthy route
+        id: route_1
+        shell: bash
+        run: bash .github/scripts/select-opencode-route.sh
+
+      - name: Run OpenCode attempt 1
+        id: agent_1
+        if: steps.route_1.outputs.selected == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          export MODEL="$OPENCODE_SELECTED_MODEL"
+          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
+          export SHARE="false"
+          export USE_GITHUB_TOKEN="true"
+          export AGENT="build"
+          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
+            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
+          else
+            export GEMINI_API_KEY=""
+          fi
+          bash .github/scripts/run-opencode-attempt.sh 1
+
+      - name: Inspect state before reroute 2
+        if: always() && steps.agent_1.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          git status --short
+          git diff --check
+          git diff --stat
+
+      - name: Select second route after agent failure
+        id: route_2
+        if: steps.route_1.outputs.selected == 'true' && steps.agent_1.outcome == 'failure'
+        shell: bash
+        run: bash .github/scripts/select-opencode-route.sh
+
+      - name: Run OpenCode attempt 2
+        id: agent_2
+        if: steps.route_2.outputs.selected == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          export MODEL="$OPENCODE_SELECTED_MODEL"
+          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
+          export SHARE="false"
+          export USE_GITHUB_TOKEN="true"
+          export AGENT="build"
+          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
+            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
+          else
+            export GEMINI_API_KEY=""
+          fi
+          bash .github/scripts/run-opencode-attempt.sh 2
+
+      - name: Inspect state before reroute 3
+        if: always() && steps.agent_2.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          git status --short
+          git diff --check
+          git diff --stat
+
+      - name: Select third route after agent failure
+        id: route_3
+        if: steps.route_1.outputs.selected == 'true' && steps.agent_1.outcome == 'failure' && steps.agent_2.outcome == 'failure'
+        shell: bash
+        run: bash .github/scripts/select-opencode-route.sh
+
+      - name: Run OpenCode attempt 3
+        id: agent_3
+        if: steps.route_3.outputs.selected == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          export MODEL="$OPENCODE_SELECTED_MODEL"
+          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
+          export SHARE="false"
+          export USE_GITHUB_TOKEN="true"
+          export AGENT="build"
+          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
+            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
+          else
+            export GEMINI_API_KEY=""
+          fi
+          bash .github/scripts/run-opencode-attempt.sh 3
+
+      - name: Post human handoff after 3 failed agent attempts
+        if: always() && steps.agent_1.outcome == 'failure' && steps.agent_2.outcome == 'failure' && steps.agent_3.outcome == 'failure'
+        shell: bash
+        env:
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          SAFE_LOG: ${{ steps.agent_3.outputs.safe_log_path }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          findings="$(tail -n 100 "$SAFE_LOG" 2>/dev/null || printf '%s' 'No sanitized attempt log was available.')"
+          body="$(printf 'OpenCode reached the 3-strike agent-attempt circuit breaker. No success is claimed; human guidance is required before another run.\\n\\nSanitized findings from the final attempt:\\n\\n```text\\n%s\\n```' "$findings")"
+          payload="$(jq -n --arg body "$body" '{body:$body}')"
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+            -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${TARGET_NUMBER}/comments" \
+            -d "$payload" >/dev/null
+          echo "Human handoff posted to issue/PR #${TARGET_NUMBER}."
+
+      - name: Routing summary
+        if: always()
+        shell: bash
+        env:
+          R1: ${{ steps.route_1.outputs.route }}
+          R2: ${{ steps.route_2.outputs.route }}
+          R3: ${{ steps.route_3.outputs.route }}
+          A1: ${{ steps.agent_1.outcome }}
+          A2: ${{ steps.agent_2.outcome }}
+          A3: ${{ steps.agent_3.outcome }}
+          E1: ${{ steps.agent_1.outputs.exit_code }}
+          E2: ${{ steps.agent_2.outputs.exit_code }}
+          E3: ${{ steps.agent_3.outputs.exit_code }}
+        run: |
+          {
+            echo "### OpenCode routing"
+            echo ""
+            echo "| Attempt | Route | Result | Exit |"
+            echo "|---|---|---|---|"
+            echo "| 1 | ${R1:-not selected} | ${A1:-not run} | ${E1:-n/a} |"
+            echo "| 2 | ${R2:-not selected} | ${A2:-not run} | ${E2:-n/a} |"
+            echo "| 3 | ${R3:-not selected} | ${A3:-not run} | ${E3:-n/a} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Final status
+        if: always()
+        shell: bash
+        env:
+          A1: ${{ steps.agent_1.outcome }}
+          A2: ${{ steps.agent_2.outcome }}
+          A3: ${{ steps.agent_3.outcome }}
+          R1: ${{ steps.route_1.outputs.selected }}
+          R2: ${{ steps.route_2.outputs.selected }}
+          R3: ${{ steps.route_3.outputs.selected }}
+        run: |
+          set -euo pipefail
+          if [[ "$A1" == "success" || "$A2" == "success" || "$A3" == "success" ]]; then
+            echo "OpenCode completed successfully on at least one route."
+            exit 0
+          fi
+          if [[ "$R1" != "true" && "$R2" != "true" && "$R3" != "true" ]]; then
+            echo "::error title=No viable model route::All configured zero-cost model probes failed."
+          else
+            echo "::error title=OpenCode recovery exhausted::Three bounded agent attempts failed; human handoff was requested."
+          fi
+          exit 1

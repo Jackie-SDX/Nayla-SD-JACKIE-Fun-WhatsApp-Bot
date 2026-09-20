@@ -1,0 +1,80 @@
+name: opencode-cache
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 0 * * *'
+
+concurrency:
+  group: opencode-cache
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve latest OpenCode release and digest
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          json="$(mktemp)"
+          trap 'rm -f "$json"' EXIT
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+            https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
+
+          tag="$(jq -r '.tag_name' "$json")"
+          version="${tag#v}"
+          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
+          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
+
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ -n "$url" && "$url" != "null" ]]
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Restore OpenCode cache
+        id: cache_restore
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.release.outputs.version }}
+
+      - name: Download and verify OpenCode release
+        if: steps.cache_restore.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 \
+            "${{ steps.release.outputs.url }}" -o "$tmp/opencode.tar.gz"
+
+          echo "${{ steps.release.outputs.digest }}  $tmp/opencode.tar.gz" | sha256sum --check -
+
+          mkdir -p "$tmp/extract"
+          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
+          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
+
+          [[ -n "$binary" ]]
+          install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
+          "$HOME/.opencode/bin/opencode" --version
+
+      - name: Save verified OpenCode cache
+        if: steps.cache_restore.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.release.outputs.version }}
