@@ -100,7 +100,7 @@ jobs:
           assert "evidence ledger" in ins
           assert "/oc continue" in ins
           assert "/oc retry failed jobs" in ins
-          assert "adversarial" in ins.lower()
+          assert ".opencode/agents/critic.md" in ins
           assert "read-only adversarial verifier" in critic
           assert "bash: deny" in critic
           assert "gh issue comment" in cont
