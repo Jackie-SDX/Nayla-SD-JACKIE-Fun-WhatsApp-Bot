@@ -75,6 +75,11 @@ jobs:
           assert "mcp-remote@0.14.2" in cfg["mcp"]["composio"]["command"]
           assert "continuing without Composio tools" in prep
           assert "Replay safety gate" not in wf
+          assert "steps.replay_2" not in wf
+          assert "steps.replay_3" not in wf
+          assert "if: steps.classify_1.outcome == 'success'" in wf
+          assert "if: steps.classify_2.outcome == 'success'" in wf
+          assert "advance_route" in Path(".github/scripts/classify-provider-failure.sh").read_text()
           assert "three-strike" not in ins
           assert "up to five total evidence-based forensic recovery cycles" not in ins
           print("continuous-agent contract: OK")

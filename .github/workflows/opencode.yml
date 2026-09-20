@@ -188,7 +188,7 @@ jobs:
 
       - name: Select route 2
         id: route_2
-        if: steps.replay_2.outcome == 'success'
+        if: steps.classify_1.outcome == 'success'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -248,7 +248,7 @@ jobs:
 
       - name: Select route 3
         id: route_3
-        if: steps.replay_3.outcome == 'success'
+        if: steps.classify_2.outcome == 'success'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
