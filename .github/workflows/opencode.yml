@@ -254,9 +254,9 @@ jobs:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: |
           set -euo pipefail
-          current="${git branch --show-current}"
+          current="$(git branch --show-current)"
           [[ "$current" == "$INITIAL_BRANCH" ]] || exit 1
-          [[ -z "${git status --porcelain}" ]] || exit 1
+          [[ -z "$(git status --porcelain)" ]] || exit 1
           if git ls-remote --heads origin "refs/heads/opencode/issue$TARGET_NUMBER-*" | grep -q .; then
             echo "::error title=Unsafe replay::An OpenCode branch already exists for this target; preserving it."
             exit 1
