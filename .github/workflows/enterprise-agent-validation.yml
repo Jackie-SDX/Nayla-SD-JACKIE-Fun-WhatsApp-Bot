@@ -88,14 +88,13 @@ jobs:
           tmp_env="$(mktemp)"; tmp_out="$(mktemp)"
           trap 'rm -f "$tmp_env" "$tmp_out"' EXIT
 
-          OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
-          grep -q 'route=opencode/big-pickle' "$tmp_out"
+          route1="$(OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh)"
+          grep -Fq 'Selected route 1: opencode/big-pickle' <<< "$route1"
 
           : > "$tmp_env"; : > "$tmp_out"
-          OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' OPENCODE_ROUTE_INDEX=1 GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
-          grep -q 'route=opencode/mimo-v2.5-free' "$tmp_out"
+          route2="$(OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' OPENCODE_ROUTE_INDEX=1 GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh)"
+          grep -Fq 'Selected route 2: opencode/mimo-v2.5-free' <<< "$route2"
 
           : > "$tmp_env"; : > "$tmp_out"
-          OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' OPENCODE_ROUTE_INDEX=1 OPENCODE_EXCLUDED_PROVIDERS=opencode GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
-          grep -q 'route=github-copilot/auto' "$tmp_out"
-
+          route3="$(OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' OPENCODE_ROUTE_INDEX=1 OPENCODE_EXCLUDED_PROVIDERS=opencode GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh)"
+          grep -Fq 'Selected route 3: github-copilot/auto' <<< "$route3"
