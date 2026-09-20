@@ -106,6 +106,21 @@ jobs:
         shell: bash
         run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
+      - name: Validate OpenCode agent council
+        id: agent_council
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/validate-opencode-council.sh
+          agents="$(opencode agent list)"
+          printf '%s\n' "$agents"
+          for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
+            grep -q "$agent" <<< "$agents" || {
+              echo "::error title=Agent council discovery failed::OpenCode did not expose $agent."
+              exit 1
+            }
+          done
+
       - name: Preflight credentials
         shell: bash
         run: |
