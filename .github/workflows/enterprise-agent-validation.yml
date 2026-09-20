@@ -97,4 +97,6 @@ jobs:
           grep -q 'route=github-copilot/auto' "$tmp_out"
           : > "$tmp_env"; : > "$tmp_out"
           OPENCODE_API_KEY=test-key OPENCODE_ZEN_FREE_MODELS='paid-model' GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
-          grep -q 'selected=false' "$tmp_out"
+          echo "Selector output for rejected paid model:"
+          cat "$tmp_out"
+          grep -q '^selected=false "$tmp_out"
