@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/retry-oc-failed-jobs.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -44,6 +44,7 @@ jobs:
           bash -n .github/scripts/cleanup-composio-mcp.sh
           bash -n .github/scripts/post-oc-continuation.sh
           bash -n .github/scripts/reconcile-opencode-result.sh
+          bash -n .github/scripts/retry-oc-failed-jobs.sh
           jq empty package.json
 
       - name: Run application test suite
@@ -147,5 +148,14 @@ jobs:
           assert "opencode/" in route
           assert "2.0.3" not in wf
           assert "OpenCode V2" not in wf
+          control=Path('.github/workflows/oc-control.yml').read_text()
+          retry=Path('.github/scripts/retry-oc-failed-jobs.sh').read_text()
+          assert 'rerun-failed-jobs' in control
+          assert 'actions: write' in control
+          assert 'oc-run-id' in wf
+          assert 'retry-oc-failed-jobs.sh' in control
+          assert 'No registered prior' in retry
+          assert 'timed out' in retry
+          assert 'Reran $failed failed job(s)' in retry
           print("routing/cache contract: OK")
           PY
