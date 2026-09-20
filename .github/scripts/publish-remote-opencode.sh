@@ -63,12 +63,14 @@ restore_quarantine
 
 if [[ -z "$(git -C "$ws" status --short)" ]]; then
   echo "Remote target workspace has no changes after this run."
-  existing="$(gh pr list --repo "$repo" --head "$branch" --base "$base" --state open --limit 10 --json number,url 2>/dev/null | jq -r '.[0].url // ""' 2>/dev/null || true)"
-  if [[ -n "$existing" ]]; then
-    echo "Reusing already-published target pull request: $existing"
+  existing_json="$(gh pr list --repo "$repo" --head "$branch" --base "$base" --state open --limit 10 --json number,url,headRefOid 2>/dev/null || printf '%s' '[]')"
+  existing="$(jq -r '.[0].url // ""' <<<"$existing_json" 2>/dev/null || true)"
+  existing_head="$(jq -r '.[0].headRefOid // ""' <<<"$existing_json" 2>/dev/null || true)"
+  if [[ -n "$existing" && "$existing_head" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Reusing already-published target pull request: $existing ($existing_head)"
     emit_out published true
     emit_out pr_url "$existing"
-    emit_out head_sha "$(git -C "$ws" rev-parse HEAD)"
+    emit_out head_sha "$existing_head"
     exit 0
   fi
   echo "::error title=Remote publication blocked::No changes were produced and no existing target pull request is open." >&2
@@ -117,12 +119,14 @@ echo "Pushed remote target branch: $repo@$branch ($head_sha)"
 
 pr_url="$(gh pr create --repo "$repo" --base "$base" --head "$branch" --title "oc: $title" --body "$(printf 'Automated /oc remote-target task from the controller repository.\n\n- Target repository: %s\n- Target base: %s\n- Branch: %s\n- The change was produced and published by controller-owned OpenCode logic.\n\nReview the resulting diff and the target repository'\''s own CI checks before merging.' "$repo" "$base" "$branch")" 2>/dev/null || true)"
 if [[ -z "$pr_url" ]]; then
-  existing="$(gh pr list --repo "$repo" --head "$branch" --base "$base" --state open --limit 10 --json number,url 2>/dev/null | jq -r '.[0].url // ""' 2>/dev/null || true)"
-  if [[ -n "$existing" ]]; then
-    echo "Reusing existing target pull request: $existing"
+  existing_json="$(gh pr list --repo "$repo" --head "$branch" --base "$base" --state open --limit 10 --json number,url,headRefOid 2>/dev/null || printf '%s' '[]')"
+  existing="$(jq -r '.[0].url // ""' <<<"$existing_json" 2>/dev/null || true)"
+  existing_head="$(jq -r '.[0].headRefOid // ""' <<<"$existing_json" 2>/dev/null || true)"
+  if [[ -n "$existing" && "$existing_head" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Reusing existing target pull request: $existing ($existing_head)"
     emit_out published true
     emit_out pr_url "$existing"
-    emit_out head_sha "$head_sha"
+    emit_out head_sha "$existing_head"
     exit 0
   fi
   echo "::warning title=Target PR not created::The branch was pushed but no pull request could be created in $repo."

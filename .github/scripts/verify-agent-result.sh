@@ -39,7 +39,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   rrepo="${OC_TARGET_REPO:-}"
   rbase="${OC_TARGET_BASE:-main}"
   rbranch="${OC_TARGET_BRANCH:-}"
-  rlocal_head="$(git -C "${OC_TARGET_WORKSPACE:-.}" rev-parse HEAD 2>/dev/null || true)"
+  expected_head="${EXPECTED_TARGET_HEAD:-}"
   reason=""
   pr_url=""
 
@@ -70,12 +70,20 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
       emit verified true
       emit retryable false
       emit pr_url "$pr_url"
-      [[ -n "$rlocal_head" ]] && emit ci_run_id "$rlocal_head"
-      echo "Remote target PR verified (merged): $pr_url"
+      emit ci_run_id "$head_sha"
+      echo "Remote target PR verified (merged): $pr_url ($head_sha)"
       exit 0
     fi
-    if [[ -n "$rlocal_head" && -n "$head_sha" && "$rlocal_head" != "$head_sha" ]]; then
-      reason="target PR head ($head_sha) does not match the policed workspace head ($rlocal_head)"
+    if [[ -n "$expected_head" && "$expected_head" != "$head_sha" ]]; then
+      reason="target PR head ($head_sha) does not match the controller published target head ($expected_head)"
+    fi
+    if [[ -z "$reason" ]]; then
+      branch_sha="$(gh api "/repos/$rrepo/git/ref/heads/$rbranch" 2>/dev/null | jq -r ".object.sha // \"\"" 2>/dev/null || true)"
+      if [[ -z "$branch_sha" ]]; then
+        reason="target branch ref $rbranch is not observable"
+      elif [[ "$branch_sha" != "$head_sha" ]]; then
+        reason="target branch head ($branch_sha) does not match target PR head ($head_sha)"
+      fi
     fi
   fi
 
@@ -91,21 +99,39 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
       reason="target CI evidence is not observable with the available workflow credential"
       break
     fi
-    success_count="$(jq '[.check_runs[]? | select(.conclusion == "success")] | length' <<<"$checks" 2>/dev/null || echo 0)"
-    if [[ "$success_count" -gt 0 ]]; then
+    total_checks="$(jq '.check_runs | length' <<<"$checks" 2>/dev/null || echo 0)"
+    success_count="$(jq '[.check_runs[]? | select(.status == "completed" and .conclusion == "success")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    skipped_count="$(jq '[.check_runs[]? | select(.status == "completed" and .conclusion == "skipped")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    neutral_count="$(jq '[.check_runs[]? | select(.status == "completed" and .conclusion == "neutral")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    pending_count="$(jq '[.check_runs[]? | select(.status == "queued" or .status == "in_progress")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    failure_count="$(jq '[.check_runs[]? | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled" or .conclusion == "action_required" or .conclusion == "startup_failure" or .conclusion == "stale")] | length' <<<"$checks" 2>/dev/null || echo 0)"
+    if [[ "$failure_count" -gt 0 ]]; then
+      reason="target CI has $failure_count failed/non-green check run(s) on exact head $head_sha"
+      break
+    fi
+    if [[ "$pending_count" -gt 0 ]]; then
+      if [[ "$SECONDS" -lt "$deadline" ]]; then
+        pending=true
+        sleep "$poll_seconds"
+        continue
+      fi
+      break
+    fi
+    if [[ "$total_checks" -gt 0 && "$success_count" -gt 0 && "$((success_count + skipped_count + neutral_count))" -eq "$total_checks" ]]; then
       verified=true
       break
     fi
-    st="$(gh api "/repos/$rrepo/commits/$head_sha/status" 2>/dev/null || printf '%s' '{"state":"pending"}')"
-    if [[ "$(jq -r '.state // ""' <<<"$st")" == "success" ]]; then
-      verified=true
-      break
-    fi
-    states="$(jq -r '[.check_runs[]?.status] | if index("in_progress") or index("queued") then "pending" else "done" end' <<<"$checks" 2>/dev/null || echo done)"
-    if [[ "$states" == "pending" && "$SECONDS" -lt "$deadline" ]]; then
-      pending=true
-      sleep "$poll_seconds"
-      continue
+    if [[ "$total_checks" -eq 0 ]]; then
+      st="$(gh api "/repos/$rrepo/commits/$head_sha/status" 2>/dev/null || printf '%s' '{"state":"pending"}')"
+      if [[ "$(jq -r '.state // ""' <<<"$st")" == "success" ]]; then
+        verified=true
+        break
+      fi
+      if [[ "$(jq -r '.state // "pending"' <<<"$st")" == "pending" && "$SECONDS" -lt "$deadline" ]]; then
+        pending=true
+        sleep "$poll_seconds"
+        continue
+      fi
     fi
     break
   done
