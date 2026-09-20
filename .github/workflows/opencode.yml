@@ -427,17 +427,17 @@ jobs:
         run: bash .github/scripts/publish-copilot-change.sh
 
       - name: OpenCode success inspection
-        if: always() && ((steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'opencode') || (steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'opencode') || (steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && ((steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'opencode' && steps.opencode_publish_1.outputs.published == 'true') || (steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'opencode' && steps.opencode_publish_2.outputs.published == 'true') || (steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'opencode' && steps.opencode_publish_3.outputs.published == 'true'))
         shell: bash
         run: |
           set -euo pipefail
-          echo "OpenCode completed successfully."
+          echo "OpenCode completed successfully and was published with verified evidence."
           git status --short
           git branch --show-current
           git log -1 --oneline
 
       - name: Human handoff after exhausted or blocked recovery
-        if: always() && steps.command_gate.outputs.valid == 'true' && steps.agent_1.outcome == 'failure' && (steps.agent_3.outcome != 'success')
+        if: always() && steps.command_gate.outputs.valid == 'true' && !((steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'opencode' && steps.opencode_publish_1.outputs.published == 'true') || (steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'opencode' && steps.opencode_publish_2.outputs.published == 'true') || (steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'opencode' && steps.opencode_publish_3.outputs.published == 'true') || (steps.agent_1.outcome == 'success' && steps.route_1.outputs.provider == 'github-copilot' && steps.publish_1.outputs.published == 'true') || (steps.agent_2.outcome == 'success' && steps.route_2.outputs.provider == 'github-copilot' && steps.publish_2.outputs.published == 'true') || (steps.agent_3.outcome == 'success' && steps.route_3.outputs.provider == 'github-copilot' && steps.publish_3.outputs.published == 'true'))
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -466,12 +466,12 @@ jobs:
           A1: ${{ steps.agent_1.outcome }}
           A2: ${{ steps.agent_2.outcome }}
           A3: ${{ steps.agent_3.outcome }}
-          P1: ${{ steps.publish_1.outcome }}
-          P2: ${{ steps.publish_2.outcome }}
-          P3: ${{ steps.publish_3.outcome }}
-          OP1: ${{ steps.opencode_publish_1.outcome }}
-          OP2: ${{ steps.opencode_publish_2.outcome }}
-          OP3: ${{ steps.opencode_publish_3.outcome }}
+          P1: ${{ steps.publish_1.outputs.published }}
+          P2: ${{ steps.publish_2.outputs.published }}
+          P3: ${{ steps.publish_3.outputs.published }}
+          OP1: ${{ steps.opencode_publish_1.outputs.published }}
+          OP2: ${{ steps.opencode_publish_2.outputs.published }}
+          OP3: ${{ steps.opencode_publish_3.outputs.published }}
         run: |
           {
             echo "### /oc hybrid agent routing"
