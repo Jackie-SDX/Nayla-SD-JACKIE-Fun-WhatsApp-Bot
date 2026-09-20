@@ -259,8 +259,8 @@ The repository is public.
 
 Never hard-code:
 
-- OpenCode Zen keys;
-- Copilot credentials;
+- OpenCode Zen credentials are stored only in OPENCODE_API_KEY;
+- Copilot fallback credentials are stored only in COPILOT_GITHUB_TOKEN;
 - Composio keys;
 - GitHub tokens;
 - WhatsApp tokens;
