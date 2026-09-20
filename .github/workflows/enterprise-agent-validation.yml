@@ -101,7 +101,7 @@ jobs:
           assert "/oc continue" in ins
           assert "/oc retry failed jobs" in ins
           assert ".opencode/agents/critic.md" in ins
-          assert "read-only adversarial verifier" in critic
+          assert "read-only adversarial verifier" in critic.lower()
           assert "bash: deny" in critic
           assert "gh issue comment" in cont
           assert "merged_same_head" in recon
