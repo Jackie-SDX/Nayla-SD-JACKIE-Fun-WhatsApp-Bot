@@ -33,7 +33,7 @@ jobs:
       OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free' }}
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-      COMPOSIO_USER_ID: ${{ github.repository_owner }}
+      COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
       COPILOT_MAX_AI_CREDITS: "60"
 
     steps:
