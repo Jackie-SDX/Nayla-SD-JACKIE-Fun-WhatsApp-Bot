@@ -138,6 +138,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import os, subprocess, tempfile
           wf=Path(".github/workflows/opencode-cache.yml").read_text()
           route=Path(".github/scripts/select-opencode-route.sh").read_text()
           assert "OPENCODE_ROUTE_INDEX" in route
@@ -147,5 +148,23 @@ jobs:
           assert "opencode/" in route
           assert "2.0.3" not in wf
           assert "OpenCode V2" not in wf
+          def pick(route_index, copilot):
+            d=tempfile.mkdtemp()
+            env=dict(os.environ)
+            env.pop("COPILOT_GITHUB_TOKEN",None)
+            env.pop("OPENCODE_EXCLUDED_PROVIDERS",None)
+            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+                     OPENCODE_ROUTE_INDEX=route_index, GITHUB_ENV=os.path.join(d,"env"),
+                     GITHUB_OUTPUT=os.path.join(d,"out"))
+            if copilot:
+              env["COPILOT_GITHUB_TOKEN"]=copilot
+            subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
+            return Path(os.path.join(d,"out")).read_text()
+          assert "route=opencode/big-pickle" in pick("",None)
+          assert "route=opencode/mimo-v2.5-free" in pick("1",None)
+          assert "route=github-copilot/auto" in pick("2","y")
+          assert "route=none" in pick("2",None)
+          assert "route=none" in pick("3","y")
           print("routing/cache contract: OK")
+          print("model ladder (big-pickle->mimo->copilot->none): OK")
           PY

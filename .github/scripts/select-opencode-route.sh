@@ -4,7 +4,7 @@ set -euo pipefail
 route_index="${OPENCODE_ROUTE_INDEX:-}"
 start=0
 if [[ "$route_index" =~ ^[0-9]+$ ]]; then
-  start=$((route_index + 1))
+  start=$route_index
 fi
 
 excluded=",${OPENCODE_EXCLUDED_PROVIDERS:-},"
