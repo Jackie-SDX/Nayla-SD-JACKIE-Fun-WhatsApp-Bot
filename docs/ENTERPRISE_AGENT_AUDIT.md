@@ -5,7 +5,7 @@ Repository: `Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot`
 Main baseline at audit start:
 `93780b5201d613da04072524d8aa84710dbafdf5`
 
-This work is staged on the isolated branch `audit/enterprise-opencode`. No implementation commit from this audit has been written to `main`.
+The reactive-provider-routing fix is staged on `fix/reactive-provider-routing` for review before integration into `main`.
 
 ## 1. Confirmed cache finding
 
@@ -39,7 +39,7 @@ Trusted cache workflow:
 
 ## 2. Model and quota architecture
 
-The zero-cost route circuit now starts with an OpenRouter free Qwen model, then uses the independent Gemini credential cluster, and ends with the OpenRouter global free router.
+The zero-cost route circuit starts with an OpenRouter free Qwen model, then uses the Gemini credential cluster, and ends with the OpenRouter global free router. Route selection is side-effect-free and performs no inference health probes, because probes consume the same scarce free-tier request budget used by real agent calls.
 
 The operational primary free model is qwen/qwen3.8-27b:free.
 
@@ -186,7 +186,15 @@ The management connector and the OpenCode MCP tool surface are not identical. Op
 
 This audit does not falsely claim that the repository-management connector executed a command inside the E2B sandbox. GitHub Actions remains the authoritative repository execution environment whenever the E2B execution action is not actually visible to the running agent.
 
-## 10. Validation evidence
+## 10. Reactive routing hardening
+
+The provider selector never calls OpenRouter `chat/completions` or Gemini `generateContent` as a health probe. It only chooses the next configured route.
+
+After a real OpenCode failure, the workflow classifies the sanitized failure evidence. 401/403/429/5xx, quota exhaustion, rate limiting, and provider saturation exclude the affected provider from later attempts in the same task. Model-specific or request-shape failures remain eligible for a different model route instead of incorrectly excluding the whole provider.
+
+This prevents the recovery mechanism from creating additional inference traffic merely to discover that a provider is unavailable.
+
+## 11. Validation evidence
 
 The final enterprise validation workflow on the isolated audit branch passed all implemented checks.
 
@@ -210,7 +218,7 @@ Validated categories included:
 - application packaging/reproducibility audit;
 - main governance visibility audit.
 
-## 11. Existing application findings
+## 12. Existing application findings
 
 These are pre-existing project findings surfaced by validation and deliberately not hidden by the agent-infrastructure work:
 
@@ -228,7 +236,7 @@ No `package-lock.json` or `npm-shrinkwrap.json` is present.
 
 These remain warnings until the application itself is intentionally repaired.
 
-## 12. Manual enterprise governance gate
+## 13. Manual enterprise governance gate
 
 Repository governance is separate from OpenCode configuration.
 
@@ -254,7 +262,7 @@ Before integrating this branch, repository settings should deliberately enforce:
 
 Those settings were intentionally not changed by this audit.
 
-## 13. Current acceptance gate
+## 14. Current acceptance gate
 
 The isolated implementation is ready for human review when all of the following are satisfied:
 
