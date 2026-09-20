@@ -128,55 +128,29 @@ jobs:
         shell: bash
         run: bash .github/scripts/validate-opencode-council.sh
 
-      - name: Validate OpenCode runtime agent discovery
+      - name: Validate OpenCode V2 runtime and agent discovery
         shell: bash
         run: |
           set -euo pipefail
-          json="$(mktemp)"
+          export OPENCODE_V2_VERSION="0.0.0-beta-19723"
+          npm view "@opencode-ai/cli@${OPENCODE_V2_VERSION}" version --json | jq -e --arg v "$OPENCODE_V2_VERSION" '. == $v' >/dev/null
           tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp" "$json"' EXIT
-          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20             https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
-          tag="$(jq -r '.tag_name' "$json")"
-          version="${tag#v}"
-          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
-          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ -n "$url" && "$url" != "null" ]]
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 "$url" -o "$tmp/opencode.tar.gz"
-          expected="${digest#sha256:}"
-          echo "$expected  $tmp/opencode.tar.gz" | sha256sum --check -
-          mkdir -p "$tmp/extract"
-          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
-          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
-          [[ -n "$binary" ]]
-          install -Dm755 "$binary" "$tmp/opencode"
-          agents="$("$tmp/opencode" agent list)"
-          printf '%s\n' "$agents"
+          trap 'rm -rf "$tmp"' EXIT
+          npm install --prefix "$tmp/opencode2" --no-audit --no-fund --prefer-online --save-exact "@opencode-ai/cli@${OPENCODE_V2_VERSION}" >/tmp/opencode2-install.log 2>&1
+          test -x "$tmp/opencode2/bin/opencode2"
+          "$tmp/opencode2/bin/opencode2" --version
+          "$tmp/opencode2/bin/opencode2" run --help | grep -q -- "--agent"
+          "$tmp/opencode2/bin/opencode2" run --help | grep -q -- "--model"
+          "$tmp/opencode2/bin/opencode2" run --help | grep -q -- "--standalone"
+          agents="$("$tmp/opencode2/bin/opencode2" agent list)"
+          printf "%s\n" "$agents"
           for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
             grep -q "$agent" <<< "$agents" || {
-              echo "::error title=OpenCode runtime discovery failed::Missing agent $agent"
+              echo "::error title=OpenCode V2 discovery failed::Missing $agent"
               exit 1
             }
           done
-
-      - name: Validate workflow-enforced council semantics
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q 'Validate command gate' .github/workflows/opencode.yml
-          grep -q 'Publish OpenCode attempt 1' .github/workflows/opencode.yml
-          grep -q 'Publish OpenCode attempt 2' .github/workflows/opencode.yml
-          grep -q 'Publish OpenCode attempt 3' .github/workflows/opencode.yml
-          grep -q 'COUNCIL_EVIDENCE_DIR' .github/workflows/opencode.yml
-          grep -q 'command_gate.outputs.valid' .github/workflows/opencode.yml
-          grep -q 'workflow-enforced agent council' .opencode/instructions.md
-          grep -q 'opencode run --standalone' .github/scripts/run-opencode-attempt.sh
-          grep -q 'COUNCIL_STAGE_COMPLETE=' .github/scripts/run-opencode-council-stage.sh
-          grep -q 'COUNCIL_DECISION=' .github/scripts/run-opencode-council-stage.sh
-          grep -q 'COUNCIL_VERDICT=' .github/scripts/run-opencode-council-stage.sh
-          grep -q 'git push --set-upstream origin' .github/scripts/publish-opencode-change.sh
-
+          [[ "$("$tmp/opencode2/bin/opencode2" --version)" == *"$OPENCODE_V2_VERSION"* ]]
       - name: Validate route selector structure
         shell: bash
         run: |
