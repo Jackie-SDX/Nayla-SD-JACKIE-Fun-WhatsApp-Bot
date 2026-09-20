@@ -182,6 +182,8 @@ jobs:
           grep -Fq 'already received a selective failed-job rerun' .github/scripts/retry-oc-failed-jobs.sh
           grep -Fq "!startsWith(github.event.comment.body, '/oc retry failed jobs')" .github/workflows/opencode.yml
           grep -Fq "!startsWith(github.event.comment.body, '/opencode retry failed jobs')" .github/workflows/opencode.yml
+          grep -Fq "github.event.comment.user.type == 'User'" .github/workflows/opencode.yml
+          grep -Fq 'github.event.comment.user.login == github.repository_owner' .github/workflows/opencode.yml
           grep -Fq 'oc-run-id' .github/workflows/opencode.yml
           grep -Fq 'OC_RUN_START_ISO' .github/workflows/opencode.yml
           grep -Fq 'commits/$head_sha/check-runs' .github/scripts/verify-agent-result.sh
