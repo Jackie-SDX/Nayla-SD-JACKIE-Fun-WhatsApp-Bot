@@ -103,6 +103,8 @@ jobs:
           ! grep -q 'connected_accounts' .github/scripts/prepare-composio-mcp.sh
           ! grep -q 'OPENCODE_CONFIG_CONTENT' .github/scripts/prepare-composio-mcp.sh
           grep -q 'COMPOSIO_MCP_HEADERS_FILE' .github/scripts/prepare-composio-mcp.sh
+          grep -q 'x-api-key: %s' .github/scripts/prepare-composio-mcp.sh
+          grep -q 'add-mask::\$mcp_url' .github/scripts/prepare-composio-mcp.sh
           grep -q 'persist-credentials: false' .github/workflows/opencode.yml
           grep -q 'contents: write' .github/workflows/opencode.yml
           grep -q 'issues: write' .github/workflows/opencode.yml
