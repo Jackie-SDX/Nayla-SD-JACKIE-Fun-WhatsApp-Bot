@@ -26,6 +26,8 @@ jobs:
       pull-requests: write
     env:
       COPILOT_MAX_AI_CREDITS: "60"
+      OPENCODE_V2_VERSION: "0.0.0-beta-19723"
+      OPENCODE_ZEN_FREE_MODELS: "big-pickle,mimo-v2.5-free,ling-3.0-flash-fin-free,nemotron-3-ultra-free,nemotron-3.5-lightning-free,muse-spark-1.3-contributor-free,jev-1.13-free,deepseek-v4-flash-free"
 
     steps:
       - name: Checkout repository
@@ -57,58 +59,38 @@ jobs:
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
           echo "Initial checkout SHA: $sha"
 
-      - name: Resolve and verify OpenCode release
+      - name: Verify pinned OpenCode V2 runtime
         id: opencode_release
         shell: bash
         run: |
           set -euo pipefail
-          json="$(mktemp)"
-          trap 'rm -f "$json"' EXIT
-          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
-            https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
-          tag="$(jq -r '.tag_name' "$json")"
-          version="${tag#v}"
-          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
-          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-          [[ -n "$url" && "$url" != "null" ]] || exit 1
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "Verified OpenCode release: $version"
+          [[ "$OPENCODE_V2_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta-[0-9]+$ ]]
+          npm view "@opencode-ai/cli@${OPENCODE_V2_VERSION}" version --json | jq -e --arg v "$OPENCODE_V2_VERSION" '. == $v' >/dev/null
+          echo "version=$OPENCODE_V2_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Restore verified OpenCode cache
+      - name: Restore verified OpenCode V2 cache
         id: cache_restore
         continue-on-error: true
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.opencode/bin
-          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.opencode_release.outputs.version }}
+          path: ~/.opencode2
+          key: opencode2-${{ runner.os }}-${{ runner.arch }}-${{ env.OPENCODE_V2_VERSION }}
 
-      - name: Install OpenCode on cache miss
+      - name: Install OpenCode V2 on cache miss
         if: steps.cache_restore.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 \
-            "${{ steps.opencode_release.outputs.url }}" -o "$tmp/opencode.tar.gz"
-          digest="${{ steps.opencode_release.outputs.digest }}"
-          digest="${digest#sha256:}"
-          echo "$digest  $tmp/opencode.tar.gz" | sha256sum --check -
-          mkdir -p "$tmp/extract"
-          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
-          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
-          [[ -n "$binary" ]] || exit 1
-          install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
-          "$HOME/.opencode/bin/opencode" --version
+          rm -rf "$HOME/.opencode2"
+          npm install --prefix "$HOME/.opencode2" --no-audit --no-fund --prefer-online --save-exact "@opencode-ai/cli@${OPENCODE_V2_VERSION}"
+          test -x "$HOME/.opencode2/bin/opencode2"
+          actual="$("$HOME/.opencode2/bin/opencode2" --version)"
+          echo "OpenCode V2 runtime: $actual"
+          [[ "$actual" == *"$OPENCODE_V2_VERSION"* ]]
 
-      - name: Add OpenCode to PATH
+      - name: Add OpenCode V2 to PATH
         shell: bash
-        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-
+        run: echo "$HOME/.opencode2/bin" >> "$GITHUB_PATH"
       - name: Validate OpenCode agent council
         id: agent_council
         if: steps.command_gate.outputs.valid == 'true'
@@ -116,7 +98,7 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/validate-opencode-council.sh
-          agents="$(opencode agent list)"
+          agents="$(opencode2 agent list)"
           printf '%s\n' "$agents"
           for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
             grep -q "$agent" <<< "$agents" || {
@@ -125,28 +107,51 @@ jobs:
             }
           done
 
-      - name: Preflight credentials
+      - name: Resolve credential availability
+        id: credentials
         if: steps.command_gate.outputs.valid == 'true'
         env:
-          OPENCODE_API_KEY: ${{ steps.route_1.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
-          COPILOT_GITHUB_TOKEN: ${{ steps.route_1.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
-          OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free,ling-3.0-flash-fin-free,nemotron-3-ultra-free,nemotron-3.5-lightning-free,muse-spark-1.3-contributor-free,jev-1.13-free,deepseek-v4-flash-free' }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "$OPENCODE_API_KEY" ]] && echo "OpenCode Zen credential: configured" || echo "::warning title=OpenCode Zen unavailable::OPENCODE_API_KEY is not configured."
-          [[ -n "$COPILOT_GITHUB_TOKEN" ]] && echo "Copilot fallback credential: configured" || echo "Copilot fallback credential: optional/unconfigured"
-          [[ -n "$OPENCODE_API_KEY" || -n "$COPILOT_GITHUB_TOKEN" ]] || {
-            echo "::error title=No agent credential::Configure OPENCODE_API_KEY or COPILOT_GITHUB_TOKEN."
-            exit 1
-          }
-          [[ -n "$COMPOSIO_API_KEY" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured."
-          echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
+          [[ -n "$OPENCODE_API_KEY" ]] && echo "opencode=true" >> "$GITHUB_OUTPUT" || echo "opencode=false" >> "$GITHUB_OUTPUT"
+          [[ -n "$COPILOT_GITHUB_TOKEN" ]] && echo "copilot=true" >> "$GITHUB_OUTPUT" || echo "copilot=false" >> "$GITHUB_OUTPUT"
+          [[ -n "$COMPOSIO_API_KEY" ]] && echo "composio=true" >> "$GITHUB_OUTPUT" || echo "composio=false" >> "$GITHUB_OUTPUT"
+
+      - name: Select route 1
+        id: route_1
+        if: steps.command_gate.outputs.valid == 'true'
+        env:
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          OPENCODE_ZEN_FREE_MODELS: ${{ env.OPENCODE_ZEN_FREE_MODELS }}
+        shell: bash
+        run: bash .github/scripts/select-opencode-route.sh
+
+      - name: Preflight credentials
+        if: steps.command_gate.outputs.valid == 'true'
+        env:
+          ROUTE_PROVIDER: ${{ steps.route_1.outputs.provider }}
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          HAS_COMPOSIO_CREDENTIAL: ${{ steps.credentials.outputs.composio }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$ROUTE_PROVIDER" in
+            opencode) [[ "$HAS_OPENCODE_CREDENTIAL" == "true" ]] || exit 1 ;;
+            github-copilot) [[ "$HAS_COPILOT_CREDENTIAL" == "true" ]] || exit 1 ;;
+            *) echo "::error title=No usable agent route::No valid provider was selected."; exit 1 ;;
+          esac
+          [[ "$HAS_COMPOSIO_CREDENTIAL" == "true" ]] || echo "::warning title=Composio unavailable::Continuing without optional Composio MCP."
+          echo "Credential availability gate passed for: $ROUTE_PROVIDER"
 
       - name: Bootstrap Composio session MCP
         id: composio_session
-        if: steps.command_gate.outputs.valid == 'true'
+        if: steps.command_gate.outputs.valid == 'true' && steps.credentials.outputs.composio == 'true'
         env:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
           COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
@@ -180,8 +185,8 @@ jobs:
         shell: bash
         env:
           SELECTED_PROVIDER: ${{ steps.route_1.outputs.provider }}
-          OPENCODE_API_KEY: ${{ steps.route_3.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
-          COPILOT_GITHUB_TOKEN: ${{ steps.route_3.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
+          OPENCODE_API_KEY: ${{ steps.route_1.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.route_1.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
           COMPOSIO_MCP_URL: ${{ env.COMPOSIO_MCP_URL }}
           COMPOSIO_MCP_HEADERS_FILE: ${{ env.COMPOSIO_MCP_HEADERS_FILE }}
           INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
@@ -261,6 +266,10 @@ jobs:
       - name: Select route 2
         id: route_2
         if: steps.command_gate.outputs.valid == 'true' && steps.replay_2.outcome == 'success'
+        env:
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          OPENCODE_ZEN_FREE_MODELS: ${{ env.OPENCODE_ZEN_FREE_MODELS }}
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -281,8 +290,8 @@ jobs:
         shell: bash
         env:
           SELECTED_PROVIDER: ${{ steps.route_2.outputs.provider }}
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          OPENCODE_API_KEY: ${{ steps.route_2.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.route_2.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
           COMPOSIO_MCP_URL: ${{ env.COMPOSIO_MCP_URL }}
           COMPOSIO_MCP_HEADERS_FILE: ${{ env.COMPOSIO_MCP_HEADERS_FILE }}
           INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
@@ -362,6 +371,10 @@ jobs:
       - name: Select route 3
         id: route_3
         if: steps.command_gate.outputs.valid == 'true' && steps.replay_3.outcome == 'success'
+        env:
+          HAS_OPENCODE_CREDENTIAL: ${{ steps.credentials.outputs.opencode }}
+          HAS_COPILOT_CREDENTIAL: ${{ steps.credentials.outputs.copilot }}
+          OPENCODE_ZEN_FREE_MODELS: ${{ env.OPENCODE_ZEN_FREE_MODELS }}
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -382,8 +395,8 @@ jobs:
         shell: bash
         env:
           SELECTED_PROVIDER: ${{ steps.route_3.outputs.provider }}
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          OPENCODE_API_KEY: ${{ steps.route_3.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.route_3.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
           COMPOSIO_MCP_URL: ${{ env.COMPOSIO_MCP_URL }}
           COMPOSIO_MCP_HEADERS_FILE: ${{ env.COMPOSIO_MCP_HEADERS_FILE }}
           INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
@@ -452,6 +465,14 @@ jobs:
           body="$(printf 'Agent recovery stopped without a fully verified success. No success is claimed.\n\nSanitized findings:\n\n%s' "$findings")"
           gh issue comment "$TARGET_NUMBER" --body "$body"
 
+      - name: Upload OpenCode council evidence
+        if: always() && steps.command_gate.outputs.valid == 'true' && (steps.agent_1.outputs.evidence_dir != '' || steps.agent_2.outputs.evidence_dir != '' || steps.agent_3.outputs.evidence_dir != '')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: opencode-council-${{ github.run_id }}
+          path: ${{ steps.agent_3.outputs.evidence_dir || steps.agent_2.outputs.evidence_dir || steps.agent_1.outputs.evidence_dir }}
+          retention-days: 14
+          if-no-files-found: warn
       - name: Routing summary
         if: always()
         env:
