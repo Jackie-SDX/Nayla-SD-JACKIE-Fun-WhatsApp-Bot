@@ -23,42 +23,12 @@ if [[ -z "${COMPOSIO_API_KEY:-}" ]]; then
 fi
 
 response="$(mktemp "${RUNNER_TEMP:-/tmp}/composio-session.XXXXXX.json")"
-trap 'rm -f "$response"' EXIT
 
-requested_user_id="${COMPOSIO_USER_ID:-}"
-active_accounts="$(mktemp "${RUNNER_TEMP:-/tmp}/composio-active-accounts.XXXXXX.json")"
-headers_file=""
-trap 'rm -f "$response" "$active_accounts" "$headers_file" 2>/dev/null || true' EXIT
-
-if ! curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
-  --get "https://backend.composio.dev/api/v3.1/connected_accounts" \
-  --data-urlencode "toolkit_slugs=tavily_mcp" \
-  --data-urlencode "statuses=ACTIVE" \
-  --data-urlencode "account_type=ALL" \
-  --data-urlencode "limit=100" \
-  -H "x-api-key: $COMPOSIO_API_KEY" -o "$active_accounts"; then
+resolved_user_id="${COMPOSIO_USER_ID:-}"
+[[ -n "$resolved_user_id" ]] || {
+  echo "::error title=Composio user ID missing::Set COMPOSIO_USER_ID to the stable external user ID used by this automation."
   fail_composio_mcp
-fi
-
-if [[ -n "$requested_user_id" ]]; then
-  matching_count="$(jq --arg uid "$requested_user_id" '[.items[] | select(.status == "ACTIVE" and .user_id == $uid)] | length' "$active_accounts")"
-  if [[ "$matching_count" -eq 0 ]]; then
-    requested_user_id=""
-  fi
-fi
-
-if [[ -z "$requested_user_id" ]]; then
-  user_candidates="$(jq -r '[.items[] | select(.status == "ACTIVE" and (.user_id // "") != "") | .user_id] | unique | .[]' "$active_accounts")"
-  user_count="$(printf '%s\n' "$user_candidates" | sed '/^$/d' | wc -l | tr -d ' ')"
-  [[ "$user_count" -eq 1 ]] || {
-    echo "::error title=Ambiguous Composio user::The project has zero or multiple active Tavily users. Set COMPOSIO_USER_ID to the intended Composio app user ID."
-    fail_composio_mcp
-  }
-  resolved_user_id="$user_candidates"
-else
-  resolved_user_id="$requested_user_id"
-fi
-
+}
 payload="$(jq -cn --arg user_id "$resolved_user_id" '{user_id:$user_id,mcp:true}')"
 
 if ! curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
@@ -87,15 +57,11 @@ headers_file="$(mktemp "${RUNNER_TEMP:-/tmp}/composio-mcp-headers.XXXXXX")"
 chmod 600 "$headers_file"
 jq -r 'to_entries[] | "\(.key): \(.value)"' <<<"$headers" > "$headers_file"
 
-[[ "$mcp_url" =~ ^https://backend\.composio\.dev/tool_router/[^/]+/mcp$ ]] || {
+[[ "$mcp_url" =~ ^https://(app|backend)\.composio\.dev/tool_router/(v[0-9]+/)?[^/]+/mcp$ ]] || {
   echo "::warning title=Unexpected Composio MCP endpoint::Refusing an MCP URL outside Composio's hosted Tool Router domain."
   fail_composio_mcp
   exit 0
 }
-
-config="$(jq -cn --arg url "$mcp_url" --argjson headers "$headers" '
-  {mcp:{composio:{type:"remote",url:$url,enabled:true,oauth:false,headers:$headers}}}
-')"
 
 printf 'COMPOSIO_MCP_URL=%s\n' "$mcp_url" >> "$GITHUB_ENV"
 printf 'COMPOSIO_MCP_HEADERS_FILE=%s\n' "$headers_file" >> "$GITHUB_ENV"
