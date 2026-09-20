@@ -171,6 +171,16 @@ Prefer GitHub Actions as the verifiable execution environment when the change af
 
 If E2B exposes a direct command/code-execution capability, use it for isolated runtime experiments. If the connected E2B surface does not expose command execution, do not claim a sandbox runtime test; use GitHub Actions or another actually executable environment instead.
 
+## Cross-provider collaboration
+
+When OpenCode completes an implementation successfully and a Copilot credential is available, the outer wrapper invokes a separate read-only Copilot peer review against the same unpushed workspace.
+
+- Copilot receives the original task and proposed diff, with only read/search tools; it cannot edit, shell, commit, push, or mutate GitHub.
+- A Copilot PASS permits the OpenCode change to proceed to the existing publisher.
+- A Copilot FAIL fails closed. The existing OpenCode cleanup restores the baseline, and the next controlled route can reuse the sanitized peer-review evidence.
+- A later Copilot implementation is explicitly instructed to verify the handoff findings instead of blindly trusting them.
+- The existing deterministic validation, replay-safety, and sensitive-publication gates remain authoritative.
+
 ## Composio gateway policy
 
 Use Composio as an actual API/tool gateway, not merely as configuration.

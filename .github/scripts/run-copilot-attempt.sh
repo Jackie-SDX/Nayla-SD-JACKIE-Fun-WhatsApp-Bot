@@ -67,9 +67,13 @@ echo "GitHub Copilot CLI: $copilot_actual"
 }
 
 prompt="$(cat .github/copilot-instructions.md)"
-prompt+=$'\n\n## Current GitHub task\n'
-prompt+="$task"
-prompt+=$'\n\nDo not commit, push, reset, clean, delete branches, or create GitHub-side mutations. Inspect and edit only the checked-out isolated branch. Use Composio MCP when an external tool is actually required.\n'
+prompt="$(printf "%s\\n\\n## Current GitHub task\\n%s" "$prompt" "$task")"
+handoff_log="${HANDOFF_REVIEW_LOG:-}"
+if [[ -n "$handoff_log" && -f "$handoff_log" ]]; then
+  handoff="$(tail -n 220 "$handoff_log")"
+  prompt="$(printf "%s\\n\\n## Prior OpenCode peer-review handoff\\n%s\\n\\nVerify the handoff findings independently; do not blindly apply them." "$prompt" "$handoff")"
+fi
+prompt="$(printf "%s\\n\\nDo not commit, push, reset, clean, delete branches, or create GitHub-side mutations. Inspect and edit only the checked-out isolated branch. Use Composio MCP when an external tool is actually required.\\n" "$prompt")"
 
 set +e
 "$copilot_bin" \

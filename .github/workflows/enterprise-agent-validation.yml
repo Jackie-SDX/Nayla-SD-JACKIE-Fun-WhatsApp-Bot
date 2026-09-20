@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-opencode-council-stage.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-opencode-change.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/validate-opencode-council.sh .github/scripts/validate-application.sh .opencode/instructions.md .opencode/agents/architect-reviewer.md .opencode/agents/adversarial-reviewer.md .opencode/agents/adjudicator.md .opencode/agents/verifier.md docs/AGENT_COUNCIL.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-opencode-council-stage.sh .github/scripts/run-copilot-attempt.sh .github/scripts/review-opencode-with-copilot.sh .github/scripts/publish-opencode-change.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/validate-opencode-council.sh .github/scripts/validate-application.sh .opencode/instructions.md .opencode/agents/architect-reviewer.md .opencode/agents/adversarial-reviewer.md .opencode/agents/adjudicator.md .opencode/agents/verifier.md docs/AGENT_COUNCIL.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -43,6 +43,7 @@ jobs:
           bash -n .github/scripts/run-opencode-council-stage.sh
           bash -n .github/scripts/publish-opencode-change.sh
           bash -n .github/scripts/run-copilot-attempt.sh
+          bash -n .github/scripts/review-opencode-with-copilot.sh
           bash -n .github/scripts/publish-copilot-change.sh
           bash -n .github/scripts/classify-provider-failure.sh
           bash -n .github/scripts/prepare-composio-mcp.sh
@@ -67,6 +68,12 @@ jobs:
           jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
           grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
+          grep -q 'review-opencode-with-copilot.sh' .github/workflows/opencode.yml .github/scripts/run-opencode-attempt.sh
+          grep -q 'copilot_token=' .github/scripts/run-opencode-attempt.sh
+          grep -q 'unset COPILOT_GITHUB_TOKEN' .github/scripts/run-opencode-attempt.sh
+          grep -q 'COPILOT_REVIEW=PASS' .github/scripts/review-opencode-with-copilot.sh
+          grep -q -- '--available-tools' .github/scripts/review-opencode-with-copilot.sh
+          grep -q 'HANDOFF_REVIEW_LOG' .github/workflows/opencode.yml .github/scripts/run-copilot-attempt.sh
           grep -q 'route_3' .github/workflows/opencode.yml
           grep -q 'three-strike' .opencode/instructions.md
           grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
@@ -224,6 +231,7 @@ jobs:
           "$bin" --help 2>&1 | grep -q -- '--allow-tool'
           "$bin" --help 2>&1 | grep -q -- '--deny-tool'
           "$bin" --help 2>&1 | grep -q -- '--max-ai-credits'
+          "$bin" --help 2>&1 | grep -q -- '--available-tools'
           echo "Copilot CLI runtime: PASS"
           grep -q '@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}' .github/scripts/run-copilot-attempt.sh
           grep -q 'allow-tool "write"' .github/scripts/run-copilot-attempt.sh

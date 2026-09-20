@@ -9,6 +9,8 @@ model="${MODEL:?}"
 root="${RUNNER_TEMP:-/tmp}/opencode-council-${GITHUB_RUN_ID:-local}-${attempt}"
 mkdir -p "$root"
 chmod 700 "$root"
+copilot_token="${COPILOT_GITHUB_TOKEN:-}"
+unset COPILOT_GITHUB_TOKEN
 
 task="$(jq -r '.comment.body // empty' "$GITHUB_EVENT_PATH")"
 task="$(printf '%s' "$task" | sed -E '1s#^/(oc|opencode)[[:space:]]*##')"
@@ -37,6 +39,12 @@ failed_cleanup() {
     cat "$root/adjudicator.log" 2>/dev/null || true
     echo "=== BUILD LOG ==="
     cat "$root/build.log" 2>/dev/null || true
+    echo "=== COPILOT PEER REVIEW LOG ==="
+    for f in "$root"/copilot-peer-review-*.log; do
+      [[ -f "$f" ]] || continue
+      echo "--- $f ---"
+      cat "$f" 2>/dev/null || true
+    done
     echo "=== VALIDATION FAILURE LOG ==="
     cat "$root/validation-failed.log" 2>/dev/null || true
     echo "=== VERIFIER LOGS ==="
@@ -196,6 +204,16 @@ for cycle in 0 1 2; do
   run_build "$root/correction-${cycle}.prompt" "$root/build-correction-${cycle}.log" || exit 1
   cp "$root/build-correction-${cycle}.log" "$root/build.log"
 done
+
+if [[ -n "$copilot_token" ]]; then
+  if ! COPILOT_GITHUB_TOKEN="$copilot_token" INITIAL_SHA="$initial_sha" TARGET_NUMBER="$target_number" COUNCIL_EVIDENCE_DIR="$root" bash .github/scripts/review-opencode-with-copilot.sh "$attempt"; then
+    echo "::error title=Copilot peer review rejected OpenCode implementation::The OpenCode implementation will be discarded and the next route will receive the review evidence."
+    exit 1
+  fi
+  printf "copilot_peer_review=passed\n" >> "$GITHUB_OUTPUT"
+else
+  echo "Copilot peer review skipped: credential unavailable."
+fi
 
 changed=false
 [[ -n "$(git status --short)" ]] && changed=true
