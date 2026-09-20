@@ -78,6 +78,7 @@ set +e
   --no-ask-user \
   -s \
   --allow-tool "shell" \
+    --allow-tool "write" \
   --deny-tool "shell(git commit)" \
   --deny-tool "shell(git push)" \
   --deny-tool "shell(git reset)" \
