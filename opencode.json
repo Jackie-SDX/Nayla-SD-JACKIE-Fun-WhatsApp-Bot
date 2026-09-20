@@ -6,7 +6,7 @@
     ".opencode/instructions.md"
   ],
   "share": "disabled",
-  "subagent_depth": 2,
+  "subagent_depth": 3,
   "mcp": {
     "composio": {
       "type": "local",
@@ -34,10 +34,6 @@
     },
     "bash": {
       "*": "allow",
-      "git commit *": "deny",
-      "git commit": "deny",
-      "git push *": "deny",
-      "git push": "deny",
       "git reset *": "deny",
       "git clean *": "deny",
       "git branch -D *": "deny",
@@ -46,6 +42,6 @@
       "rm -rf /*": "deny"
     },
     "external_directory": "deny",
-    "doom_loop": "deny"
+    "doom_loop": "allow"
   }
 }
