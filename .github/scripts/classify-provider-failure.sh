@@ -15,7 +15,7 @@ if grep -Eiq '(model[[:space:]_-]*(not[[:space:]_-]*found|unavailable)|not avail
   exit 0
 fi
 
-if ! grep -Eiq '(statusCode:[[:space:]]*(401|403|429|500|502|503|504)\b|HTTP[[:space:]]+(401|403|429|500|502|503|504)\b|RESOURCE_EXHAUSTED|UNAVAILABLE|quota exceeded|rate[- ]limit|high demand|too many requests)' "$safe_log"; then
+if ! grep -Eiq '(statusCode:[[:space:]]*(401|403|429|500|502|503|504)\b|HTTP[[:space:]]+(401|403|429|500|502|503|504)\b|FreeTierError|free tier can only be used from within OpenCode|RESOURCE_EXHAUSTED|UNAVAILABLE|quota exceeded|rate[- ]limit|high demand|too many requests)' "$safe_log"; then
   echo "Failure is not classified as provider/account availability failure; preserving cross-route failover."
   exit 0
 fi

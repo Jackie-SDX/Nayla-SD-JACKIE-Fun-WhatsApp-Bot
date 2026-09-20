@@ -196,4 +196,5 @@ jobs:
           : > "$tmp/route_output"
           GITHUB_ENV="$tmp/route_env" GITHUB_OUTPUT="$tmp/route_output" OPENCODE_EXCLUDED_PROVIDERS=opencode HAS_OPENCODE_CREDENTIAL=true HAS_COPILOT_CREDENTIAL=true bash .github/scripts/select-opencode-route.sh
           grep -qx 'provider=github-copilot' "$tmp/route_output"
+          grep -qx 'OPENCODE_SELECTED_PROVIDER=github-copilot' "$tmp/route_env"
           echo "Provider failover classifier and route transition: PASS"
