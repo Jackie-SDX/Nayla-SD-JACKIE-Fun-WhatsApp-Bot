@@ -492,12 +492,12 @@ jobs:
           R1: ${{ steps.route_1.outputs.provider }}
           R2: ${{ steps.route_2.outputs.provider }}
           R3: ${{ steps.route_3.outputs.provider }}
-          P1: ${{ steps.publish_1.outcome }}
-          P2: ${{ steps.publish_2.outcome }}
-          P3: ${{ steps.publish_3.outcome }}
-          OP1: ${{ steps.opencode_publish_1.outcome }}
-          OP2: ${{ steps.opencode_publish_2.outcome }}
-          OP3: ${{ steps.opencode_publish_3.outcome }}
+          P1: ${{ steps.publish_1.outputs.published }}
+          P2: ${{ steps.publish_2.outputs.published }}
+          P3: ${{ steps.publish_3.outputs.published }}
+          OP1: ${{ steps.opencode_publish_1.outputs.published }}
+          OP2: ${{ steps.opencode_publish_2.outputs.published }}
+          OP3: ${{ steps.opencode_publish_3.outputs.published }}
           COMMAND_VALID: ${{ steps.command_gate.outputs.valid }}
         run: |
           set -euo pipefail
@@ -506,12 +506,12 @@ jobs:
             exit 0
           fi
           success=false
-          if [[ "$A1" == "success" && "$R1" == "opencode" && "$OP1" == "success" ]]; then success=true; fi
-          if [[ "$A2" == "success" && "$R2" == "opencode" && "$OP2" == "success" ]]; then success=true; fi
-          if [[ "$A3" == "success" && "$R3" == "opencode" && "$OP3" == "success" ]]; then success=true; fi
-          if [[ "$A1" == "success" && "$R1" == "github-copilot" && "$P1" == "success" ]]; then success=true; fi
-          if [[ "$A2" == "success" && "$R2" == "github-copilot" && "$P2" == "success" ]]; then success=true; fi
-          if [[ "$A3" == "success" && "$R3" == "github-copilot" && "$P3" == "success" ]]; then success=true; fi
+          if [[ "$A1" == "success" && "$R1" == "opencode" && "$OP1" == "true" ]]; then success=true; fi
+          if [[ "$A2" == "success" && "$R2" == "opencode" && "$OP2" == "true" ]]; then success=true; fi
+          if [[ "$A3" == "success" && "$R3" == "opencode" && "$OP3" == "true" ]]; then success=true; fi
+          if [[ "$A1" == "success" && "$R1" == "github-copilot" && "$P1" == "true" ]]; then success=true; fi
+          if [[ "$A2" == "success" && "$R2" == "github-copilot" && "$P2" == "true" ]]; then success=true; fi
+          if [[ "$A3" == "success" && "$R3" == "github-copilot" && "$P3" == "true" ]]; then success=true; fi
           if [[ "$success" == "true" ]]; then
             echo "Hybrid agent completed successfully."
             exit 0

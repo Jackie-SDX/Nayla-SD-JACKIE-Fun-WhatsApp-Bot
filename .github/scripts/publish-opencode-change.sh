@@ -12,9 +12,9 @@ git diff --check "$initial_sha"
 git merge-base --is-ancestor "$initial_sha" HEAD
 
 if [[ -z "$(git status --short)" ]]; then
-  echo "Verified council run produced no repository changes."
+  echo "::error title=OpenCode publication blocked::The verified council run produced no repository changes."
   printf 'published=false\npr_url=\n' >> "$GITHUB_OUTPUT"
-  exit 0
+  exit 1
 fi
 
 git add -A

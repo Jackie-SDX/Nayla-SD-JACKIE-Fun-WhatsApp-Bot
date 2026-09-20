@@ -2,8 +2,9 @@
 set -euo pipefail
 
 if [[ -z "$(git status --short)" ]]; then
-  echo "Copilot completed successfully with no repository changes."
-  exit 0
+  echo "::error title=Copilot publication blocked::The fallback agent exited successfully but produced no repository changes."
+  printf 'published=false\npr_url=\n' >> "$GITHUB_OUTPUT"
+  exit 1
 fi
 
 git diff --check
@@ -20,4 +21,10 @@ body="$(printf '%s\n\n%s\n%s\n\n%s' \
   "The fallback worker ran on an isolated branch and was prohibited from Git commit/push/reset/clean and GitHub CLI mutations." \
   "Review the resulting diff and CI checks before merging.")"
 pr_url="$(gh pr create --base "$BASE_REF" --head "$(git branch --show-current)" --title "oc: $title" --body "$body")"
+if [[ -z "$pr_url" ]]; then
+  echo "::error title=Copilot publication failed::gh pr create returned no pull-request URL."
+  printf 'published=false\npr_url=\n' >> "$GITHUB_OUTPUT"
+  exit 1
+fi
+printf 'published=true\npr_url=%s\n' "$pr_url" >> "$GITHUB_OUTPUT"
 echo "Published verified Copilot fallback changes as: $pr_url"
