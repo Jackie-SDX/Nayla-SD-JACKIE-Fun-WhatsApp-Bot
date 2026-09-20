@@ -47,9 +47,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          branch="$(git branch --show-current)"
-          printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
-          echo "Initial branch: $branch"
+          sha="$(git rev-parse HEAD)"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          echo "Initial checkout SHA: $sha"
 
       - name: Resolve and verify OpenCode release
         id: opencode_release
@@ -172,12 +172,15 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          INITIAL_BRANCH: ${{ steps.initial_state.outputs.branch }}
+          INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: |
           set -euo pipefail
-          current="$(git branch --show-current)"
-          [[ "$current" == "$INITIAL_BRANCH" ]] || exit 1
+          current="$(git rev-parse HEAD)"
+          [[ "$current" == "$INITIAL_SHA" ]] || {
+            echo "::error title=Unsafe replay::The failed agent changed the local commit state."
+            exit 1
+          }
           [[ -z "$(git status --porcelain)" ]] || exit 1
           if git ls-remote --heads origin "refs/heads/opencode/issue$TARGET_NUMBER-*" | grep -q .; then
             echo "::error title=Unsafe replay::An OpenCode branch already exists for this target; preserving it."
