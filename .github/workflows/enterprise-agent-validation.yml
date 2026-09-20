@@ -34,6 +34,7 @@ jobs:
           test -f .github/workflows/opencode-cache.yml
           test -f .github/scripts/select-opencode-route.sh
           test -f .github/scripts/run-opencode-attempt.sh
+          test -f .github/scripts/classify-provider-failure.sh
           test -f .opencode/instructions.md
           test -f opencode.json
           test -f .github/dependabot.yml
@@ -53,6 +54,7 @@ jobs:
           set -euo pipefail
           bash -n .github/scripts/select-opencode-route.sh
           bash -n .github/scripts/run-opencode-attempt.sh
+          bash -n .github/scripts/classify-provider-failure.sh
           [[ ! -f index.js ]] || node --check index.js
           [[ ! -f pair.js ]] || node --check pair.js
 
@@ -71,6 +73,10 @@ jobs:
           grep -q 'GEMINI_API_KEY_5' .github/workflows/opencode.yml
           grep -q 'OPENROUTER_PRIMARY_MODEL' .github/workflows/opencode.yml
           grep -q 'route_count=27' .github/scripts/select-opencode-route.sh
+          grep -q 'provider_is_excluded' .github/scripts/select-opencode-route.sh
+          grep -q 'OPENCODE_EXCLUDED_PROVIDERS' .github/scripts/select-opencode-route.sh
+          grep -q 'statusCode' .github/scripts/classify-provider-failure.sh
+          ! grep -Eq 'chat/completions|generateContent|streamGenerateContent|curl' .github/scripts/select-opencode-route.sh
           grep -q 'qwen/qwen3.8-27b:free' .github/scripts/select-opencode-route.sh
           grep -q 'openrouter/free' .github/scripts/select-opencode-route.sh
           grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
@@ -80,6 +86,43 @@ jobs:
           grep -q 'three-strike' .opencode/instructions.md
           grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
           ! grep -Eiq 'qwen/qwen3\.8-max|max-0902' .github/workflows/opencode.yml .github/scripts/*.sh
+
+      - name: Validate reactive routing without inference probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp_env="$(mktemp)"
+          tmp_out="$(mktemp)"
+          trap 'rm -f "$tmp_env" "$tmp_out"' EXIT
+
+          : > "$tmp_env"
+          : > "$tmp_out"
+          OPENROUTER_API_KEY=test-key \
+          OPENROUTER_PRIMARY_MODEL=qwen/qwen3.8-27b:free \
+          GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" \
+            bash .github/scripts/select-opencode-route.sh
+          grep -q 'selected=true' "$tmp_out"
+          grep -q 'route=openrouter/qwen/qwen3.8-27b:free' "$tmp_out"
+
+          : > "$tmp_env"
+          : > "$tmp_out"
+          GEMINI_API_KEY=test-key \
+          OPENROUTER_API_KEY=test-key \
+          OPENROUTER_PRIMARY_MODEL=qwen/qwen3.8-27b:free \
+          OPENCODE_ROUTE_INDEX=0 \
+          OPENCODE_EXCLUDED_PROVIDERS=openrouter \
+          GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" \
+            bash .github/scripts/select-opencode-route.sh
+          grep -q 'selected=true' "$tmp_out"
+          grep -q 'route=google/gemini-3.8-flash:key-slot-1' "$tmp_out"
+
+          tmp_log="$(mktemp)"
+          printf 'statusCode: 429\nRESOURCE_EXHAUSTED\n' > "$tmp_log"
+          : > "$tmp_env"
+          CURRENT_PROVIDER=openrouter SAFE_LOG="$tmp_log" GITHUB_ENV="$tmp_env" \
+            bash .github/scripts/classify-provider-failure.sh
+          grep -q 'OPENCODE_EXCLUDED_PROVIDERS=openrouter' "$tmp_env"
+          rm -f "$tmp_log"
 
       - name: Validate security invariants
         shell: bash

@@ -130,7 +130,7 @@ jobs:
             exit 1
           fi
 
-      - name: Select first healthy route
+      - name: Select first configured route
         id: route_1
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
@@ -162,6 +162,15 @@ jobs:
           git status --short
           git diff --check
           git diff --stat
+
+      - name: Classify provider failure after attempt 1
+        id: classify_1
+        if: always() && steps.agent_1.outcome == 'failure'
+        env:
+          CURRENT_PROVIDER: ${{ steps.route_1.outputs.provider }}
+          SAFE_LOG: ${{ steps.agent_1.outputs.safe_log_path }}
+        shell: bash
+        run: bash .github/scripts/classify-provider-failure.sh
 
       - name: Select second route after agent failure
         id: route_2
@@ -196,6 +205,15 @@ jobs:
           git status --short
           git diff --check
           git diff --stat
+
+      - name: Classify provider failure after attempt 2
+        id: classify_2
+        if: always() && steps.agent_2.outcome == 'failure'
+        env:
+          CURRENT_PROVIDER: ${{ steps.route_2.outputs.provider }}
+          SAFE_LOG: ${{ steps.agent_2.outputs.safe_log_path }}
+        shell: bash
+        run: bash .github/scripts/classify-provider-failure.sh
 
       - name: Select third route after agent failure
         id: route_3
