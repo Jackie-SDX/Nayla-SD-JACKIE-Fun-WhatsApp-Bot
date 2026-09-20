@@ -26,7 +26,7 @@ A configured connector is not evidence that the connector works.
 
 A documentation fetch is not evidence that a tool works.
 
-A health probe is route-quality evidence only; it does not prove the subsequent full agent call will succeed.
+Provider selection must not perform an inference health probe. The real OpenCode agent call is the authoritative provider test because inference probes consume the same scarce provider request budget as the task.
 
 Never print, echo, commit, upload, or expose secrets.
 
@@ -124,6 +124,8 @@ A 429, quota error, provider saturation, or transient provider failure is a rout
 On such a failure:
 
 - stop hammering the failed route;
+- classify the observed failure;
+- exclude a provider for the remainder of the task when the evidence is provider/account-wide;
 - move to the next untried credential/model route;
 - prefer an independent credential/project where available;
 - never expose the key value;
