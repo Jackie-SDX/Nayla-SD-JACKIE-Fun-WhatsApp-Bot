@@ -32,34 +32,31 @@ Never print, echo, commit, upload, or expose secrets.
 
 ## Git discipline
 
-Treat `main` as protected even if GitHub settings do not yet enforce it.
+Treat main as a protected production line.
 
-Never push directly to `main`, force-push, rewrite, reset, delete, merge into, or silently change governance settings for `main`.
+Use an isolated working branch for implementation. You may create commits and push working branches when the task requires it. Use the normal GitHub/OpenCode branch and PR lifecycle for integration.
 
-Work from an isolated branch and use a pull request for integration.
+Do not bypass branch protection, force-push, rewrite protected history, or silently alter repository governance.
 
 For every substantial task:
 
-inspect → read history → plan → patch → validate → review diff → revalidate → report
+inspect → understand history → plan → patch → validate → review diff → revalidate → inspect CI → correct → re-test → integrate → report
 
 Before handoff, inspect:
-
-- `git status --short`
-- `git diff --check`
-- `git diff`
-- `git log -n 5 --oneline`
+- git status --short
+- git diff --check
+- git diff
+- git log -n 5 --oneline
 
 Do not make unrelated cleanup changes.
 
-## Mutation and commit evidence gate
+## Mutation and commit evidence
 
-Apply a practical "90%-evidence" gate before committing or creating a PR.
+Use progressive evidence, not a fixed confidence threshold.
 
-This is an evidence threshold, not a mathematical probability. Do not claim numeric confidence unless it is actually measured.
+Commit and continue when the changed files match the intended fix, the strongest relevant validation available at that point passes, and no known critical correctness or security blocker remains.
 
-A mutation is ready to commit only when the available evidence converges: the relevant test/compile/static check passes, the changed files match the intended fix, the diff is reviewed, and no known correctness or security blocker remains.
-
-When the available evidence is materially incomplete, keep the work reversible and report the gap instead of presenting it as complete.
+When evidence is incomplete, keep working: inspect more evidence, run another targeted check, consult authoritative documentation, reproduce the failure, or inspect CI. Report a gap only when the remaining evidence cannot be obtained within the available execution budget or the next action is genuinely unsafe.
 
 ## Repository first read
 
@@ -110,38 +107,22 @@ The Copilot fallback is optional and bounded by COPILOT_MAX_AI_CREDITS. It is us
 
 ## Recovery architecture
 
-There are two separate recovery budgets.
+Recovery is time- and evidence-bounded, not iteration-count-bounded.
 
-### Provider route budget
+When an implementation, test, CI job, tool call, or deployment check fails:
+1. preserve the current state and evidence;
+2. inspect the actual failure output or logs and repository/GitHub state;
+3. formulate a concrete fault hypothesis;
+4. choose the smallest useful corrective action;
+5. execute the correction;
+6. re-run the most informative validation;
+7. continue recursively until acceptance criteria are satisfied or the remaining path is genuinely unsafe or unavailable.
 
-The GitHub workflow makes at most three full agent invocations for one trigger.
+Do not stop merely because an earlier attempt failed, because a route changed, or because an arbitrary retry count was reached.
 
-Each new invocation uses a route that the selector has not previously used for that trigger.
+Never repeat an identical failed action without new evidence. Before replaying, inspect local and remote state so a previous partial mutation is continued rather than duplicated.
 
-Before replaying after a failed agent invocation:
-
-- inspect current repository/worktree state;
-- identify whether the previous attempt already changed files or remote GitHub state;
-- avoid duplicating commits, branches, comments, or PRs;
-- continue only when the next attempt is safe against the actual current state.
-
-### Forensic debugging budget
-
-Within one coding task, use up to five total evidence-based forensic recovery cycles when useful.
-
-Each cycle must read the actual failure evidence, form a concrete fault hypothesis, apply the smallest relevant correction, and re-run the most informative validation.
-
-Never spend multiple cycles repeating an identical call or the same untested hypothesis.
-
-If the same unresolved fault produces three consecutive failures, treat that as the three-strike circuit breaker:
-
-- stop further forensic recovery;
-- preserve the evidence;
-- summarize the concrete findings;
-- post the sanitized findings to the triggering GitHub Issue or PR;
-- wait for human guidance.
-
-A 3-strike stop is a correctness safeguard, not a provider outage excuse.
+The real stopping conditions are: the task is successfully validated; the execution budget is exhausted; required credentials or capabilities are genuinely unavailable; destructive intent is ambiguous; or a critical safety boundary cannot be resolved safely.
 
 ## Testing and verification
 
@@ -180,9 +161,9 @@ This repository uses Composio's current session-backed MCP architecture. The Git
 Never send a project API key as `x-consumer-api-key`, never hard-code a `ck_*` consumer key, and never use the legacy `connect.composio.dev/mcp` endpoint. A configured MCP endpoint is not evidence of connectivity; `opencode mcp list` and an actual tool call are the runtime evidence.
 
 The MCP session should be as short-lived and scoped as practical. Do not print session URLs, session headers, or API keys.
-The OpenCode workflow requires `COMPOSIO_API_KEY` because Composio is part of its controlled agent gateway. Failure to create or validate the session-backed MCP is a hard failure.
+The OpenCode workflow requires `COMPOSIO_API_KEY` because Composio is part of its controlled agent gateway. Failure to establish the optional session must not hard-fail an otherwise executable task; continue with the best actually available tool path and report the missing capability.
 OpenCode 1.x reaches Composio's current Streamable HTTP session endpoint through the pinned `mcp-remote@0.14.2` local stdio bridge. The bridge is `http-only`; do not silently fall back to legacy SSE. The temporary mode-0600 header file always carries the project `x-api-key` plus any non-duplicate session headers returned by Composio, and is deleted during cleanup. The session URL and ID are masked before entering GitHub Actions environment output.
-The session user is the stable external `COMPOSIO_USER_ID` configured by the workflow (defaulting to the repository owner when no repository variable overrides it). Do not substitute another user's private Composio connection. If the requested toolkit has no active connection for that session user, use Composio's connection-management flow to initiate authorization for that same user; never guess or silently cross user boundaries.
+The session user is the stable external `COMPOSIO_USER_ID` configured by the workflow (defaulting to the repository owner when no repository variable overrides it). Do not substitute another user's private Composio connection. If the requested toolkit has no active connection for that session user, do not start an OAuth flow during a normal repository task; use another supported capability or report the specific unavailable integration without blocking unrelated work.
 
 ### Capability discovery and routing checklist
 
@@ -190,13 +171,13 @@ At the start of a non-trivial task, discover the currently exposed Composio tool
 
 Use this checklist:
 
-1. Search Composio for the exact task capability and inspect the returned tool schemas.
-2. Check the toolkit connection state for every tool that requires authentication. An active account in one toolkit does not prove another toolkit, account, or workflow user is active.
-3. Prefer the smallest sufficient tool for the job.
-4. When multiple independent research paths are available, use them deliberately for cross-checking rather than duplicating identical calls.
-5. Preserve the source URL, returned evidence, and validation result needed to justify consequential implementation decisions.
-6. If a tool is unavailable, use a supported alternative only after discovering that alternative and confirming its schema/connection state.
-7. Never infer that a provider works from configuration, a cached plan, or the presence of credentials.
+1. Prefer the already-authenticated Composio session and directly execute the smallest sufficient app or tool capability.
+2. When the session exposes active connected accounts, use them. Do not call connection-management or start a new OAuth flow for an already-active toolkit.
+3. Discover the exact capability or schema when needed, then execute it rather than falling back immediately to raw HTTP or public unauthenticated REST.
+4. Use multiple independent research paths deliberately when they improve confidence; do not duplicate identical calls.
+5. Preserve source URLs, returned evidence, and validation results needed for consequential decisions.
+6. Only fall back to another supported path after the desired Composio capability is genuinely unavailable or fails in a way the alternative addresses.
+7. Never infer that a tool or provider works from configuration, a cached plan, or the presence of credentials; use real execution evidence.
 
 The currently verified useful web/research surfaces include:
 
@@ -213,11 +194,11 @@ This list is a routing aid, not a static guarantee. Re-run capability discovery 
 
 ### Agentic research-and-implementation loop
 
-For tasks that require back-and-forth reasoning, treat research and implementation as one evidence loop:
+For tasks that require back-and-forth reasoning, treat research and implementation as one continuous recursive evidence loop:
 
-discover → inspect → hypothesize → research → cross-check → implement → test → inspect failures → correct → re-test → independently validate → report
+discover → inspect → hypothesize → research → cross-check → implement → test → inspect failures or logs → correct → re-test → inspect CI or remote state → independently validate → integrate → report
 
-Use the loop recursively within the forensic recovery budget. On every iteration:
+Keep iterating for as long as the task has a productive, evidence-backed next action and execution time remains. On every iteration:
 
 - record the concrete hypothesis being tested;
 - gather the minimum evidence needed to discriminate between plausible causes;
@@ -380,19 +361,13 @@ Do not pipe an unverified remote script into privileged CI when a verifiable art
 
 ## Git mutation boundaries
 
-The automated shell path may inspect the repository and perform safe build/test operations.
+The agent may use normal Git commands in its isolated working branch, including commit and push, when needed to complete the task.
 
-Direct destructive or irreversible Git shell mutations are blocked for the agent:
+Prefer OpenCode’s GitHub integration for branch and PR lifecycle when available. Do not bypass protected-branch rules, force-push, rewrite protected history, or change repository governance merely to make a merge succeed.
 
-- `git commit`
-- `git push`
-- `git reset`
-- `git clean`
-- local branch deletion
+Before destructive local recovery such as reset or clean, inspect whether uncommitted work is valuable and preserve it when possible. Use reversible operations wherever practical.
 
-OpenCode's GitHub integration is responsible for its branch/commit/push/PR lifecycle through the installed OpenCode GitHub App. The separate Copilot fallback is published by the outer workflow only after replay safety is proven.
-
-Never force-push or rewrite history.
+Never force-push or rewrite protected history.
 
 ## Application-specific invariants
 

@@ -17,44 +17,64 @@ permissions:
 jobs:
   warm:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      OPENCODE_VERSION_PIN: ${{vars.OPENCODE_VERSION || ''}}
     steps:
-      - name: Verify pinned OpenCode V2 package
-        id: runtime
-        env:
-          OPENCODE_V2_VERSION: "2.0.3"
+      - name: Resolve verified OpenCode release
+        id: release
         shell: bash
         run: |
           set -euo pipefail
-          npm view "@opencode/cli@${OPENCODE_V2_VERSION}" version --json | jq -e --arg v "$OPENCODE_V2_VERSION" '. == $v' >/dev/null
-          echo "Verified OpenCode V2 package: $OPENCODE_V2_VERSION"
+          json="$(mktemp)"
+          trap 'rm -f "$json"' EXIT
+          if [[ -n "$OPENCODE_VERSION_PIN" ]]; then
+            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 "https://api.github.com/repos/anomalyco/opencode/releases/tags/v$OPENCODE_VERSION_PIN" -o "$json"
+          else
+            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
+          fi
+          tag="$(jq -r ".tag_name" "$json")"
+          version="$(printf "%s" "$tag" | sed "s/^v//")"
+          url="$(jq -r ".assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url" "$json")"
+          digest="$(jq -r ".assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest" "$json")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ -n "$url" && "$url" != "null" ]]
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf "version=%s\n" "$version" >> "$GITHUB_OUTPUT"
+          printf "url=%s\n" "$url" >> "$GITHUB_OUTPUT"
+          printf "digest=%s\n" "$digest" >> "$GITHUB_OUTPUT"
 
-      - name: Restore OpenCode V2 cache
+      - name: Restore OpenCode cache
         id: cache_restore
         continue-on-error: true
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.opencode
-          key: opencode-${{ runner.os }}-${{ runner.arch }}-2.0.3
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.release.outputs.version }}
 
-      - name: Install OpenCode V2 on cache miss
+      - name: Install OpenCode on cache miss
         if: steps.cache_restore.outputs.cache-hit != 'true'
-        env:
-          OPENCODE_V2_VERSION: "2.0.3"
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf "$HOME/.opencode"
-          npm install --prefix "$HOME/.opencode" --no-audit --no-fund --prefer-online --save-exact "@opencode/cli@${OPENCODE_V2_VERSION}"
-          test -x "$HOME/.opencode/node_modules/.bin/opencode"
-          actual="$("$HOME/.opencode/node_modules/.bin/opencode" --version)"
-          echo "OpenCode V2 runtime: $actual"
-          [[ "$actual" == *"$OPENCODE_V2_VERSION"* ]]
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 ${{ steps.release.outputs.url }} -o "$tmp/opencode.tar.gz"
+          digest=${{ steps.release.outputs.digest }}
+          digest="$(printf "%s" "$digest" | sed "s/^sha256://")"
+          echo "$digest  $tmp/opencode.tar.gz" | sha256sum --check -
+          mkdir -p "$tmp/extract"
+          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
+          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
+          [[ -n "$binary" ]]
+          install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
+          actual="$("$HOME/.opencode/bin/opencode" --version)"
+          [[ "$actual" == *${{ steps.release.outputs.version }}* ]]
 
-      - name: Save verified OpenCode V2 cache
+      - name: Save verified OpenCode cache
         if: steps.cache_restore.outputs.cache-hit != 'true'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.opencode
-          key: opencode-${{ runner.os }}-${{ runner.arch }}-2.0.3
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.release.outputs.version }}
