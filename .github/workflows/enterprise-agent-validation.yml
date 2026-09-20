@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/validate-opencode-council.sh .opencode/instructions.md .opencode/agents/architect-reviewer.md .opencode/agents/adversarial-reviewer.md .opencode/agents/adjudicator.md .opencode/agents/verifier.md docs/AGENT_COUNCIL.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -42,6 +42,7 @@ jobs:
           bash -n .github/scripts/classify-provider-failure.sh
           bash -n .github/scripts/prepare-composio-mcp.sh
           bash -n .github/scripts/cleanup-composio-mcp.sh
+          bash -n .github/scripts/validate-opencode-council.sh
 
       - name: Validate hybrid architecture
         shell: bash
@@ -110,6 +111,42 @@ jobs:
           grep -q 'issues: write' .github/workflows/opencode.yml
           grep -q 'pull-requests: write' .github/workflows/opencode.yml
           grep -q 'id-token: write' .github/workflows/opencode.yml
+
+      - name: Validate agent council
+        shell: bash
+        run: bash .github/scripts/validate-opencode-council.sh
+
+      - name: Validate OpenCode runtime agent discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          json="$(mktemp)"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp" "$json"' EXIT
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20             https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
+          tag="$(jq -r '.tag_name' "$json")"
+          version="${tag#v}"
+          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
+          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ -n "$url" && "$url" != "null" ]]
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 "$url" -o "$tmp/opencode.tar.gz"
+          expected="${digest#sha256:}"
+          echo "$expected  $tmp/opencode.tar.gz" | sha256sum --check -
+          mkdir -p "$tmp/extract"
+          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
+          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
+          [[ -n "$binary" ]]
+          install -Dm755 "$binary" "$tmp/opencode"
+          agents="$("$tmp/opencode" agent list)"
+          printf '%s\n' "$agents"
+          for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
+            grep -q "$agent" <<< "$agents" || {
+              echo "::error title=OpenCode runtime discovery failed::Missing agent $agent"
+              exit 1
+            }
+          done
 
       - name: Validate route selector structure
         shell: bash

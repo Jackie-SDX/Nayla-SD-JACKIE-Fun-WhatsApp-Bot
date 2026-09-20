@@ -46,6 +46,13 @@
       "rm -rf /*": "deny"
     },
     "external_directory": "deny",
-    "doom_loop": "deny"
+    "doom_loop": "deny",
+    "task": {
+      "*": "deny",
+      "architect-reviewer": "allow",
+      "adversarial-reviewer": "allow",
+      "adjudicator": "allow",
+      "verifier": "allow"
+    }
   }
 }

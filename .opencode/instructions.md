@@ -436,3 +436,116 @@ Before reporting success, verify:
 Report exact branch/commit/test evidence.
 
 Never call a partially verified state fully verified.
+
+
+## MANDATORY AGENT COUNCIL — MULTI-MODEL DELIBERATION
+
+For any non-trivial task, the primary Build agent is an orchestrator, not the sole source of truth.
+
+### What counts as non-trivial
+
+Use the full council whenever the task:
+- changes application source, tests, CI/CD, dependencies, security, persistence, concurrency, configuration, or runtime behavior;
+- touches more than one file;
+- asks for an audit, review, diagnosis, architecture assessment, hardening, or root-cause analysis;
+- could cause production behavior, data, authentication, deployment, or repository-state changes.
+
+A purely cosmetic, one-file, behavior-preserving formatting change may use the normal fast path.
+
+Do not downgrade a task to trivial merely to avoid the council.
+
+### Council roles
+
+The council consists of four independent specialist subagents:
+
+1. architect-reviewer — architecture, correctness, data flow, state, performance, maintainability.
+2. adversarial-reviewer — security, edge cases, races, failure modes, resource exhaustion, hidden assumptions, documentation/code contradictions.
+3. adjudicator — reconciles the independent reports and produces the evidence-backed canonical decision ledger.
+4. verifier — fresh-context post-implementation verifier; for audit-only work it becomes a second-pass red-team auditor.
+
+The two independent reviewers use different free OpenCode Zen models. Do not replace independent reasoning with one model asked to simulate another.
+
+### Mandatory sequence
+
+For a coding task:
+
+1. Build agent reads the original task and repository.
+2. Invoke architect-reviewer in a fresh subagent context.
+3. Invoke adversarial-reviewer in a fresh subagent context.
+4. Do NOT give reviewer B reviewer A's report. Their analysis must be independent.
+5. Give both reports plus the original acceptance criteria to adjudicator.
+6. Adjudicator separates confirmed defects, supported risks, uncertain claims, and rejected findings; it must not use majority vote.
+7. Only then implement the accepted plan.
+8. Run deterministic validation.
+9. Invoke verifier in a fresh context. Give it the original task, accepted plan, changed-file summary, and relevant validation evidence.
+10. Verifier must treat the implementation as untrusted and look specifically for regressions, incomplete fixes, invariant violations, and evidence gaps.
+11. If verifier finds a material problem, do not declare success. Return to the smallest correction needed, re-test, and re-run the verifier.
+12. Do not create or publish a PR until the verifier is satisfied and deterministic validation is green.
+
+For an audit/review task with no intended code mutation:
+
+1. architect-reviewer independently audits the repository.
+2. adversarial-reviewer independently audits the repository from scratch.
+3. adjudicator produces the first canonical audit.
+4. verifier performs a fresh second-pass audit, using the canonical findings only as hypotheses to attack — never as established truth.
+5. The final report must include what the second pass added, rejected, or left uncertain.
+
+### Independence rules
+
+- Reviewer A and Reviewer B must start from the same task but separate reasoning contexts.
+- Reviewer B must not be shown Reviewer A's conclusions before completing its own inspection.
+- The verifier must use a fresh context and must not inherit the implementer's confidence.
+- A finding supported by execution or primary-source evidence outranks a finding supported only by model agreement.
+- Never average model opinions.
+- Never say two models agree, therefore it is true.
+- When the reviewers disagree materially, reproduce or research the disputed claim.
+- When evidence remains insufficient, mark the claim UNVERIFIED rather than choosing a winner.
+
+### Evidence contract
+
+Each specialist report must identify findings with:
+- finding ID;
+- status: CONFIRMED / REPRODUCED / SUPPORTED / UNVERIFIED / REJECTED;
+- severity;
+- file(s) and line/range where practical;
+- observed behavior;
+- evidence;
+- impact;
+- recommended action;
+- remaining uncertainty.
+
+For implementation work, retain:
+- the original acceptance criteria;
+- the adjudicated plan;
+- exact changed files;
+- validation commands and real results;
+- verifier findings;
+- final repository/CI state.
+
+Do not turn a hypothesis into a bug merely because it sounds plausible.
+
+### Council budget and recovery
+
+The normal council is capped at:
+- 2 independent reviews;
+- 1 adjudication;
+- 1 post-change verifier;
+- up to 2 correction/re-adjudication loops when the verifier finds a material issue.
+
+Do not repeatedly invoke the same reviewer for the same unchanged hypothesis.
+
+If a specialist is unavailable because its configured model cannot be executed, say so explicitly. Do not pretend that a same-model rerun provides independent evidence. The primary OpenCode route may still use its existing provider fallback policy, but independence must be reported honestly.
+
+If the council reaches an unresolved high-impact disagreement after reasonable reproduction/research, stop at the evidence boundary and report the disagreement rather than guessing.
+
+### No premature success
+
+The primary Build agent MUST NOT declare a non-trivial task fully complete until:
+- the independent review stage was performed;
+- the adjudication stage was performed;
+- implementation validation passed;
+- the fresh verifier stage was performed;
+- all material verifier findings were resolved or explicitly reported as unresolved;
+- final repository state was inspected.
+
+This council is an engineering control, not a ceremony. Skip no stage merely because the first model appears confident.
