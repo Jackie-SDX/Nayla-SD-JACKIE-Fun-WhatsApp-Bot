@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "google/gemini-3.8-flash",
+  "model": "openrouter/qwen/qwen3.8-27b:free",
   "default_agent": "build",
   "instructions": [
     ".opencode/instructions.md"
@@ -35,6 +35,7 @@
         "chunkTimeout": 30000
       },
       "models": {
+        "qwen/qwen3.8-27b:free": {},
         "free": {}
       }
     }

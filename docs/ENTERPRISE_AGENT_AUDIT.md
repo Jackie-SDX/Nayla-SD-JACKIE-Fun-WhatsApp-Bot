@@ -39,32 +39,25 @@ Trusted cache workflow:
 
 ## 2. Model and quota architecture
 
-The previous Gemini model identifiers were retired. The hardened configuration uses the currently configured Gemini generation ladder and does not depend on the retired 2.5 identifiers.
+The zero-cost route circuit now starts with an OpenRouter free Qwen model, then uses the independent Gemini credential cluster, and ends with the OpenRouter global free router.
 
-The interactive route selector supports five Gemini credential slots:
+The operational primary free model is qwen/qwen3.8-27b:free.
 
-1. `GEMINI_API_KEY`
-2. `GEMINI_API_KEY_2`
-3. `GEMINI_API_KEY_3`
-4. `GEMINI_API_KEY_4`
-5. `GEMINI_API_KEY_5`
+The requested qwen/qwen3.6-plus-preview:free identifier was live-tested through the connected OpenRouter account during this change and returned HTTP 404 with No endpoints found. It is therefore not hard-coded into the production route.
 
-The current route order is model-major, then credential-major:
+The operational Qwen replacement was live-tested successfully at zero cost. Its current OpenRouter endpoint exposed tool calling and a 262K context window.
 
-- Gemini 3.8 Flash + key slots 1→5
-- Gemini 3.7 Flash + key slots 1→5
-- Gemini 3.6 Flash + key slots 1→5
-- Gemini 3.5 Flash + key slots 1→5
-- Gemini 3.5 Flash-Lite + key slots 1→5
-- OpenRouter `openrouter/free`
+The primary free model is configurable through the repository variable OPENROUTER_PRIMARY_MODEL. The route selector rejects values that are not explicitly suffixed :free, preventing accidental paid-model activation in the zero-cost lane.
 
-With all five Gemini slots configured, this produces 26 theoretical route candidates: 25 Gemini model/key combinations plus the OpenRouter free router.
+The Gemini fallback cluster supports five credential slots: GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, GEMINI_API_KEY_4, and GEMINI_API_KEY_5.
 
-With three Gemini keys configured today, it produces 16 theoretical candidates: 15 Gemini combinations plus OpenRouter.
+The Gemini model ladder is Gemini 3.8 Flash, 3.7 Flash, 3.6 Flash, 3.5 Flash, and 3.5 Flash-Lite, each across the five available credential slots.
 
-The selector performs a small live provider probe before a full OpenCode invocation. HTTP 401/403, 429, and common 5xx provider failures cause the selector to advance without retrying the failed route repeatedly.
+The final fallback is openrouter/free.
 
-Important quota constraint: multiple keys are not unlimited quota. They are useful only when they represent credentials/projects/accounts that the human is authorized to use and whose provider quota accounting is actually isolated. A provider-level restriction, suspension, or organization-wide limit must not be bypassed with key rotation.
+With five Gemini slots, the circuit contains 27 theoretical route positions: one OpenRouter primary, 25 Gemini model/key combinations, and one OpenRouter global free-router fallback.
+
+Separate Gmail accounts can improve quota resilience only when the associated Google credentials/projects have genuinely independent quota accounting and the human is authorized to use them. The Gmail address itself is not the quota boundary, and key rotation does not create unlimited quota or justify bypassing provider restrictions.
 
 ## 3. OpenRouter behavior
 
@@ -181,22 +174,17 @@ The current source release reference audited during this work is OpenCode v1.18.
 
 ## 9. Composio integration audit
 
-The verified Composio MCP endpoint for this repository is:
+The verified Composio MCP endpoint for this repository is https://connect.composio.dev/mcp with the credential supplied through x-consumer-api-key: {env:COMPOSIO_API_KEY}.
 
-`https://connect.composio.dev/mcp`
-
-with the credential supplied through:
-
-`x-consumer-api-key: {env:COMPOSIO_API_KEY}`
-
-Live connected-tool checks performed during this audit:
+Live connected-tool checks performed during this work:
 
 - Tavily: a real current web search succeeded;
-- E2B: API health check succeeded.
+- E2B: sandbox creation and connection succeeded;
+- E2B shell/code execution: the E2B integration advertises execution capabilities, but the repository-management connector did not expose a standalone E2B execute action in its own management tool surface.
 
-The available E2B Composio surface in this environment did not expose a direct arbitrary command/code-execution operation. Therefore this audit does not claim an E2B runtime build/test. GitHub Actions remains the verifiable project execution environment for repository changes.
+The management connector and the OpenCode MCP tool surface are not identical. OpenCode should dynamically discover the E2B execution capability through the Composio MCP when it is exposed.
 
-A configured connector or successful health check is not treated as proof that every higher-level tool operation works.
+This audit does not falsely claim that the repository-management connector executed a command inside the E2B sandbox. GitHub Actions remains the authoritative repository execution environment whenever the E2B execution action is not actually visible to the running agent.
 
 ## 10. Validation evidence
 
@@ -286,7 +274,7 @@ No claim of full end-to-end `/oc` execution is made for the current audit branch
 Audit branch:
 `audit/enterprise-opencode`
 
-Current audit head:
+Current audit head: see the tip of audit/enterprise-opencode.
 `b3c5b1acfcb1b2b5f5562c8b2da58aaca5e3cffe`
 
 Main baseline:

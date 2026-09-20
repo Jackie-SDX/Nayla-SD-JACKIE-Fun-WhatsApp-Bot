@@ -95,26 +95,27 @@ Never hard-code a temporary free-model catalog when a stable provider router exi
 
 ## Zero-cost model ladder
 
-The zero-cost route order is deliberately model-major, then credential-major:
+The zero-cost route order is:
 
-1. `google/gemini-3.8-flash` + key slot 1
-2. `google/gemini-3.8-flash` + key slot 2
-3. `google/gemini-3.8-flash` + key slot 3
-4. `google/gemini-3.8-flash` + key slot 4
-5. `google/gemini-3.8-flash` + key slot 5
-6. `google/gemini-3.7-flash` + key slots 1→5
-7. `google/gemini-3.6-flash` + key slots 1→5
-8. `google/gemini-3.5-flash` + key slots 1→5
-9. `google/gemini-3.5-flash-lite` + key slots 1→5
-10. `openrouter/free`
+1. OpenRouter primary free model: qwen/qwen3.8-27b:free
+2. Gemini 3.8 Flash + key slots 1→5
+3. Gemini 3.7 Flash + key slots 1→5
+4. Gemini 3.6 Flash + key slots 1→5
+5. Gemini 3.5 Flash + key slots 1→5
+6. Gemini 3.5 Flash-Lite + key slots 1→5
+7. OpenRouter global free router: openrouter/free
 
-The workflow currently supports five Gemini credential slots. Empty slots are skipped.
+The workflow supports five Gemini credential slots. Empty slots are skipped.
 
-Use OpenCode's Google `high` variant for the Gemini routes where supported.
+The requested qwen/qwen3.6-plus-preview:free identifier was live-tested through the connected OpenRouter account during this change and returned HTTP 404 with No endpoints found. It is not used as the production primary.
 
-Do not hard-code Qwen3.8 Max into the zero-cost path. The currently listed `qwen/qwen3.8-max-0902` model on OpenRouter is a paid model. A paid Qwen route requires explicit human authorization and must be implemented as a separate, opt-in lane rather than silently entering a free fallback.
+The operational replacement is qwen/qwen3.8-27b:free, currently exposed by OpenRouter as a free endpoint with tool calling and a 262K context window. The primary model is configurable through the repository variable OPENROUTER_PRIMARY_MODEL, but the routing script refuses any value that is not explicitly suffixed :free.
 
-`openrouter/free` is a router, not a deterministic promise of a specific model. Never claim which underlying free model it selected unless runtime telemetry reports it.
+Use OpenCode's Google high variant for the Gemini routes where supported.
+
+Do not put paid Qwen models into the zero-cost path. A paid model requires explicit human authorization and must be implemented as a separate opt-in lane.
+
+openrouter/free is a router, not a deterministic promise of one underlying model. Never claim which model it selected unless runtime telemetry reports it.
 
 ## Multi-key rotation
 
@@ -212,7 +213,20 @@ Inspect returned evidence and prefer official sources for final implementation d
 
 ### E2B
 
-Use E2B for isolated code/runtime/dependency experiments only when a direct execution operation is actually exposed.
+Composio's current E2B integration exposes sandbox/code-execution capabilities, while E2B itself supports Linux shells and command execution.
+
+At runtime:
+
+1. discover the currently exposed E2B execution tool through the Composio MCP;
+2. create/connect to a short-lived sandbox;
+3. run only the minimum non-destructive verification needed;
+4. capture exit status and compact stdout/stderr;
+5. inspect diagnostics before recovery;
+6. delete the sandbox after evidence is secured.
+
+The management connector used for repository administration may not expose the individual E2B execute action even when the E2B MCP integration supports it. Management-tool visibility is not proof that OpenCode cannot discover the capability.
+
+If the OpenCode session cannot see an E2B execution tool, do not claim an E2B runtime test. Use GitHub Actions as the authoritative repository execution environment instead.
 
 Lifecycle/connectivity success is not runtime execution success.
 
@@ -372,7 +386,8 @@ Before reporting success, verify:
 7. external tools actually executed;
 8. worktree/diff state;
 9. scope drift;
-10. remaining risks.
+10. remaining risks;
+11. whether each requested external model/tool was actually routable and executable in the current environment.
 
 Report exact branch/commit/test evidence.
 

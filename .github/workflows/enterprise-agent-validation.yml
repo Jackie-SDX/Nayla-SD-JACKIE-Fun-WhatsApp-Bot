@@ -66,6 +66,7 @@ jobs:
           grep -q '"gemini-3.5-flash": {}' opencode.json
           grep -q '"gemini-3.5-flash-lite": {}' opencode.json
           grep -q 'GEMINI_API_KEY_4' .github/workflows/opencode.yml
+          grep -q 'OPENROUTER_PRIMARY_MODEL' .github/workflows/opencode.yml
           grep -q 'GEMINI_API_KEY_5' .github/workflows/opencode.yml
           grep -q 'Gemini key slots available: $gemini_count/5' .github/workflows/opencode.yml
           grep -q 'FORENSIC_RECOVERY_MAX: "5"' .github/workflows/opencode.yml
@@ -75,7 +76,10 @@ jobs:
           grep -q 'GEMINI_API_KEY_5' .github/scripts/run-opencode-attempt.sh
           for model in gemini-3.8-flash gemini-3.7-flash gemini-3.6-flash gemini-3.5-flash gemini-3.5-flash-lite; do grep -q "$model" .github/scripts/select-opencode-route.sh; done
           grep -q 'openrouter/free' .github/scripts/select-opencode-route.sh
-          grep -q 'route_count=' .github/scripts/select-opencode-route.sh
+          grep -q 'route_count=27' .github/scripts/select-opencode-route.sh
+          grep -q 'qwen/qwen3.8-27b:free' .github/scripts/select-opencode-route.sh
+          grep -q 'openrouter/qwen/qwen3.8-27b:free' opencode.json
+          grep -q 'qwen/qwen3.8-27b:free' opencode.json
           test "$(grep -c 'Run OpenCode attempt [123]$' .github/workflows/opencode.yml)" -eq 3
           ! grep -q 'Run OpenCode attempt 4' .github/workflows/opencode.yml
           grep -q 'three-strike' .opencode/instructions.md
