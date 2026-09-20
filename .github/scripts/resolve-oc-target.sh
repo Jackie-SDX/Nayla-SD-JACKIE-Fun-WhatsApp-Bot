@@ -124,10 +124,9 @@ while (( i < ${#tokens[@]} )); do
       if (( ${#kept[@]} == 0 )) && valid_repo "$(clean_arg "$tok")"; then
         set_target "$(clean_arg "$tok")"
       else
-        if [[ "$tok" == *.github.com/* ]] || [[ "$tok" == *:* ]]; then
-          echo "::error title=Rejected remote target form::Only https://github.com/OWNER/REPO, OWNER/REPO selectors, and owner/repo tokens are accepted." >&2
-          exit 2
-        fi
+        # Once an explicit target has been selected, every other token is
+        # task text. Colons and ordinary URLs are valid senior-engineering
+        # prompt content and must never be interpreted as a second target.
         kept+=("$tok")
       fi
       ;;

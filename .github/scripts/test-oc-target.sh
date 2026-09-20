@@ -63,6 +63,16 @@ grep -q 'OC_TARGET_TASK=fix the bug' "$GITHUB_ENV" \
   && ok "explicit https://github.com/OWNER/REPO url is parsed into remote mode" \
   || bad "explicit https://github.com/OWNER/REPO url is parsed into remote mode"
 
+new_output_files resolver-task-text
+make_event task-text "/oc target=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot Task: fix repository: parser behavior and inspect https://example.com/docs"
+GITHUB_EVENT_PATH="$TESTS/event-task-text.json" \
+GITHUB_REPOSITORY="o/x" TARGET_NUMBER=0 bash "$SCRIPTS/resolve-oc-target.sh"
+grep -q '^mode=remote$' "$GITHUB_OUTPUT" && \
+grep -q '^target_repo=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot$' "$GITHUB_OUTPUT" && \
+grep -q 'OC_TARGET_TASK=Task: fix repository: parser behavior and inspect https://example.com/docs' "$GITHUB_ENV" \
+  && ok "explicit target preserves colon-containing task text and ordinary URLs" \
+  || bad "explicit target preserves colon-containing task text and ordinary URLs"
+
 for form in "repo=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot" "repository=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot" "target=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot"; do
   key="${form%%=*}"
   new_output_files "resolver-$key"
