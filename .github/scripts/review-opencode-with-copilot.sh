@@ -84,7 +84,7 @@ while IFS= read -r path; do
       case "$base" in
         .env.example|.env.sample) ;;
         *) block 'The proposed OpenCode change touches a sensitive environment file.'; exit 1 ;;
-      esac ;;
+      esac
       ;;
     .npmrc|id_rsa|id_ed25519|*.pem|*.key|*.p12|*.pfx)
       block 'The proposed OpenCode change touches a sensitive credential file'; exit 1 ;;
