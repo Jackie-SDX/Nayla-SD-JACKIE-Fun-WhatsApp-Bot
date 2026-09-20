@@ -52,6 +52,8 @@ grep -q 'opencode run --standalone' docs/AGENT_COUNCIL.md
 ! grep -q 'connect.composio.dev/mcp' .github/scripts/run-copilot-attempt.sh
 ! grep -q 'x-consumer-api-key' .github/scripts/run-copilot-attempt.sh
 ! grep -q '^      id-token: write
+! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
+echo "Enterprise council validation: PASS"
  .github/workflows/opencode.yml
 ! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
 echo "Enterprise council validation: PASS"
