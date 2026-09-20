@@ -36,6 +36,7 @@ test -f .github/scripts/publish-opencode-change.sh
 test -f .github/scripts/validate-application.sh
 
 grep -q 'opencode run --standalone --auto --agent' .github/scripts/run-opencode-council-stage.sh
+! grep -R -q 'opencode agent list' .github/scripts .github/workflows
 grep -q 'COUNCIL_STAGE_COMPLETE=' .github/scripts/run-opencode-council-stage.sh
 grep -q 'COUNCIL_DECISION=' .github/scripts/run-opencode-attempt.sh
 grep -q 'COUNCIL_VERDICT=' .github/scripts/run-opencode-attempt.sh
@@ -56,5 +57,13 @@ bash -n .github/scripts/validate-application.sh
 ! grep -q '^      id-token: write$' .github/workflows/opencode.yml
 ! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
 ! grep -q '^\s*GITHUB_TOKEN:' .github/workflows/opencode.yml
+
+# OpenCode 2.x exposes custom agents through repository markdown frontmatter.
+for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
+  f=".opencode/agents/$agent.md"
+  test -f "$f"
+  grep -q '^mode: primary$' "$f"
+  grep -q '^model: ' "$f"
+done
 
 echo "Enterprise council validation: PASS"
