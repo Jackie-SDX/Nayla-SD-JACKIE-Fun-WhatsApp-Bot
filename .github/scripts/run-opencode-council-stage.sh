@@ -11,7 +11,7 @@ cleanup() { rm -f "$raw_log"; }
 trap cleanup EXIT
 
 set +e
-opencode run --standalone --auto --agent "$stage" --model "$model" "$(cat "$prompt_file")" >"$raw_log" 2>&1
+opencode2 run --standalone --auto --agent "$stage" --model "$model" "$(cat "$prompt_file")" >"$raw_log" 2>&1
 exit_code=$?
 set -e
 

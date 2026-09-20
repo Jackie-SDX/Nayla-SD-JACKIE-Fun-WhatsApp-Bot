@@ -15,6 +15,8 @@ task="$(printf '%s' "$task" | sed -E '1s#^/(oc|opencode)[[:space:]]*##')"
 printf '%s\n' "$task" > "$root/task.md"
 
 branch="opencode/council-issue${target_number}-${GITHUB_RUN_ID}-${attempt}"
+printf 'evidence_dir=%s\n' "$root" >> "$GITHUB_OUTPUT"
+printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
 if git ls-remote --heads origin "refs/heads/$branch" | grep -q .; then
   echo "::error title=Unsafe council replay::Remote branch $branch already exists."
   exit 1
@@ -74,7 +76,7 @@ run_build() {
   local prompt_file="$1" output_file="$2" raw
   raw="$(mktemp "${RUNNER_TEMP:-/tmp}/opencode-build-raw.XXXXXX")"
   set +e
-  opencode run --standalone --auto --agent build --model "$model" "$(cat "$prompt_file")" >"$raw" 2>&1
+  opencode2 run --standalone --auto --agent build --model "$model" "$(cat "$prompt_file")" >"$raw" 2>&1
   local rc=$?
   set -e
   python3 - "$raw" "$output_file" <<'PY'

@@ -158,15 +158,6 @@ jobs:
         shell: bash
         run: bash .github/scripts/prepare-composio-mcp.sh
 
-      - name: Select route 1
-        id: route_1
-        if: steps.command_gate.outputs.valid == 'true'
-        env:
-          OPENCODE_API_KEY: ${{ steps.route_2.outputs.provider == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
-          COPILOT_GITHUB_TOKEN: ${{ steps.route_2.outputs.provider == 'github-copilot' && secrets.COPILOT_GITHUB_TOKEN || '' }}
-          OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free,ling-3.0-flash-fin-free,nemotron-3-ultra-free,nemotron-3.5-lightning-free,muse-spark-1.3-contributor-free,jev-1.13-free,deepseek-v4-flash-free' }}
-        shell: bash
-        run: bash .github/scripts/select-opencode-route.sh
 
       - name: Prepare Copilot branch for attempt 1
         if: steps.command_gate.outputs.valid == 'true' && steps.route_1.outputs.provider == 'github-copilot'

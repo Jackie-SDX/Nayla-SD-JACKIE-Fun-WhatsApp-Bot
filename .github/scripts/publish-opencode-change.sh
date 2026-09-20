@@ -21,6 +21,7 @@ git add -A
 title="$(jq -r '.issue.title // .pull_request.title // "OpenCode council task"' "$GITHUB_EVENT_PATH" | tr '\n' ' ' | cut -c1-72)"
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+gh auth setup-git
 git commit -m "oc: $title"
 git push --set-upstream origin "$branch"
 
