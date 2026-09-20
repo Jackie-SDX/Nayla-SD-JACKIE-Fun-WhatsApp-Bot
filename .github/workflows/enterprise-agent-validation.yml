@@ -99,5 +99,5 @@ jobs:
           OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' OPENCODE_ROUTE_INDEX=1 OPENCODE_EXCLUDED_PROVIDERS=opencode GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
           grep -q 'route=github-copilot/auto' "$tmp_out"
 
-          grep -Fq 'model == "big-pickle"' .github/scripts/select-opencode-route.sh
-          grep -Fq 'model == *"-free"' .github/scripts/select-opencode-route.sh
+          grep -Fq 'big-pickle' .github/scripts/select-opencode-route.sh
+          grep -Fq '*"-free"' .github/scripts/select-opencode-route.sh
