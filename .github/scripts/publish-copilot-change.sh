@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+source "$script_dir/oc-publish-lib.sh"
+
 if [[ -z "$(git status --short)" ]]; then
   echo "::error title=Copilot publication blocked::The fallback agent exited successfully but produced no repository changes."
   printf 'published=false\npr_url=\n' >> "$GITHUB_OUTPUT"
@@ -32,23 +35,27 @@ reject_sensitive_publication() {
         ;;
     esac
   done < <(git ls-files -m -o --exclude-standard)
-  git add -A
-  if git diff --cached --binary | grep -Eiq "(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[A-Za-z0-9_-]{20,}|-----BEGIN (OPENSSH |RSA |EC |DSA )?PRIVATE KEY-----)"; then
-    echo "::error title=Secret material detected::Refusing to publish a staged diff containing a high-confidence credential pattern."
-    git reset >/dev/null
-    return 1
-  fi
 }
 
 reject_sensitive_publication
+
+# Stages the tree and refuses nested Git repositories (.octmp fixtures, mode
+# 160000 gitlinks), temporary trees, and secret-bearing diffs.
+oc_guard_repo_publication .
+if [[ -z "$(git diff --cached --name-only)" ]]; then
+  echo "::error title=Copilot publication blocked::Nothing was staged for publication."
+  printf 'published=false\npr_url=\n' >> "$GITHUB_OUTPUT"
+  exit 1
+fi
 
 git diff --check
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 title="$(jq -r '.issue.title // .pull_request.title // "OpenCode task"' "$GITHUB_EVENT_PATH" | tr '\n' ' ' | cut -c1-72)"
 git commit -m "oc: $title"
-gh auth setup-git
-git push --set-upstream origin "$(git branch --show-current)"
+# Explicit non-logging auth: single-invocation Authorization header holding an
+# explicit x-access-token; never a mutable credential helper.
+oc_git_push --set-upstream origin "$(git branch --show-current)"
 body="$(printf '%s\n\n%s\n%s\n\n%s' \
   "Automated /oc task from issue or pull-request comment #$TARGET_NUMBER." \
   "Fallback execution: GitHub Copilot CLI with bounded AI-credit usage." \

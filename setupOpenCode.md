@@ -274,6 +274,9 @@ random GitHub passers-by can't make your bot do their chores. 😌
 | `/opencode ...` | Same as `/oc` (full-name alias) |
 | `/oc continue` | Resume work after a timeout checkpoint |
 | `/oc retry failed jobs` | **Selectively** rerun only the failed CI jobs from the last run |
+| `/oc fix it https://github.com/OTHER-OWNER/OTHER-REPO` | Run the task against an **external target repository** (remote-target mode) |
+| `/oc repo=OTHER-OWNER/OTHER-REPO fix it` | Same remote-target mode via `repo=`/`repository=`/`target=` selectors |
+| `/oc --repo OTHER-OWNER/OTHER-REPO --base main fix it` | Remote-target mode with an explicit base branch |
 
 > 💬 You can even comment on a **specific line of code** in a PR's "Files"
 > tab — the agent receives the file path, line numbers, and diff context, and
@@ -349,6 +352,32 @@ architecture and you get a *self-healing* agent, not just a script.
 3. **Timeouts leave breadcrumbs.** If the 5h50m agent budget runs out, the
    pipeline plants a durable checkpoint comment so `/oc continue` can resume
    exactly where it stopped — never duplicating already-made progress. 🍞
+
+### 🌐 Remote-target mode (work on *another* repository)
+
+Add an explicit target to a `/oc` command and the same controller-owned
+pipeline operates on an **external** repository:
+
+- The target is cloned into `$RUNNER_TEMP` — never your worktree — so its
+  `.git` and policy can never be staged or published by accident.
+- The target's own `.opencode/`, `opencode.json`, `AGENTS.md`, and `plugins`
+  are quarantined for the run; **your** `opencode.json` and enterprise
+  instructions stay authoritative. Target files are restored on publication.
+- Work never restarts from scratch: one stable branch
+  `oc/remote-OWNER-REPO-base-slug` per (repo, base, task), reused on resume.
+- Publication refuses nested Git repositories (mode 160000 gitlinks),
+  `.octmp/`/`.oc-tmp/` trees, and secret-bearing diffs, and pushes with an
+  explicit single-invocation Authorization header — never a stored credential.
+- Success is verified against the **target repository's own PR and CI
+  checks**; the `validate` check of *this* repo is never assumed to exist there.
+- A timed-out remote run drops a durable
+  `<!-- oc-target-repo:... base:... branch:... -->` marker, so a bare
+  `/oc continue` resumes that exact target/base/branch.
+
+The GitHub Actions workflow needs write permission on the target repository
+for this mode; a short-lived `UNIVERSAL_TOKEN` covering both repositories (or
+the target's own token released as `secrets.UNIVERSAL_TOKEN`) makes remote
+publication work end-to-end.
 
 ---
 

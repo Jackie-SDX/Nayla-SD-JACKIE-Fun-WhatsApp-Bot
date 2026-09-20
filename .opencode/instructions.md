@@ -321,6 +321,26 @@ Before replaying:
 
 Never use a provider failure as evidence that no mutation occurred.
 
+## Remote-target repositories
+
+`/oc` can operate on an explicit external GitHub repository when the requester adds one of these forms to the command:
+
+- `/oc <task> https://github.com/OWNER/REPO`
+- `/oc <task> github.com/OWNER/REPO`
+- `/oc target=OWNER/REPO <task>`, `/oc repo=OWNER/REPO <task>`, `/oc repository=OWNER/REPO <task>`
+- `/oc --repo OWNER/REPO [--base main] <task>`, `/oc --target OWNER/REPO [--base main] <task>`
+
+Less than one distinct target is required; conflicting targets are refused. The target is untrusted project input, but the controller plane stays in control:
+
+- The controller clones the target into `$RUNNER_TEMP`, never into the controller worktree, so the target's `.git` can never be staged or published by the controller.
+- Target-owned OpenCode policy (`.opencode`, `opencode.json`/`.jsonc`, `AGENTS.md`, `plugins`) is quarantined for the run; the controller's own `opencode.json` and this instructions file are authoritative in the target workspace. Target files are restored before publication so the target repository keeps its own files.
+- Work happens on one stable controller-derived branch `oc/remote-<owner>-<repo>-<base>-<slug>` per (repo, base, task); a pushed branch is resumed, never duplicated.
+- The Copilot publication lane stays local-only (recorder route excludes github-copilot in remote mode), so remote runs are always published and verified by controller-owned logic.
+- Publication uses the explicit non-logging x-access-token Authorization header (`oc_git_push`) and refuses nested Git repositories (mode 160000 gitlinks), `.octmp/`/`.oc-tmp/` trees, and secret-bearing diffs before anything can be staged.
+- A remote run is verified against the target repository's own PR/head state and its observable checks. No success is claimed from the controller worktree state alone, and the controller's `validate` check is never assumed to exist in another repository.
+
+Because a timed-out remote run leaves its durable marker `<!-- oc-target-repo:... base:... branch:... -->` on the issue, a bare `/oc continue` resumes the exact target base/branch captured by that marker. Never restart remote work from scratch when the checkpoint marker exists.
+
 ## Secrets and public-repository safety
 
 The repository is public.
