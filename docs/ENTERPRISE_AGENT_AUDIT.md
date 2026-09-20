@@ -1,3 +1,5 @@
+> Historical note (2026-09-20): the external-provider route ladder documented below records the earlier audit. The current /oc architecture is the hybrid OpenCode Zen + Copilot fallback design documented in HYBRID_AGENT_ARCHITECTURE_AUDIT.md.
+
 # Enterprise OpenCode Agent Audit
 
 Repository: `Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot`

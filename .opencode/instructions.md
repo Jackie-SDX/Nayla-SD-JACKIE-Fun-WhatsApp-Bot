@@ -114,7 +114,7 @@ There are two separate recovery budgets.
 
 ### Provider route budget
 
-The GitHub workflow makes at most three full OpenCode agent invocations for one trigger.
+The GitHub workflow makes at most three full agent invocations for one trigger.
 
 Each new invocation uses a route that the selector has not previously used for that trigger.
 
@@ -224,7 +224,7 @@ Do not fail the engineering task over non-critical optional failures.
 Examples:
 
 - cache miss → install and continue;
-- absent optional OpenRouter key → skip;
+- absent optional Copilot credential → skip the fallback lane;
 - absent optional Composio credential → continue without Composio tools;
 - unavailable formatter/linter → use the strongest deterministic checks available and report the gap;
 - unavailable E2B command execution → use real GitHub Actions execution instead.

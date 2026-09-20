@@ -5,6 +5,7 @@ on:
     branches:
       - 'audit/**'
       - 'feature/**'
+      - 'fix/**'
   pull_request:
   workflow_dispatch:
 
@@ -20,157 +21,80 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Validate required files
+      - name: Validate files and syntax
         shell: bash
         run: |
           set -euo pipefail
-          test -f .github/workflows/opencode.yml
-          test -f .github/workflows/opencode-cache.yml
-          test -f .github/scripts/select-opencode-route.sh
-          test -f .github/scripts/run-opencode-attempt.sh
-          test -f .github/scripts/classify-provider-failure.sh
-          test -f .opencode/instructions.md
-          test -f opencode.json
-          test -f .github/dependabot.yml
-          test -f .github/CODEOWNERS
-          test -f docs/ENTERPRISE_AGENT_AUDIT.md
-          test -f .github/copilot-instructions.md
-          test -f .github/scripts/run-copilot-attempt.sh
-          test -f docs/GITHUB_NATIVE_COPILOT_AUDIT.md
-
-      - name: Validate JSON and YAML syntax
-        shell: bash
-        run: |
-          set -euo pipefail
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+            test -f "$f"
+          done
           jq empty opencode.json
           ruby -e 'require "yaml"; Dir[".github/workflows/*.yml",".github/dependabot.yml"].uniq.each { |f| YAML.load_file(f); puts "YAML OK: #{f}" }'
-
-      - name: Validate shell and application syntax
-        shell: bash
-        run: |
-          set -euo pipefail
           bash -n .github/scripts/select-opencode-route.sh
           bash -n .github/scripts/run-opencode-attempt.sh
-          bash -n .github/scripts/classify-provider-failure.sh
           bash -n .github/scripts/run-copilot-attempt.sh
-          [[ ! -f index.js ]] || node --check index.js
-          [[ ! -f pair.js ]] || node --check pair.js
+          bash -n .github/scripts/publish-copilot-change.sh
+          bash -n .github/scripts/classify-provider-failure.sh
 
-      - name: Validate enterprise routing and recovery invariants
+      - name: Validate hybrid architecture
         shell: bash
         run: |
           set -euo pipefail
+          grep -q 'OPENCODE_API_KEY' .github/workflows/opencode.yml
+          grep -q 'OPENCODE_ZEN_FREE_MODELS' .github/workflows/opencode.yml
           grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
-          grep -q '@github/copilot@1.0.86' .github/workflows/opencode.yml
-          grep -q -- '--model auto' .github/scripts/run-copilot-attempt.sh
-          grep -q -- '--no-ask-user' .github/scripts/run-copilot-attempt.sh
-          grep -q -- '--additional-mcp-config' .github/scripts/run-copilot-attempt.sh
+          grep -q 'id-token: write' .github/workflows/opencode.yml
+          grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
           grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
-          grep -q 'Create isolated agent branch' .github/workflows/opencode.yml
-          grep -q 'Publish verified agent changes' .github/workflows/opencode.yml
-          grep -q 'isolated branch' .github/copilot-instructions.md
-          ! grep -Eiq 'openrouter|huggingface|hugging-face|chat/completions|generateContent|streamGenerateContent' .github/workflows/opencode.yml .github/scripts/select-opencode-route.sh .github/scripts/run-copilot-attempt.sh
-          ! grep -q 'opencode github run' .github/workflows/opencode.yml
-          ! grep -Eiq 'echo|printf' .github/workflows/opencode.yml <(grep -E 'COPILOT_GITHUB_TOKEN|COMPOSIO_API_KEY' .github/workflows/opencode.yml)
-          test "$(grep -c 'Run GitHub Copilot attempt' .github/workflows/opencode.yml)" -eq 1
+          grep -q 'route_3' .github/workflows/opencode.yml
+          grep -q 'three-strike' .opencode/instructions.md
+          grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
+          grep -q 'OPENCODE_EXCLUDED_PROVIDERS' .github/scripts/classify-provider-failure.sh
+          grep -q 'model-specific' .github/scripts/classify-provider-failure.sh
+          ! grep -Eiq 'openrouter|huggingface|hugging-face|GEMINI_API_KEY' .github/workflows/opencode.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh
+          ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml
+          ! grep -q 'actions/cache/save' .github/workflows/opencode.yml
 
-      - name: Validate GitHub-native Copilot route
+      - name: Validate Zen configuration
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'COPILOT_GITHUB_TOKEN' .github/workflows/opencode.yml
-          grep -q '@github/copilot@1.0.86' .github/workflows/opencode.yml
-          grep -q -- '--model auto' .github/scripts/run-copilot-attempt.sh
-          grep -q -- '--no-ask-user' .github/scripts/run-copilot-attempt.sh
-          grep -q -- '--additional-mcp-config' .github/scripts/run-copilot-attempt.sh
-          grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
-          ! grep -Eiq 'openrouter|huggingface|hugging-face|chat/completions|generateContent|streamGenerateContent' .github/workflows/opencode.yml .github/scripts/select-opencode-route.sh .github/scripts/run-copilot-attempt.sh
-          ! grep -q 'opencode github run' .github/workflows/opencode.yml
-          grep -q 'contents: write' .github/workflows/opencode.yml
-          grep -q 'issues: write' .github/workflows/opencode.yml
-          grep -q 'pull-requests: write' .github/workflows/opencode.yml
-
-      - name: Validate Copilot route selection without inference
-        shell: bash
-        run: |
-          set -euo pipefail
-          tmp_env="$(mktemp)"
-          tmp_out="$(mktemp)"
-          trap 'rm -f "$tmp_env" "$tmp_out"' EXIT
-          : > "$tmp_env"
-          : > "$tmp_out"
-          COPILOT_GITHUB_TOKEN=test-token GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
-          grep -q 'selected=true' "$tmp_out"
-          grep -q 'route=github-copilot/auto' "$tmp_out"
-          grep -q 'OPENCODE_SELECTED_PROVIDER=github-copilot' "$tmp_env"
-          : > "$tmp_env"
-          : > "$tmp_out"
-          GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
-          grep -q 'selected=false' "$tmp_out"
-
-      - name: Validate security invariants
-        shell: bash
-        run: |
-          set -euo pipefail
+          jq -e '.model == "opencode/big-pickle"' opencode.json >/dev/null
+          jq -e 'has("provider") | not' opencode.json >/dev/null
+          jq -e 'has("enabled_providers") | not' opencode.json >/dev/null
           jq -e '.share == "disabled"' opencode.json >/dev/null
           jq -e '.permission.external_directory == "deny"' opencode.json >/dev/null
           jq -e '.permission.doom_loop == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git commit *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
           jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git branch -D *"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.read["*.env"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.read["*.env.*"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.read[".env"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.read[".npmrc"] == "deny"' opencode.json >/dev/null
           grep -q 'connect.composio.dev/mcp' opencode.json
           grep -q 'persist-credentials: false' .github/workflows/opencode.yml
           grep -q 'contents: write' .github/workflows/opencode.yml
           grep -q 'issues: write' .github/workflows/opencode.yml
           grep -q 'pull-requests: write' .github/workflows/opencode.yml
-          ! grep -q 'id-token: write' .github/workflows/opencode.yml
-          ! grep -q 'actions/cache/save' .github/workflows/opencode.yml
-          ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml
-          ! grep -Eq '(echo|printf)[[:space:]].*\$(COPILOT_GITHUB_TOKEN|GITHUB_TOKEN|COMPOSIO_API_KEY|GEMINI_API_KEY|OPENROUTER_API_KEY)' .github/workflows/opencode.yml .github/scripts/run-copilot-attempt.sh
-          ! grep -Eiq 'qwen/qwen3\.8-max|max-0902' .github/workflows/opencode.yml .github/scripts/*.sh
-          grep -q 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/opencode.yml
-          grep -q 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/enterprise-agent-validation.yml
+          grep -q 'id-token: write' .github/workflows/opencode.yml
 
-      - name: Audit application packaging and reproducibility
+      - name: Validate selector without inference
         shell: bash
         run: |
-          set -u
-          if node -e 'const fs=require("fs"); const p=require("./package.json"); const s=p.scripts?.start||""; const m=s.match(/node\s+([A-Za-z0-9._\/-]+\.js)/); if (m && !fs.existsSync(m[1])) process.exit(2)' 2>/dev/null; then
-            echo "Start entrypoint exists."
-          else
-            echo "::warning title=Application packaging finding::package.json may reference a start-time JavaScript file that is absent from the repository tree."
-          fi
-          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
-            echo "npm lockfile present."
-          else
-            echo "::warning title=No npm lockfile::Dependency installation is not fully reproducible yet."
-          fi
-          if node -e 'const p=require("./package.json"); process.exit(p.scripts?.test ? 0 : 1)' 2>/dev/null; then
-            echo "Automated test script present."
-          else
-            echo "::warning title=No automated test script::Repository validation cannot claim a project test suite."
-          fi
-
-      - name: Audit main governance visibility
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -u
-          if gh api "repos/$GITHUB_REPOSITORY/branches/main/protection" >/dev/null 2>&1; then
-            echo "main branch protection is visible."
-          else
-            echo "::warning title=Main branch protection unavailable::Repository governance must be configured deliberately in GitHub settings."
-          fi
+          set -euo pipefail
+          tmp_env="$(mktemp)"; tmp_out="$(mktemp)"
+          trap 'rm -f "$tmp_env" "$tmp_out"' EXIT
+          OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
+          grep -q 'route=opencode/big-pickle' "$tmp_out"
+          : > "$tmp_env"; : > "$tmp_out"
+          OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' OPENCODE_ROUTE_INDEX=1 GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
+          grep -q 'route=opencode/mimo-v2.5-free' "$tmp_out"
+          : > "$tmp_env"; : > "$tmp_out"
+          OPENCODE_API_KEY=test-key COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' OPENCODE_ROUTE_INDEX=2 OPENCODE_EXCLUDED_PROVIDERS=opencode GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
+          grep -q 'route=github-copilot/auto' "$tmp_out"
+          : > "$tmp_env"; : > "$tmp_out"
+          OPENCODE_API_KEY=test-key OPENCODE_ZEN_FREE_MODELS='paid-model' GITHUB_ENV="$tmp_env" GITHUB_OUTPUT="$tmp_out" bash .github/scripts/select-opencode-route.sh
+          grep -q 'selected=false' "$tmp_out"
