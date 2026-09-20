@@ -30,7 +30,7 @@ if [[ -n "${COMPOSIO_API_KEY:-}" ]]; then
       }
     }
   }' > "$mcp_config"
-  mcp_args+=(--additional-mcp-config "@$mcp_config" --allow-tool "composio(*)")
+  mcp_args+=(--additional-mcp-config "@$mcp_config" --allow-tool "composio")
 fi
 
 prompt="$(cat .github/copilot-instructions.md)"
@@ -43,15 +43,16 @@ copilot \
   --model auto \
   --no-ask-user \
   -s \
-  --allow-tool "shell(*)" \
-  --deny-tool "shell(git commit*)" \
-  --deny-tool "shell(git push*)" \
-  --deny-tool "shell(git reset*)" \
-  --deny-tool "shell(git clean*)" \
-  --deny-tool "shell(gh*)" \
-  --deny-tool "shell(curl*)" \
-  --deny-tool "shell(wget*)" \
+  --allow-tool "shell" \
+  --deny-tool "shell(git commit)" \
+  --deny-tool "shell(git push)" \
+  --deny-tool "shell(git reset)" \
+  --deny-tool "shell(git clean)" \
+  --deny-tool "shell(gh)" \
+  --deny-tool "shell(curl)" \
+  --deny-tool "shell(wget)" \
   "${mcp_args[@]}" \
+  --secret-env-vars "COMPOSIO_API_KEY" \
   -p "$prompt" >"$raw_log" 2>&1
 exit_code=$?
 set -e
