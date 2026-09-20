@@ -18,14 +18,26 @@ if [[ -z "$task" ]]; then
 fi
 
 mcp_args=()
-if [[ -n "${COMPOSIO_API_KEY:-}" ]]; then
+if [[ -n "${COMPOSIO_MCP_URL:-}" && -f "${COMPOSIO_MCP_HEADERS_FILE:-}" ]]; then
   mcp_config="$(mktemp "/tmp/copilot-mcp.XXXXXX.json")"
-  jq -n --arg key "$COMPOSIO_API_KEY" '{
+  headers_json="$(python3 - "$COMPOSIO_MCP_HEADERS_FILE" <<'PY'
+import json,sys
+headers={}
+for line in open(sys.argv[1],errors="replace"):
+    line=line.rstrip("\n")
+    if ":" not in line:
+        continue
+    key,value=line.split(":",1)
+    headers[key.strip()]=value.lstrip()
+print(json.dumps(headers))
+PY
+)"
+  jq -n --arg url "$COMPOSIO_MCP_URL" --argjson headers "$headers_json" '{
     mcpServers: {
       composio: {
         type: "http",
-        url: "https://connect.composio.dev/mcp",
-        headers: {"x-consumer-api-key": $key},
+        url: $url,
+        headers: $headers,
         tools: ["*"]
       }
     }
@@ -53,7 +65,6 @@ copilot \
   --deny-tool "shell(curl)" \
   --deny-tool "shell(wget)" \
   "${mcp_args[@]}" \
-  --secret-env-vars "COMPOSIO_API_KEY" \
   -p "$prompt" >"$raw_log" 2>&1
 exit_code=$?
 set -e
