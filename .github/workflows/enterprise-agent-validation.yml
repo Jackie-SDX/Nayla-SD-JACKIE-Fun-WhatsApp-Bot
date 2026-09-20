@@ -30,13 +30,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/validate-opencode-council.sh .opencode/instructions.md .opencode/agents/architect-reviewer.md .opencode/agents/adversarial-reviewer.md .opencode/agents/adjudicator.md .opencode/agents/verifier.md docs/AGENT_COUNCIL.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-opencode-council-stage.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-opencode-change.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/validate-opencode-council.sh .github/scripts/validate-application.sh .opencode/instructions.md .opencode/agents/architect-reviewer.md .opencode/agents/adversarial-reviewer.md .opencode/agents/adjudicator.md .opencode/agents/verifier.md docs/AGENT_COUNCIL.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md; do
             test -f "$f"
           done
           jq empty opencode.json
           ruby -e 'require "yaml"; Dir[".github/workflows/*.yml",".github/dependabot.yml"].uniq.each { |f| YAML.load_file(f); puts "YAML OK: #{f}" }'
           bash -n .github/scripts/select-opencode-route.sh
           bash -n .github/scripts/run-opencode-attempt.sh
+          bash -n .github/scripts/run-opencode-council-stage.sh
+          bash -n .github/scripts/publish-opencode-change.sh
           bash -n .github/scripts/run-copilot-attempt.sh
           bash -n .github/scripts/publish-copilot-change.sh
           bash -n .github/scripts/classify-provider-failure.sh
@@ -74,6 +76,10 @@ jobs:
           ! grep -Eiq 'openrouter|huggingface|hugging-face|GEMINI_API_KEY' .github/workflows/opencode.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh
           ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml
           ! grep -q 'actions/cache/save' .github/workflows/opencode.yml
+          ! grep -q 'connect.composio.dev/mcp' .github/scripts/run-copilot-attempt.sh
+          ! grep -q 'x-consumer-api-key' .github/scripts/run-copilot-attempt.sh
+          ! grep -q 'id-token: write' .github/workflows/opencode.yml
+          ! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
 
       - name: Validate Zen configuration
         shell: bash
@@ -81,14 +87,18 @@ jobs:
           set -euo pipefail
           jq -e '.model == "opencode/big-pickle"' opencode.json >/dev/null
           jq -e 'has("provider") | not' opencode.json >/dev/null
+          jq -e '.permissions | type == "array"' opencode.json >/dev/null
+          jq -e 'has("permission") | not' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action=="subagent" and .resource=="*" and .effect=="deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action=="shell" and .resource=="git push *" and .effect=="deny")' opencode.json >/dev/null
           jq -e 'has("enabled_providers") | not' opencode.json >/dev/null
           jq -e '.share == "disabled"' opencode.json >/dev/null
-          jq -e '.permission.external_directory == "deny"' opencode.json >/dev/null
-          jq -e '.permission.doom_loop == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git commit *"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
-          jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "external_directory" and .resource == "*" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "doom_loop" and .resource == "*" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "shell" and .resource == "git commit *" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "shell" and .resource == "git push *" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "shell" and .resource == "git reset *" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "shell" and .resource == "git clean *" and .effect == "deny")' opencode.json >/dev/null
           jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
           jq -e '.mcp.composio.timeout == 20000' opencode.json >/dev/null
@@ -147,6 +157,23 @@ jobs:
               exit 1
             }
           done
+
+      - name: Validate workflow-enforced council semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'Validate command gate' .github/workflows/opencode.yml
+          grep -q 'Publish OpenCode attempt 1' .github/workflows/opencode.yml
+          grep -q 'Publish OpenCode attempt 2' .github/workflows/opencode.yml
+          grep -q 'Publish OpenCode attempt 3' .github/workflows/opencode.yml
+          grep -q 'COUNCIL_EVIDENCE_DIR' .github/workflows/opencode.yml
+          grep -q 'command_gate.outputs.valid' .github/workflows/opencode.yml
+          grep -q 'workflow-enforced agent council' .opencode/instructions.md
+          grep -q 'opencode run --standalone' .github/scripts/run-opencode-attempt.sh
+          grep -q 'COUNCIL_STAGE_COMPLETE=' .github/scripts/run-opencode-council-stage.sh
+          grep -q 'COUNCIL_DECISION=' .github/scripts/run-opencode-council-stage.sh
+          grep -q 'COUNCIL_VERDICT=' .github/scripts/run-opencode-council-stage.sh
+          grep -q 'git push --set-upstream origin' .github/scripts/publish-opencode-change.sh
 
       - name: Validate route selector structure
         shell: bash
