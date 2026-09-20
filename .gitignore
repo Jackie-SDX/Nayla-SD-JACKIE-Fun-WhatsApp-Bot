@@ -1,0 +1,21 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# WhatsApp Baileys linked-device session (impersonation-grade credentials)
+session_auth/
+creds.json
+auth_info*/
+*.session
+*.session-*
+
+# Node tooling
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db

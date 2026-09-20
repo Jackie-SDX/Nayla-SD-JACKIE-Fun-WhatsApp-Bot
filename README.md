@@ -6,7 +6,7 @@
 
 *Chats, vibes, remembers, sees, listens, and speaks — running on a free-tier budget.*
 
-![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)
 ![WhatsApp](https://img.shields.io/badge/WhatsApp-Baileys-25D366?logo=whatsapp&logoColor=white)
 ![Database](https://img.shields.io/badge/database-MongoDB%20Atlas-47A248?logo=mongodb&logoColor=white)
 ![Platform](https://img.shields.io/badge/hosting-Render-46E3B7?logo=render&logoColor=white)
@@ -205,7 +205,7 @@ flowchart TB
 
 | Requirement | Version / Tier | Notes |
 |---|---|---|
-| **Node.js** | **18 or later** | The code uses native `fetch`, `AbortController`, `FormData`, and `Blob` directly with no polyfills — these are Node 18+ globals. |
+| **Node.js** | **20 or later** | The code uses native `fetch`, `AbortController`, `FormData`, and `Blob` directly (Node 18+ globals), and `@whiskeysockets/baileys` declares a Node `>=20` engine requirement. |
 | **MongoDB Atlas** | Free **M0** tier is sufficient | ~512MB storage. Used for session persistence and all long-term memory. The bot runs without it, but loses all persistence across restarts. |
 | **Hosting** | [Render.com](https://render.com) free or paid Web Service | The keep-alive server, self-ping loop, and health-check design are all built specifically around Render's free-tier constraints (port-binding requirement, 15-minute idle sleep). Any host that can run a long-lived Node process and expose one HTTP port will work, but Render is the tested target. |
 | **RAM** | ~512MB target | Every in-memory cache in the codebase is bounded and self-expiring specifically to fit this budget, with a heap-pressure flush valve at 380MB. |
