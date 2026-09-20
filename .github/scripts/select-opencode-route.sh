@@ -50,8 +50,8 @@ select_route() {
 }
 
 if [[ ",$excluded," != *,opencode,* && "$opencode_available" == "true" ]]; then
-  if [[ "${GITHUB_ACTIONS:-false}" == "true" && -z "$models_cv" ]]; then
-    echo "::notice title=OpenCode CI model not configured::Skipping OpenCode Zen free models in GitHub Actions; configure OPENCODE_CI_MODELSs with a CI-supported OpenCode model to enable the OpenCode route."
+  if [[ "${GITHUB_ACTIONS:-false}" == "true" && -z "$models_csv" ]]; then
+    echo "::notice title=OpenCode CI model not configured::Skipping OpenCode Zen free models in GitHub Actions; configure OPENCODE_CI_MODELS with a CI-supported OpenCode model to enable the OpenCode route."
   fi
   index=0
   for model in "${models[@]}"; do
