@@ -58,14 +58,12 @@ bash -n .github/scripts/validate-application.sh
 ! grep -q '^      GITHUB_TOKEN:' .github/workflows/opencode.yml
 ! grep -q '^\s*GITHUB_TOKEN:' .github/workflows/opencode.yml
 
-# OpenCode 2.x exposes custom agents from repository markdown frontmatter; do not use the removed V1-style
-# `opencode agent list` positional command here. The actual agent executors perform the authoritative
-# runtime smoke/council stages and emit completion markers.
-grep -R -q '^mode: primary
- .opencode/agents
-grep -q '^model: opencode/big-pickle
- .opencode/agents/architect-reviewer.md
-grep -q '^model: opencode/mimo-v2.5-free
- .opencode/agents/adversarial-reviewer.md
+# OpenCode 2.x exposes custom agents through repository markdown frontmatter.
+for agent in architect-reviewer adversarial-reviewer adjudicator verifier; do
+  f=".opencode/agents/$agent.md"
+  test -f "$f"
+  grep -q '^mode: primary$' "$f"
+  grep -q '^model: ' "$f"
+done
 
 echo "Enterprise council validation: PASS"
