@@ -39,7 +39,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   rrepo="${OC_TARGET_REPO:-}"
   rbase="${OC_TARGET_BASE:-main}"
   rbranch="${OC_TARGET_BRANCH:-}"
-  rlocal_head="$(git -C "${OC_TARGET_WORKSPACE:-.}" rev-parse HEAD 2>/dev/null || true)"
+  expected_head="${EXPECTED_TARGET_HEAD:-}"
   reason=""
   pr_url=""
 
@@ -70,12 +70,20 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
       emit verified true
       emit retryable false
       emit pr_url "$pr_url"
-      [[ -n "$rlocal_head" ]] && emit ci_run_id "$rlocal_head"
-      echo "Remote target PR verified (merged): $pr_url"
+      emit ci_run_id "$head_sha"
+      echo "Remote target PR verified (merged): $pr_url ($head_sha)"
       exit 0
     fi
-    if [[ -n "$rlocal_head" && -n "$head_sha" && "$rlocal_head" != "$head_sha" ]]; then
-      reason="target PR head ($head_sha) does not match the policed workspace head ($rlocal_head)"
+    if [[ -n "$expected_head" && "$expected_head" != "$head_sha" ]]; then
+      reason="target PR head ($head_sha) does not match the controller published target head ($expected_head)"
+    fi
+    if [[ -z "$reason" ]]; then
+      branch_sha="$(gh api "/repos/$rrepo/git/ref/heads/$rbranch" 2>/dev/null | jq -r ".object.sha // \"\"" 2>/dev/null || true)"
+      if [[ -z "$branch_sha" ]]; then
+        reason="target branch ref $rbranch is not observable"
+      elif [[ "$branch_sha" != "$head_sha" ]]; then
+        reason="target branch head ($branch_sha) does not match target PR head ($head_sha)"
+      fi
     fi
   fi
 
