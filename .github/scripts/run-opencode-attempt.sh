@@ -24,7 +24,38 @@ fi
 
 failed_cleanup() {
   rc=$?
-  echo "Council attempt ${attempt} failed; restoring baseline ${initial_sha}."
+  safe_log="$root/failure.log"
+  {
+    echo "OpenCode council attempt: $attempt"
+    echo "Provider model: $model"
+    echo "Baseline SHA: $initial_sha"
+    echo "=== ARCHITECT LOG ==="
+    cat "$root/architect.log" 2>/dev/null || true
+    echo "=== ADVERSARIAL LOG ==="
+    cat "$root/adversarial.log" 2>/dev/null || true
+    echo "=== ADJUDICATOR LOG ==="
+    cat "$root/adjudicator.log" 2>/dev/null || true
+    echo "=== BUILD LOG ==="
+    cat "$root/build.log" 2>/dev/null || true
+    echo "=== VALIDATION FAILURE LOG ==="
+    cat "$root/validation-failed.log" 2>/dev/null || true
+    echo "=== VERIFIER LOGS ==="
+    for f in "$root"/verifier-*.log; do
+      [[ -f "$f" ]] || continue
+      echo "--- $f ---"
+      cat "$f" 2>/dev/null || true
+    done
+    echo "=== CORRECTION BUILD LOGS ==="
+    for f in "$root"/build-correction-*.log; do
+      [[ -f "$f" ]] || continue
+      echo "--- $f ---"
+      cat "$f" 2>/dev/null || true
+    done
+  } > "$safe_log"
+  chmod 600 "$safe_log"
+  printf 'evidence_dir=%s\n' "$root" >> "$GITHUB_OUTPUT"
+  printf 'safe_log_path=%s\n' "$safe_log" >> "$GITHUB_OUTPUT"
+  echo "Council attempt ${attempt} failed; failure evidence: ${safe_log}. Restoring baseline ${initial_sha}."
   git reset --hard "$initial_sha" >/dev/null 2>&1 || true
   git clean -fd >/dev/null 2>&1 || true
   git switch --detach "$initial_sha" >/dev/null 2>&1 || true
