@@ -27,14 +27,18 @@ jobs:
       issues: write
       pull-requests: write
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
       GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+      GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
+      GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
       GEMINI_API_KEY_SECONDARY: ${{ secrets.GEMINI_API_KEY_2 }}
       GEMINI_API_KEY_TERTIARY: ${{ secrets.GEMINI_API_KEY_3 }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+      FORENSIC_RECOVERY_MAX: "5"
+      FORENSIC_FAILURE_STRIKE_MAX: "3"
 
     steps:
       - name: Checkout repository
@@ -110,10 +114,12 @@ jobs:
         run: |
           set -euo pipefail
           gemini_count=0
-          [[ -n "${GEMINI_API_KEY:-}" ]] && gemini_count=$((gemini_count + 1))
-          [[ -n "${GEMINI_API_KEY_2:-}" ]] && gemini_count=$((gemini_count + 1))
-          [[ -n "${GEMINI_API_KEY_3:-}" ]] && gemini_count=$((gemini_count + 1))
-          echo "Gemini key slots available: $gemini_count/3"
+          for key_name in GEMINI_API_KEY GEMINI_API_KEY_2 GEMINI_API_KEY_3 GEMINI_API_KEY_4 GEMINI_API_KEY_5; do
+            if [[ -n "${!key_name:-}" ]]; then
+              gemini_count=$((gemini_count + 1))
+            fi
+          done
+          echo "Gemini key slots available: $gemini_count/5"
           [[ -n "${OPENROUTER_API_KEY:-}" ]] && echo "OpenRouter free fallback: configured" || echo "OpenRouter free fallback: optional/unconfigured"
           [[ -n "${COMPOSIO_API_KEY:-}" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured; the agent will continue without Composio tools."
           if (( gemini_count == 0 )) && [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
@@ -126,7 +132,7 @@ jobs:
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
-      - name: Run OpenCode
+      - name: Run OpenCode attempt 1
         id: agent_1
         if: steps.route_1.outputs.selected == 'true'
         continue-on-error: true
@@ -134,11 +140,25 @@ jobs:
         run: |
           set -u
           export MODEL="$OPENCODE_SELECTED_MODEL"
+          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
           export SHARE="false"
           export USE_GITHUB_TOKEN="true"
           export AGENT="build"
-          if [[ "$MODEL" == google/* ]]; then export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"; else export GEMINI_API_KEY=""; fi
-          opencode github run
+          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
+            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
+          else
+            export GEMINI_API_KEY=""
+          fi
+          bash .github/scripts/run-opencode-attempt.sh 1
+
+      - name: Inspect state before reroute 2
+        if: always() && steps.agent_1.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          git status --short
+          git diff --check
+          git diff --stat
 
       - name: Select second route after agent failure
         id: route_2
@@ -146,7 +166,7 @@ jobs:
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
-      - name: Run OpenCode after first re-route
+      - name: Run OpenCode attempt 2
         id: agent_2
         if: steps.route_2.outputs.selected == 'true'
         continue-on-error: true
@@ -154,19 +174,33 @@ jobs:
         run: |
           set -u
           export MODEL="$OPENCODE_SELECTED_MODEL"
+          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
           export SHARE="false"
           export USE_GITHUB_TOKEN="true"
           export AGENT="build"
-          if [[ "$MODEL" == google/* ]]; then export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"; else export GEMINI_API_KEY=""; fi
-          opencode github run
+          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
+            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
+          else
+            export GEMINI_API_KEY=""
+          fi
+          bash .github/scripts/run-opencode-attempt.sh 2
 
-      - name: Select third route after second agent failure
+      - name: Inspect state before reroute 3
+        if: always() && steps.agent_2.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          git status --short
+          git diff --check
+          git diff --stat
+
+      - name: Select third route after agent failure
         id: route_3
         if: steps.route_1.outputs.selected == 'true' && steps.agent_1.outcome == 'failure' && steps.agent_2.outcome == 'failure'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
-      - name: Run OpenCode after second re-route
+      - name: Run OpenCode attempt 3
         id: agent_3
         if: steps.route_3.outputs.selected == 'true'
         continue-on-error: true
@@ -174,11 +208,37 @@ jobs:
         run: |
           set -u
           export MODEL="$OPENCODE_SELECTED_MODEL"
+          export VARIANT="${OPENCODE_SELECTED_VARIANT:-}"
           export SHARE="false"
           export USE_GITHUB_TOKEN="true"
           export AGENT="build"
-          if [[ "$MODEL" == google/* ]]; then export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"; else export GEMINI_API_KEY=""; fi
-          opencode github run
+          if [[ "$OPENCODE_SELECTED_PROVIDER" == "google" ]]; then
+            export GEMINI_API_KEY="$OPENCODE_SELECTED_GEMINI_KEY"
+          else
+            export GEMINI_API_KEY=""
+          fi
+          bash .github/scripts/run-opencode-attempt.sh 3
+
+      - name: Post human handoff after 3 failed agent attempts
+        if: always() && steps.agent_1.outcome == 'failure' && steps.agent_2.outcome == 'failure' && steps.agent_3.outcome == 'failure'
+        shell: bash
+        env:
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          SAFE_LOG: ${{ steps.agent_3.outputs.safe_log_path }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          findings="$(tail -n 100 "$SAFE_LOG" 2>/dev/null || printf '%s' 'No sanitized attempt log was available.')"
+          body="$(printf 'OpenCode reached the 3-strike agent-attempt circuit breaker. No success is claimed; human guidance is required before another run.\\n\\nSanitized findings from the final attempt:\\n\\n```text\\n%s\\n```' "$findings")"
+          payload="$(jq -n --arg body "$body" '{body:$body}')"
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+            -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${TARGET_NUMBER}/comments" \
+            -d "$payload" >/dev/null
+          echo "Human handoff posted to issue/PR #${TARGET_NUMBER}."
 
       - name: Routing summary
         if: always()
@@ -190,15 +250,18 @@ jobs:
           A1: ${{ steps.agent_1.outcome }}
           A2: ${{ steps.agent_2.outcome }}
           A3: ${{ steps.agent_3.outcome }}
+          E1: ${{ steps.agent_1.outputs.exit_code }}
+          E2: ${{ steps.agent_2.outputs.exit_code }}
+          E3: ${{ steps.agent_3.outputs.exit_code }}
         run: |
           {
             echo "### OpenCode routing"
             echo ""
-            echo "| Attempt | Route | Result |"
-            echo "|---|---|---|"
-            echo "| 1 | ${R1:-not selected} | ${A1:-not run} |"
-            echo "| 2 | ${R2:-not selected} | ${A2:-not run} |"
-            echo "| 3 | ${R3:-not selected} | ${A3:-not run} |"
+            echo "| Attempt | Route | Result | Exit |"
+            echo "|---|---|---|---|"
+            echo "| 1 | ${R1:-not selected} | ${A1:-not run} | ${E1:-n/a} |"
+            echo "| 2 | ${R2:-not selected} | ${A2:-not run} | ${E2:-n/a} |"
+            echo "| 3 | ${R3:-not selected} | ${A3:-not run} | ${E3:-n/a} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Final status
@@ -213,6 +276,13 @@ jobs:
           R3: ${{ steps.route_3.outputs.selected }}
         run: |
           set -euo pipefail
-          if [[ "$A1" == "success" || "$A2" == "success" || "$A3" == "success" ]]; then exit 0; fi
-          if [[ "$R1" != "true" && "$R2" != "true" && "$R3" != "true" ]]; then echo "::error title=No viable model route::All configured model probes failed."; else echo "::error title=OpenCode recovery exhausted::All selected agent attempts failed."; fi
+          if [[ "$A1" == "success" || "$A2" == "success" || "$A3" == "success" ]]; then
+            echo "OpenCode completed successfully on at least one route."
+            exit 0
+          fi
+          if [[ "$R1" != "true" && "$R2" != "true" && "$R3" != "true" ]]; then
+            echo "::error title=No viable model route::All configured zero-cost model probes failed."
+          else
+            echo "::error title=OpenCode recovery exhausted::Three bounded agent attempts failed; human handoff was requested."
+          fi
           exit 1

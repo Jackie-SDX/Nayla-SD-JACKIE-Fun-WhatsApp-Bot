@@ -1,7 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "google/gemini-3.8-flash",
-  "small_model": "google/gemini-3.5-flash-lite",
   "default_agent": "build",
   "instructions": [
     ".opencode/instructions.md"
@@ -22,7 +21,9 @@
       },
       "models": {
         "gemini-3.8-flash": {},
+        "gemini-3.7-flash": {},
         "gemini-3.6-flash": {},
+        "gemini-3.5-flash": {},
         "gemini-3.5-flash-lite": {}
       }
     },
@@ -50,13 +51,27 @@
     }
   },
   "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      ".env": "deny",
+      ".npmrc": "deny"
+    },
     "bash": {
       "*": "allow",
+      "git commit *": "deny",
+      "git commit": "deny",
       "git push *": "deny",
       "git push": "deny",
+      "git reset *": "deny",
+      "git clean *": "deny",
+      "git branch -D *": "deny",
+      "git branch -d *": "deny",
       "rm -rf /": "deny",
       "rm -rf /*": "deny"
     },
-    "external_directory": "deny"
+    "external_directory": "deny",
+    "doom_loop": "deny"
   }
 }
