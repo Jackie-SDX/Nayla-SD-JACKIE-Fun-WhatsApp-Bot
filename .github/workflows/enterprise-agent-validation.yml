@@ -194,6 +194,28 @@ jobs:
           grep -q 'github-copilot/auto' .github/scripts/select-opencode-route.sh
           grep -q 'opencode/\$model' .github/scripts/select-opencode-route.sh
 
+          tmp="$(mktemp -d)"
+          : > "$tmp/github_env"
+          : > "$tmp/github_output"
+          GITHUB_ACTIONS=true HAS_OPENCODE_CREDENTIAL=true HAS_COPILOT_CREDENTIAL=true \
+            OPENCODE_API_KEY=dummy COPILOT_GITHUB_TOKEN=dummy \
+            OPENCODE_ZEN_FREE_MODELS='big-pickle,mimo-v2.5-free' \
+            GITHUB_ENV="$tmp/github_env" GITHUB_OUTPUT="$tmp/github_output" \
+            bash .github/scripts/select-opencode-route.sh
+          grep -qx 'provider=github-copilot' "$tmp/github_output"
+          grep -qx 'OPENCODE_SELECTED_PROVIDER=github-copilot' "$tmp/github_env"
+
+          : > "$tmp/github_env"
+          : > "$tmp/github_output"
+          GITHUB_ACTIONS=true HAS_OPENCODE_CREDENTIAL=true HAS_COPILOT_CREDENTIAL=true \
+            OPENCODE_API_KEY=dummy COPILOT_GITHUB_TOKEN=dummy \
+            OPENCODE_CI_MODELS='ci-model' \
+            GITHUB_ENV="$tmp/github_env" GITHUB_OUTPUT="$tmp/github_output" \
+            bash .github/scripts/select-opencode-route.sh
+          grep -qx 'provider=opencode' "$tmp/github_output"
+          grep -qx 'OPENCODE_SELECTED_MODEL=opencode/ci-model' "$tmp/github_env"
+          echo "CI OpenCode routing guard: PASS"
+
 
       - name: Validate provider failover
         shell: bash
