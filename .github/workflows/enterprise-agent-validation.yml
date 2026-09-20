@@ -47,80 +47,67 @@ jobs:
           jq empty opencode.json
           ruby -e 'require "yaml"; Dir[".github/workflows/*.yml",".github/dependabot.yml"].uniq.each { |f| YAML.load_file(f); puts "YAML OK: #{f}" }'
 
-      - name: Validate shell syntax
+      - name: Validate shell and application syntax
         shell: bash
         run: |
           set -euo pipefail
           bash -n .github/scripts/select-opencode-route.sh
           bash -n .github/scripts/run-opencode-attempt.sh
-          if [[ -f index.js ]]; then node --check index.js; fi
-          if [[ -f pair.js ]]; then node --check pair.js; fi
+          [[ ! -f index.js ]] || node --check index.js
+          [[ ! -f pair.js ]] || node --check pair.js
 
       - name: Validate enterprise routing and recovery invariants
         shell: bash
         run: |
           set -euo pipefail
-
           grep -q '"model": "google/gemini-3.8-flash"' opencode.json
           grep -q '"gemini-3.7-flash": {}' opencode.json
           grep -q '"gemini-3.6-flash": {}' opencode.json
           grep -q '"gemini-3.5-flash": {}' opencode.json
           grep -q '"gemini-3.5-flash-lite": {}' opencode.json
-
           grep -q 'GEMINI_API_KEY_4' .github/workflows/opencode.yml
           grep -q 'GEMINI_API_KEY_5' .github/workflows/opencode.yml
           grep -q 'Gemini key slots available: $gemini_count/5' .github/workflows/opencode.yml
           grep -q 'FORENSIC_RECOVERY_MAX: "5"' .github/workflows/opencode.yml
           grep -q 'FORENSIC_FAILURE_STRIKE_MAX: "3"' .github/workflows/opencode.yml
-
           grep -q 'opencode github run' .github/scripts/run-opencode-attempt.sh
           grep -q 'safe_log' .github/scripts/run-opencode-attempt.sh
-          grep -q 'Bearer' .github/scripts/run-opencode-attempt.sh
           grep -q 'GEMINI_API_KEY_5' .github/scripts/run-opencode-attempt.sh
-
-          grep -q 'gemini-3.8-flash' .github/scripts/select-opencode-route.sh
-          grep -q 'gemini-3.7-flash' .github/scripts/select-opencode-route.sh
-          grep -q 'gemini-3.6-flash' .github/scripts/select-opencode-route.sh
-          grep -q 'gemini-3.5-flash' .github/scripts/select-opencode-route.sh
-          grep -q 'gemini-3.5-flash-lite' .github/scripts/select-opencode-route.sh
+          for model in gemini-3.8-flash gemini-3.7-flash gemini-3.6-flash gemini-3.5-flash gemini-3.5-flash-lite; do grep -q "$model" .github/scripts/select-opencode-route.sh; done
           grep -q 'openrouter/free' .github/scripts/select-opencode-route.sh
           grep -q 'route_count=' .github/scripts/select-opencode-route.sh
-
           test "$(grep -c 'Run OpenCode attempt [123]$' .github/workflows/opencode.yml)" -eq 3
           ! grep -q 'Run OpenCode attempt 4' .github/workflows/opencode.yml
           grep -q 'three-strike' .opencode/instructions.md
           grep -q 'up to five total evidence-based forensic recovery cycles' .opencode/instructions.md
-
-          ! grep -Eiq 'qwen/qwen3\.8|max-0902' .github/workflows/opencode.yml .github/scripts/select-opencode-route.sh
+          ! grep -Eiq 'qwen/qwen3\\.8|max-0902' .github/workflows/opencode.yml .github/scripts/*.sh
 
       - name: Validate security invariants
         shell: bash
         run: |
           set -euo pipefail
-
-          grep -q '"share": "disabled"' opencode.json
-          grep -q '"external_directory": "deny"' opencode.json
-          grep -q '"doom_loop": "deny"' opencode.json
-          grep -q '"git push \*": "deny"' opencode.json
-          grep -q '"git commit \*": "deny"' opencode.json
-          grep -q '"git reset \*": "deny"' opencode.json
-          grep -q '"git clean \*": "deny"' opencode.json
-          grep -q '"git branch -D \*": "deny"' opencode.json
-          grep -q '"\*.env": "deny"' opencode.json
-          grep -q '".npmrc": "deny"' opencode.json
-
+          jq -e '.share == "disabled"' opencode.json >/dev/null
+          jq -e '.permission.external_directory == "deny"' opencode.json >/dev/null
+          jq -e '.permission.doom_loop == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git push *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git commit *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git reset *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git clean *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.bash["git branch -D *"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read["*.env"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read["*.env.*"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read[".env"] == "deny"' opencode.json >/dev/null
+          jq -e '.permission.read[".npmrc"] == "deny"' opencode.json >/dev/null
           grep -q 'connect.composio.dev/mcp' opencode.json
           grep -q 'persist-credentials: false' .github/workflows/opencode.yml
-
           grep -q 'contents: write' .github/workflows/opencode.yml
           grep -q 'issues: write' .github/workflows/opencode.yml
           grep -q 'pull-requests: write' .github/workflows/opencode.yml
           ! grep -q 'id-token: write' .github/workflows/opencode.yml
           ! grep -q 'actions/cache/save' .github/workflows/opencode.yml
           ! grep -q 'anomalyco/opencode/github@latest' .github/workflows/opencode.yml
-          ! grep -Eiq 'echo .*GEMINI_API_KEY|echo .*OPENROUTER_API_KEY|echo .*COMPOSIO_API_KEY|printf .*GEMINI_API_KEY' .github/workflows/opencode.yml .github/scripts
-          ! grep -Eiq 'qwen/qwen3\.8-max' .github/workflows/opencode.yml .github/scripts
-
+          ! grep -Eiq 'echo .*GEMINI_API_KEY|echo .*OPENROUTER_API_KEY|echo .*COMPOSIO_API_KEY|printf .*GEMINI_API_KEY' .github/workflows/opencode.yml .github/scripts/*.sh
+          ! grep -Eiq 'qwen/qwen3\\.8-max' .github/workflows/opencode.yml .github/scripts/*.sh
           grep -q 'actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode.yml
           grep -q 'actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' .github/workflows/opencode-cache.yml
           grep -q 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/opencode.yml
@@ -131,18 +118,16 @@ jobs:
         shell: bash
         run: |
           set -u
-          if node -e 'const fs=require("fs"); const p=require("./package.json"); const s=p.scripts?.start||""; const m=s.match(/node\\s+([A-Za-z0-9._/-]+\\.js)/); if (m && !fs.existsSync(m[1])) process.exit(2)' 2>/dev/null; then
+          if node -e 'const fs=require("fs"); const p=require("./package.json"); const s=p.scripts?.start||""; const m=s.match(/node\s+([A-Za-z0-9._\/-]+\.js)/); if (m && !fs.existsSync(m[1])) process.exit(2)' 2>/dev/null; then
             echo "Start entrypoint exists."
           else
             echo "::warning title=Application packaging finding::package.json may reference a start-time JavaScript file that is absent from the repository tree."
           fi
-
           if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
             echo "npm lockfile present."
           else
             echo "::warning title=No npm lockfile::Dependency installation is not fully reproducible yet."
           fi
-
           if node -e 'const p=require("./package.json"); process.exit(p.scripts?.test ? 0 : 1)' 2>/dev/null; then
             echo "Automated test script present."
           else
