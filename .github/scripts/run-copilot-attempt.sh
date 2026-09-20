@@ -91,6 +91,19 @@ set +e
 exit_code=$?
 set -e
 
+if [[ "$exit_code" -eq 0 ]]; then
+  if [[ -z "$(git status --short)" ]]; then
+    echo "::error title=Copilot task produced no changes::Agent exited zero but repository state is unchanged."
+    exit 1
+  fi
+  validation_log="/tmp/copilot-${attempt}-validation.log"
+  if ! bash .github/scripts/validate-application.sh >"$validation_log" 2>&1; then
+    echo "::error title=Copilot deterministic validation failed::The fallback agent changed the repository but validation did not pass."
+    tail -160 "$validation_log" || true
+    exit 1
+  fi
+  echo "Copilot deterministic validation: PASS"
+fi
 RAW_LOG="$raw_log" SAFE_LOG="$safe_log" python3 - <<'PY'
 import os, re
 from pathlib import Path

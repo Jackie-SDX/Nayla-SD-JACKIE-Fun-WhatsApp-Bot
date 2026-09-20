@@ -104,6 +104,9 @@ jobs:
           jq -e '.permissions[] | select(.action == "shell" and .resource == "git push *" and .effect == "deny")' opencode.json >/dev/null
           jq -e '.permissions[] | select(.action == "shell" and .resource == "git reset *" and .effect == "deny")' opencode.json >/dev/null
           jq -e '.permissions[] | select(.action == "shell" and .resource == "git clean *" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "edit" and .resource == "*.env" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "edit" and .resource == "*.env.*" and .effect == "deny")' opencode.json >/dev/null
+          jq -e '.permissions[] | select(.action == "edit" and .resource == ".npmrc" and .effect == "deny")' opencode.json >/dev/null
           jq -e '.update == "disable"' opencode.json >/dev/null
           jq -e '.mcp.composio.type == "local"' opencode.json >/dev/null
           jq -e '.mcp.composio.enabled == true' opencode.json >/dev/null
@@ -225,3 +228,12 @@ jobs:
           grep -q '@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}' .github/scripts/run-copilot-attempt.sh
           grep -q 'allow-tool "write"' .github/scripts/run-copilot-attempt.sh
 
+          grep -q 'published=true' .github/scripts/publish-copilot-change.sh
+          grep -q 'published=false' .github/scripts/publish-copilot-change.sh
+          grep -q 'produced no repository changes' .github/scripts/publish-copilot-change.sh
+          grep -q 'Sensitive publication path blocked' .github/scripts/publish-copilot-change.sh
+          grep -q 'Secret material detected' .github/scripts/publish-copilot-change.sh
+          grep -q 'Sensitive publication path blocked' .github/scripts/publish-opencode-change.sh
+          grep -q 'Secret material detected' .github/scripts/publish-opencode-change.sh
+          grep -q 'outputs.published' .github/workflows/opencode.yml
+          grep -q 'Copilot deterministic validation: PASS' .github/scripts/run-copilot-attempt.sh
