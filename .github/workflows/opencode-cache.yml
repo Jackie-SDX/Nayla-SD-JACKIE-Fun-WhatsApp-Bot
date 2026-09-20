@@ -35,8 +35,8 @@ jobs:
           fi
           tag="$(jq -r ".tag_name" "$json")"
           version="$(printf "%s" "$tag" | sed "s/^v//")"
-          url="$(jq -r ".assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url" "$json")"
-          digest="$(jq -r ".assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest" "$json")"
+          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
+          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ -n "$url" && "$url" != "null" ]]
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
