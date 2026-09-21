@@ -504,14 +504,24 @@ jobs:
           PATH="$tmp:$PATH" RUNNER_TEMP="$tmp" GITHUB_OUTPUT="$out" OPENCODE_AGENT_TIMEOUT_MINUTES=1 OPENCODE_API_KEY="test-secret-123456" OC_PROGRESS_INTERVAL_SECONDS=1 bash .github/scripts/run-opencode-attempt.sh 99 >"$live" 2>&1
           rc=$?
           set -e
-          [[ "$rc" == "7" ]]
-          grep -Fq "FIRST-LIVE-LINE" "$live"
-          grep -Fq "SECOND-LIVE-LINE" "$live"
-          grep -Fq "[REDACTED]" "$live"
-          ! grep -Fq "test-secret-123456" "$live"
+          # Self-diagnosing assertion tail: every check is recorded so a CI
+          # failure names the exact failed assertion instead of a silent grep.
+          set +e
+          ok=0; fail=0
+          note() { if [ "$1" = ok ]; then ok=$((ok+1)); else fail=$((fail+1)); echo "  ASSERTION FAILED: $2"; fi; }
+          [[ "$rc" == "7" ]] && note ok rc || note fail "mock rc=$rc"
+          grep -Fq "FIRST-LIVE-LINE" "$live" && note ok first-live-line || note fail first-live-line
+          grep -Fq "SECOND-LIVE-LINE" "$live" && note ok second-live-line || note fail second-live-line
+          grep -Fq "[REDACTED]" "$live" && note ok redacted-live-line || note fail redacted-live-line
+          ! grep -Fq "test-secret-123456" "$live" && note ok secret-redacted || note fail secret-leaked-in-live
           # The runner writes heartbeat telemetry to the progress log, whose
           # path is exported through GITHUB_OUTPUT; the live stream carries
           # the sanitized agent stdout only.
-          grep -Fq "heartbeat state=running" "$(sed -n 's/^progress_log_path=//p' "$out")"
-          grep -Fq "exit_code=7" "$out"
-          grep -Fq "termination_reason=failed" "$out"
+          hb_log="$(sed -n 's/^progress_log_path=//p' "$out")"
+          grep -Fq "heartbeat state=running" "$hb_log" && note ok heartbeat-in-progress-log || note fail "heartbeat-in-progress-log ($hb_log)"
+          grep -Fq "exit_code=7" "$out" && note ok exit-code-7-in-out || note fail exit-code-7-in-out
+          grep -Fq "termination_reason=failed" "$out" && note ok termination-reason-failed-in-out || note fail termination-reason-failed-in-out
+          echo "smoke-test report: ok=${ok} failed=${fail} rc=${rc} live_bytes=$(wc -c < "$live")"
+          echo "--- progress log ($hb_log):"; cat "$hb_log"
+          echo "--- live stream:"; cat "$live"
+          [ "${fail}" = "0" ]
