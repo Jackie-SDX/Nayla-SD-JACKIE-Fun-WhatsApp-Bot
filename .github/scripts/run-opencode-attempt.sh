@@ -150,9 +150,6 @@ printf "[OC][attempt=%s][elapsed=%ss] finished exit_code=%s termination_reason=%
 {
   printf "exit_code=%s\n" "$exit_code"
   printf "termination_reason=%s\n" "$termination_reason"
-  printf "safe_log_path=%s\n" "$safe_log"
-  printf "progress_log_path=%s\n" "$progress_log"
-  printf "effective_timeout_seconds=%s\n" "$effective_timeout_seconds"
 } >> "$output_file"
 
 echo "[OC][attempt=${attempt}] live stream complete; exit_code=${exit_code}; termination_reason=${termination_reason}"
