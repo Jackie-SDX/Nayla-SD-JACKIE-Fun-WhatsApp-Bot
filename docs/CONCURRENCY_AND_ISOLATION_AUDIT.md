@@ -131,3 +131,35 @@ already implemented and verified:
 - `verify-agent-result.sh`, `post-oc-continuation.sh` branch derivation.
 - PR #58 (bot-recursion guard); PR #70 (issue69 doc PR).
 - `index.js` per-chat memory, load-shedding, removal cleanup, media placeholder fix.
+
+## 8. Addendum: publication-window verification and the skipped-check policy (issue #71)
+
+Merged via PR #76 onto a task-specific branch named `oc/demo-loop-regression-test`
+(the test branch itself carries no prefix match) the demo-loop run
+(`35595874054`) red-fired: `verify-agent-result.sh`'s `check_pr()` only accepted
+pull requests whose `headRefName` started with `opencode/issue<N>-*` or
+`oc/copilot-<N>-<runid>-*`, and PR #76's branch had no such prefix even though it
+was explicitly referenced inside the issue thread by the agent that created it.
+
+Deterministic fix (`verify-agent-result.sh`, pinned by `test-oc-target.sh` and
+`enterprise-agent-validation.yml`):
+
+- Candidates are sourced from two independent windows: the controller naming
+  window (`branch_candidate_prs`, strict prefix) and the issue-comment window
+  (`scan_candidate_prs`, pull requests referenced in the issue thread after the
+  run started, `OC_RUN_START_ISO`). Scan-window candidates may be
+  un-prefixed (`allow_unprefixed`), but they still must match the base branch,
+  be created inside the run window, be open or merged, and have every
+  observable CI surface green on their exact head.
+- `evaluate_ci_state` treats a set of check-runs that is all skipped as pending,
+  never as success: at least one observable check must complete with
+  success/neutral or the SHA can never be declared verified.
+- When no candidate PR ends up verifiably green, the verifier emits an explicit
+  reason (`no candidate pull request was verifiably green...`) instead of a
+  silent red step, and posts an idempotent issue notice
+  (`<!-- oc-unverified-run-id:<run> -->`) so a retried/failed run can be
+  reconciled without duplicate noise.
+
+No concurrency-rule change was made: `cancel-in-progress: false` stays, the
+`oc-agent-<issue>-<true|false>` / `oc-retry-<issue>` groups stay, and
+`oc-control.yml` stays removed.

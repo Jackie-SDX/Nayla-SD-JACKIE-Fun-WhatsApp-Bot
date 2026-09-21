@@ -405,6 +405,224 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 4b. local-mode verifier: issue-comment (non-prefix) publication window
+# ---------------------------------------------------------------------------
+# Regression for the demo-loop failure (run 35595874054): the /oc agent can
+# publish onto a task-specific branch that is NOT in the controller prefix
+# namespace (e.g. oc/demo-loop-regression-test), as long as it is explicitly
+# referenced in this issue's thread after the run started. The verifier must
+# accept and exact-SHA-verify that PR instead of declaring the run a failure.
+VERIFY_SCAN_BIN="$TESTS/verify-scan-bin"
+mkdir -p "$VERIFY_SCAN_BIN"
+SCAN_HEAD="8888888888888888888888888888888888888888"
+cat > "$VERIFY_SCAN_BIN/gh" <<'FAKE_SCAN'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *"pr list"*)
+    printf '%s\n' '[{"number":8,"url":"https://github.com/fixture/controller/pull/8","state":"OPEN","mergedAt":null,"headRefName":"oc/demo-loop-regression-test","headRefOid":"8888888888888888888888888888888888888888","baseRefName":"main","createdAt":"2026-09-21T11:53:40Z","updatedAt":"2026-09-21T11:53:40Z"}]'
+    ;;
+  *"/branches?per_page=100"*)
+    printf '%s\n' '[[{"name":"main"},{"name":"oc/demo-loop-regression-test"}]]'
+    ;;
+  *"/issues/71/comments?per_page=100"*)
+    printf '%s\n' '[[{"created_at":"2026-09-21T11:56:33Z","body":"## report\nhttps://github.com/fixture/controller/pull/8\n"}]]'
+    ;;
+  *"pr view"*)
+    printf '%s\n' '{"number":8,"url":"https://github.com/fixture/controller/pull/8","state":"OPEN","mergedAt":null,"headRefName":"oc/demo-loop-regression-test","headRefOid":"8888888888888888888888888888888888888888","baseRefName":"main","createdAt":"2026-09-21T11:53:40Z"}'
+    ;;
+  *"/commits/"*"/check-runs"*)
+    printf '%s\n' '{"check_runs":[{"name":"validate","status":"completed","conclusion":"success"},{"name":"self-test","status":"completed","conclusion":"success"}]}'
+    ;;
+  *"/commits/"*"/status"*)
+    printf '%s\n' '{"state":"success","total_count":0,"statuses":[]}'
+    ;;
+  *) exit 0 ;;
+esac
+FAKE_SCAN
+chmod +x "$VERIFY_SCAN_BIN/gh"
+
+new_output_files verifier-scan-nonprefix
+if ( cd "$VERIFY_WS" && PATH="$VERIFY_SCAN_BIN:$PATH" \
+    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=71 BASE_REF="main" \
+    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=11 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+    OC_TARGET_MODE=local OC_RUN_START_ISO="2026-09-21T11:46:48Z" \
+    OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
+    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1 ); then
+  ok "local verifier accepts an issue-comment-referenced PR on a non-prefix branch (demo-loop regression)"
+else
+  bad "local verifier accepts an issue-comment-referenced PR on a non-prefix branch (demo-loop regression)"
+fi
+grep -q "^verified=true$" "$GITHUB_OUTPUT" \
+  && grep -q "^verified_sha=$SCAN_HEAD$" "$GITHUB_OUTPUT" \
+  && ok "local verifier records the exact non-prefix PR head as verified_sha" \
+  || bad "local verifier records the exact non-prefix PR head as verified_sha"
+
+# ---------------------------------------------------------------------------
+# 4c. verifier tolerates unset OC_CI_VERIFY_* env vars under `set -u`
+# ---------------------------------------------------------------------------
+# Regression for the original unbound-variable crash
+# (OC_CI_VERIFY_SETTLE_SECONDS: unbound variable, runs 35587360775/35589826828).
+# Each test unsets exactly one variable; the others are set to fast values so the
+# run still completes quickly even if an unset one used its default.
+VERIFY_ENV_BIN="$TESTS/verify-env-bin"
+mkdir -p "$VERIFY_ENV_BIN"
+cat > "$VERIFY_ENV_BIN/gh" <<'FAKE_ENV'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *"pr list"*)
+    printf '%s\n' '[{"number":1,"url":"https://github.com/fixture/target/pull/1","state":"OPEN","mergedAt":null,"headRefOid":"2222222222222222222222222222222222222222"}]'
+    ;;
+  *"/git/ref/heads/"*)
+    printf '%s\n' '{"object":{"sha":"2222222222222222222222222222222222222222"}}'
+    ;;
+  *"/commits/"*"/check-runs"*)
+    printf '%s\n' '{"check_runs":[{"name":"validate","status":"completed","conclusion":"success"}]}'
+    ;;
+  *"/commits/"*"/status"*)
+    printf '%s\n' '{"state":"success","total_count":0,"statuses":[]}'
+    ;;
+  *"/repos/fixture/target"*)
+    printf '%s\n' '{"full_name":"fixture/target"}'
+    ;;
+  *) exit 0 ;;
+esac
+FAKE_ENV
+chmod +x "$VERIFY_ENV_BIN/gh"
+# Unset-env coverage pinned for validation greps (bare variable names, literal):
+#   OC_CI_VERIFY_SETTLE_SECONDS  -- default fallback, never an unbound-variable crash
+#   OC_CI_VERIFY_WAIT_MINUTES  -- default fallback, never an unbound-variable crash
+#   OC_CI_VERIFY_POLL_SECONDS  -- default fallback, never an unbound-variable crash
+run_unset_env_verify() { # run_unset_env_verify <name> <label> <unset_var>
+  local name="$1" label="$2" unset_var="$3" rc
+  new_output_files "envtest-$name"
+  rc=0
+  (
+    cd "$VERIFY_WS"
+    export PATH="$VERIFY_ENV_BIN:$PATH"
+    export GITHUB_REPOSITORY=fixture/controller PROVIDER=opencode ATTEMPT=1 TARGET_NUMBER=0 BASE_REF=main
+    export INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT"
+    export OC_TARGET_MODE=remote OC_TARGET_REPO=fixture/target OC_TARGET_BASE=main
+    export OC_TARGET_BRANCH=oc/test OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA"
+    export OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0
+    unset "$unset_var"
+    bash "$SCRIPTS/verify-agent-result.sh"
+  ) >/dev/null 2>&1 || rc=$?
+  if [[ "$rc" == "0" ]] && grep -q "^verified=true$" "$GITHUB_OUTPUT"; then
+    ok "verifier survives unset $label under set -u (uses default, no unbound-variable crash)"
+  else
+    bad "verifier survives unset $label under set -u (uses default, no unbound-variable crash)"
+  fi
+}
+run_unset_env_verify settlestr OC_CI_VERIFY_SETTLE_SECONDS OC_CI_VERIFY_SETTLE_SECONDS
+run_unset_env_verify waitstr OC_CI_VERIFY_WAIT_MINUTES OC_CI_VERIFY_WAIT_MINUTES
+run_unset_env_verify pollstr OC_CI_VERIFY_POLL_SECONDS OC_CI_VERIFY_POLL_SECONDS
+
+# ---------------------------------------------------------------------------
+# 4d. all-observable-checks-skipped is never declared verified
+# ---------------------------------------------------------------------------
+VERIFY_SKIP_BIN="$TESTS/verify-skip-bin"
+mkdir -p "$VERIFY_SKIP_BIN"
+cat > "$VERIFY_SKIP_BIN/gh" <<'FAKE_SKIP'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *"pr list"*)
+    printf '%s\n' '[{"number":1,"url":"https://github.com/fixture/target/pull/1","state":"OPEN","mergedAt":null,"headRefOid":"2222222222222222222222222222222222222222"}]'
+    ;;
+  *"/git/ref/heads/"*)
+    printf '%s\n' '{"object":{"sha":"2222222222222222222222222222222222222222"}}'
+    ;;
+  *"/commits/"*"/check-runs"*)
+    printf '%s\n' '{"check_runs":[{"status":"completed","conclusion":"skipped"},{"status":"completed","conclusion":"skipped"}]}'
+    ;;
+  *"/commits/"*"/status"*)
+    printf '%s\n' '{"state":"success","total_count":0,"statuses":[]}'
+    ;;
+  *"/repos/fixture/target"*)
+    printf '%s\n' '{"full_name":"fixture/target"}'
+    ;;
+  *) exit 0 ;;
+esac
+FAKE_SKIP
+chmod +x "$VERIFY_SKIP_BIN/gh"
+
+new_output_files verifier-all-skipped
+rc=0
+( cd "$VERIFY_WS" && PATH="$VERIFY_SKIP_BIN:$PATH" \
+    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=0 BASE_REF="main" \
+    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+    OC_TARGET_MODE=remote OC_TARGET_REPO=fixture/target OC_TARGET_BASE=main \
+    OC_TARGET_BRANCH=oc/test OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA" \
+    OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
+    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1 ) || rc=$?
+if [[ "$rc" == "1" ]] && grep -q "^verified=false$" "$GITHUB_OUTPUT" \
+   && grep -q "^timed_out=true$" "$GITHUB_OUTPUT"; then
+  ok "a SHA whose only observable checks were all skipped is never verified (only pending/timed out)"
+else
+  bad "a SHA whose only observable checks were all skipped is never verified (only pending/timed out)"
+fi
+
+# ---------------------------------------------------------------------------
+# 4e. a late-arriving external status flip is caught by the settle window
+# ---------------------------------------------------------------------------
+VERIFY_FLIP_BIN="$TESTS/verify-flip-bin"
+mkdir -p "$VERIFY_FLIP_BIN"
+cat > "$VERIFY_FLIP_BIN/gh" <<'FAKE_FLIP'
+#!/usr/bin/env bash
+# Stateful fake: the first combined <sha>/status evaluation is green; every
+# status evaluation after that reports an external failure (a provider that
+# posts late). Exercises the settle window's re-confirmation path.
+set -euo pipefail
+SCOUNTER="${FLIP_STATE:?}/status-counter"
+mkdir -p "$(dirname "$SCOUNTER")"
+case "$*" in
+  *"pr list"*)
+    printf '%s\n' '[{"number":1,"url":"https://github.com/fixture/target/pull/1","state":"OPEN","mergedAt":null,"headRefOid":"2222222222222222222222222222222222222222"}]'
+    ;;
+  *"/git/ref/heads/"*)
+    printf '%s\n' '{"object":{"sha":"2222222222222222222222222222222222222222"}}'
+    ;;
+  *"/commits/"*"/check-runs"*)
+    printf '%s\n' '{"check_runs":[{"name":"validate","status":"completed","conclusion":"success"}]}'
+    ;;
+  *"/commits/"*"/status"*)
+    if [[ -f "$SCOUNTER" ]]; then o="$(cat "$SCOUNTER")"; else o=0; fi
+    o=$((o + 1))
+    printf '%s\n' "$o" > "$SCOUNTER"
+    if [[ "$o" -le 1 ]]; then
+      printf '%s\n' '{"state":"success","total_count":0,"statuses":[]}'
+    else
+      printf '%s\n' '{"state":"failure","total_count":1,"statuses":[{"context":"ci/circleci","state":"failure"}]}'
+    fi
+    ;;
+  *"/repos/fixture/target"*)
+    printf '%s\n' '{"full_name":"fixture/target"}'
+    ;;
+  *) exit 0 ;;
+esac
+FAKE_FLIP
+chmod +x "$VERIFY_FLIP_BIN/gh"
+
+FLIP_STATE="$TESTS/flip-state"
+mkdir -p "$FLIP_STATE"
+new_output_files verifier-late-status
+rc=0
+( cd "$VERIFY_WS" && PATH="$VERIFY_FLIP_BIN:$PATH" FLIP_STATE="$FLIP_STATE" \
+    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=0 BASE_REF="main" \
+    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+    OC_TARGET_MODE=remote OC_TARGET_REPO=fixture/target OC_TARGET_BASE=main \
+    OC_TARGET_BRANCH=oc/test OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA" \
+    OC_CI_VERIFY_WAIT_MINUTES=1 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=1 \
+    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1 ) || rc=$?
+if [[ "$rc" == "1" ]] && grep -q "^verified=false$" "$GITHUB_OUTPUT"; then
+  ok "late-arriving external-status failure after an initially green snapshot fails closed"
+else
+  bad "late-arriving external-status failure after an initially green snapshot fails closed"
+fi
+
+# ---------------------------------------------------------------------------
 # 5. durable failure-comment idempotency (cross-attempt, cross-process)
 # ---------------------------------------------------------------------------
 # Verifies the local verifier only ever posts ONE CI-failure comment per run id

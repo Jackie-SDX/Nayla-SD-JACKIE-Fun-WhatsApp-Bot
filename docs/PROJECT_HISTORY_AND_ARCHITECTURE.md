@@ -147,3 +147,20 @@ verifier (`verified_sha`), the `validate` check of `enterprise-agent-validation.
 (syntax, file existence, JSON/YAML/JS/Python assertions), and the
 `oc-enterprise-e2e-self-test.yml` application suite with the `whatsapp-vibe-moderator`
 package-name invariant. Pending/skipped mandatory checks are NOT treated as success.
+
+## 9. Addendum: publication-window verification (issue #71)
+
+- PR #76 was merged on 2026-09-21 via squash onto `main`
+  (`45d6a405da1085721c5df860ff17a4bbdffca6b6`) as the latest demo-loop
+  regression-test for the autonomous-agent control plane. It runs on issue
+  numbers with a task-specific non-prefixed branch
+  (`oc/demo-loop-regression-test`), so it exposed the verifier's
+  prefix-only candidate rule.
+- `verify-agent-result.sh` now also accepts scan-derived candidates from the
+  issue-comment window (`pull/([0-9]+)` references created after
+  `OC_RUN_START_ISO`) in addition to the strict controller-prefix window, and
+  treats all-skipped check sets as never-verified (pending/timed out). Pinned
+  by `test-oc-target.sh` and `enterprise-agent-validation.yml`. Full analysis:
+  `docs/CONCURRENCY_AND_ISOLATION_AUDIT.md` §8.
+- PR #75 was closed without merging (empty diff against `main`); its test
+  branch was removed.
