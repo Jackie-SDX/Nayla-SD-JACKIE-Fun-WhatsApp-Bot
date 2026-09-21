@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/workflows/oc-control.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -76,11 +76,25 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           opencode = Path(".github/workflows/opencode.yml").read_text()
-          ctl = Path(".github/workflows/oc-control.yml").read_text()
           ins = Path(".opencode/instructions.md").read_text()
           verifier = Path(".github/scripts/verify-agent-result.sh").read_text()
           continuation = Path(".github/scripts/post-oc-continuation.sh").read_text()
-          assert "cancel-in-progress: false" in opencode and "cancel-in-progress: false" in ctl
+          # Same-issue serialization is preserved per job with command-aware
+          # concurrency groups; cancel-in-progress stays false so an older
+          # in-flight run is never killed mid-mutation by a newer one. Both the
+          # agent lane and the merged retry control lane live in opencode.yml;
+          # the former oc-control.yml is gone so one comment triggers one run.
+          assert opencode.count("\n      cancel-in-progress: false") == 2
+          brace = "$" + "{{"
+          assert ("oc-agent-" + brace + " github.event.issue.number") in opencode
+          assert "startsWith(github.event.comment.body, '/oc')" in opencode
+          assert ("oc-retry-" + brace + " github.event.issue.number") in opencode
+          assert "retry-failed-jobs:" in opencode
+          assert 'OC_CI_VERIFY_SETTLE_SECONDS: "30"' in opencode
+          # The former oc-control.yml must not be reintroduced as a second
+          # comment listener; the invariant is file-existence based so a
+          # documentation comment in opencode.yml may still name it.
+          assert not Path(".github/workflows/oc-control.yml").exists()
           assert "commits/$head_sha/check-runs" in verifier
           assert "commits/$head_sha/status" in verifier
           assert "none-observed" in verifier
@@ -257,10 +271,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f .github/workflows/oc-control.yml
+          test ! -f .github/workflows/oc-control.yml
           test -f .github/scripts/retry-oc-failed-jobs.sh
           test -f .github/scripts/verify-agent-result.sh
-          grep -Fq 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/oc-control.yml
+          grep -Fq 'retry-failed-jobs:' .github/workflows/opencode.yml
+          grep -Fq 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803' .github/workflows/opencode.yml
           grep -Fq 'rerun-failed-jobs' .github/scripts/retry-oc-failed-jobs.sh
           grep -Fq 'already received a selective failed-job rerun' .github/scripts/retry-oc-failed-jobs.sh
           grep -Fq "!startsWith(github.event.comment.body, '/oc retry failed jobs')" .github/workflows/opencode.yml

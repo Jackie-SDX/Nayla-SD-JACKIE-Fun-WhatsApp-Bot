@@ -468,8 +468,13 @@ deterministic self-test (`test-ingest-evidence.sh`).
 Do not disable the same-issue serialization described in
 `docs/CONCURRENCY_AND_ISOLATION_AUDIT.md`:
 
-- `opencode.yml` and `oc-control.yml` keep `cancel-in-progress: false` per-issue
-  concurrency groups; cross-issue parallelism is preserved;
+- `opencode.yml` is the single issue_comment-triggered workflow and keeps
+  `cancel-in-progress: false` per-issue concurrency groups on every job:
+  the agent lane uses the command-aware group `oc-agent-<issue>-<true|false>`
+  (so workflow-originated noise comments are skipped instantly instead of
+  queuing behind the active agent run) and the `retry-failed-jobs` control lane
+  uses its own `oc-retry-<issue>` group; cross-issue parallelism is preserved;
+  `oc-control.yml` must not be reintroduced as a second comment listener;
 - the owner user-type recursion guard on `/oc` triggers stays in place;
 - per-chat application memory isolation, bounded queues, bounded external waits,
   manual-only deletion, and Mongo-backed session persistence stay in place.

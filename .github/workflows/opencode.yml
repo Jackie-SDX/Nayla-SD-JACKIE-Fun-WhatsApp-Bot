@@ -6,12 +6,19 @@ on:
   pull_request_review_comment:
     types: [created]
 
-concurrency:
-  group: opencode-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: false
-
 jobs:
   opencode:
+    # Per-issue serialization with cancel-in-progress: false, scoped to the
+    # exact command. The group is command-aware so that workflow-originated
+    # noise comments (run markers, checkpoints, failure notices) land in a
+    # distinct "-false" group and are skipped immediately instead of queuing
+    # behind the active agent run as "pending" for its whole duration.
+    #
+    # Real /oc and /opencode commands serialize per issue via the "-true"
+    # group, so two agents can never mutate the same issue concurrently.
+    concurrency:
+      group: oc-agent-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}-${{ startsWith(github.event.comment.body, '/oc') || startsWith(github.event.comment.body, '/opencode') }}
+      cancel-in-progress: false
     if: |
       github.event.comment.user.type == 'User' &&
       github.event.comment.user.login == github.repository_owner &&
@@ -42,6 +49,7 @@ jobs:
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
       COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
       COPILOT_MAX_AI_CREDITS: "60"
+      OC_CI_VERIFY_SETTLE_SECONDS: "30"
 
     steps:
       - name: Checkout repository
@@ -557,3 +565,40 @@ jobs:
           SESSION_ID: ${{ steps.composio_session.outputs.session_id }}
           HEADERS_FILE: ${{ steps.composio_session.outputs.headers_file }}
         run: bash .github/scripts/cleanup-composio-mcp.sh
+
+  retry-failed-jobs:
+    # Control lane merged from the former oc-control.yml so that a single
+    # workflow owns every issue_comment trigger. Its own per-issue group keeps
+    # the lane disjoint from the agent lane, preserving serialization while
+    # eliminating the duplicate workflow run that oc-control.yml created per
+    # comment (which raced the agent lane and sometimes queued as "pending").
+    concurrency:
+      group: oc-retry-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: false
+    if: |
+      github.event.comment.user.login == github.repository_owner &&
+      (
+        startsWith(github.event.comment.body, '/oc retry failed jobs') ||
+        startsWith(github.event.comment.body, '/opencode retry failed jobs')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: read
+      checks: read
+      statuses: read
+    env:
+      GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Execute selective failed-job retry
+        shell: bash
+        run: bash .github/scripts/retry-oc-failed-jobs.sh

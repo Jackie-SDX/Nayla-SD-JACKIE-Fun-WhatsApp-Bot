@@ -8,31 +8,46 @@ and the invariants that must not be reintroduced.
 
 ## 1. Control-plane workflow concurrency groups
 
-| Workflow | Trigger keys | Group | cancel-in-progress | Purpose |
+| Workflow | Trigger keys | Concurrency | cancel-in-progress | Purpose |
 | --- | --- | --- | --- | --- |
-| `opencode.yml` | issue_comment / PR review comment | `opencode-${{ issue.number \|\| pr.number \|\| run_id }}` | `false` | Main `/oc` and `/opencode` agent runs |
-| `oc-control.yml` | issue_comment / PR review comment | `${{ issue.number \|\| pr.number \|\| run_id }}` | `false` | `/oc retry failed jobs` control lane |
+| `opencode.yml` (agent lane) | issue_comment / PR review comment | `oc-agent-${{ issue.number \|\| pr.number \|\| run_id }}-${{ startsWith(comment.body,'/oc') \|\| startsWith(comment.body,'/opencode') }}` | `false` | Main `/oc` and `/opencode` agent runs |
+| `opencode.yml` (`retry-failed-jobs` lane) | issue_comment / PR review comment | `oc-retry-${{ issue.number \|\| pr.number \|\| run_id }}` | `false` | `/oc retry failed jobs` control lane (merged from the removed `oc-control.yml`) |
 | `enterprise-agent-validation.yml` | push, PR, dispatch | `enterprise-agent-validation-${{ github.ref }}` | `true` | Repo validation (fast, read-only, ref-scoped) |
 | `oc-enterprise-e2e-self-test.yml` | PR, dispatch | `oc-enterprise-e2e-self-test-${{ github.head_ref \|\| github.ref }}` | `true` | Application e2e self-test on the PR head |
 | `opencode-cache.yml` | push to main, dispatch, cron | `opencode-cache` | `false` | Cache creation (single lane by design) |
 
+`oc-control.yml` was removed: it was a second issue_comment listener that fired a
+duplicate run for every comment and raced the agent lane (its runs sometimes queued
+as "pending" behind the active agent run and were later skipped/cancelled). Its
+`retry-failed-jobs` job was merged into `opencode.yml` under its own
+`oc-retry-<issue>` group, so both lanes live in one workflow and each comment
+triggers exactly one workflow run.
+
 Rules that make this safe:
 
-1. **Same issue, never concurrent.** Every `/oc` request for the same issue number
-   serializes on the shared `opencode-<issue>` group with `cancel-in-progress: false`,
-   so an older in-flight run is never killed mid-mutation by a newer one. This prevents
-   two agents mutating the same working/PR state for the same issue at the same time.
-   Newer runs queue instead of cancel.
-2. **Cross-issue parallelism is preserved.** Parallel missions happen across issues,
-   not within one. Verification targets exactly the PR/head for the current run
-   (`verify-agent-result.sh` resolves the merged/head SHA for `opencode/issue<issue>-<ts>`
-   or `oc/copilot-<target>-<run_id>` branches), so distinct runs verify distinct state.
-3. **Ref-scoped validation only.** Validation and e2e self-test groups are scoped to the
+1. **Same issue, never concurrent.** The agent lane serializes real `/oc` and
+   `/opencode` requests for the same issue number on the `oc-agent-<issue>-true`
+   group with `cancel-in-progress: false`, so an older in-flight run is never
+   killed mid-mutation by a newer one. This prevents two agents mutating the same
+   working/PR state for the same issue at the same time. Newer command runs queue
+   instead of cancel.
+2. **Noise comments never queue.** The command-aware group suffix means
+   workflow-originated comments (run markers, checkpoints, failure notices) land
+   in the distinct `oc-agent-<issue>-false` group. Their job-level `if` filter
+   fails, so the run is skipped in seconds instead of sitting "pending" behind the
+   active agent run and later being cancelled.
+3. **Cross-issue parallelism is preserved.** Parallel missions happen across
+   issues, not within one. Verification targets exactly the PR/head for the current
+   run (`verify-agent-result.sh` resolves the merged/head SHA for
+   `opencode/issue<issue>-<ts>` or `oc/copilot-<target>-<run_id>` branches), so
+   distinct runs verify distinct state.
+4. **Ref-scoped validation only.** Validation and e2e self-test groups are scoped to the
    ref and may cancel a stale run of the *same ref* (an old result becomes meaningless
    once the ref moved), but never touch other refs.
-4. **Control lane is separate.** `/oc retry failed jobs` runs under its own group and
-   `if` filter; it cannot overlap with an agent run for the same issue. It retries only
-   after inspecting the failing run, per the recovery architecture.
+5. **Control lane is separate.** `/oc retry failed jobs` runs under its own
+   `oc-retry-<issue>` group and `if` filter; it cannot overlap with an agent run for
+   the same issue. It retries only after inspecting the failing run, per the
+   recovery architecture.
 
 ## 2. Why same-issue serialization (and not per-task parallelism)
 
@@ -109,8 +124,10 @@ already implemented and verified:
 
 ## 7. Evidence sources
 
-- `opencode.yml`, `oc-control.yml`, `enterprise-agent-validation.yml`,
+- `opencode.yml` (agent + merged `retry-failed-jobs` lanes), `enterprise-agent-validation.yml`,
   `oc-enterprise-e2e-self-test.yml`, `opencode-cache.yml` concurrency + trigger sections.
+- `oc-control.yml` removed (duplicate issue_comment listener); superseded by the merged
+  `retry-failed-jobs` job in `opencode.yml`.
 - `verify-agent-result.sh`, `post-oc-continuation.sh` branch derivation.
 - PR #58 (bot-recursion guard); PR #70 (issue69 doc PR).
 - `index.js` per-chat memory, load-shedding, removal cleanup, media placeholder fix.
