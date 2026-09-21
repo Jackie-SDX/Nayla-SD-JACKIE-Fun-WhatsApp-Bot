@@ -128,9 +128,8 @@ heartbeat_pid=$!
 
 while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   safe_line="$(sanitize_line "$raw_line")"
-  printf "%s\n" "$safe_line" | tee -a "$safe_log"
-done < "$fifo"
-
+  printf "%s\n" "$safe_line"
+done < "$fifo" | awk -f .github/scripts/filter-opencode-live-output.awk | tee -a "$safe_log"
 wait "$agent_pid"
 exit_code=$?
 set -e
