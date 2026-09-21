@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
+      id-token: write
       contents: write
       issues: write
       pull-requests: write
