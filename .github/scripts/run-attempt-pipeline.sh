@@ -102,7 +102,7 @@ agent_branch="$(read_back_output agent_branch)"
 [[ -n "$agent_branch" ]] && out agent_branch "$agent_branch"
 [[ -n "$termination_reason" ]] && out termination_reason "$termination_reason"
 
-# Publication runs only after a successful agent. Local opencode publications
+# Publication runs only after a successful agent. Local OpenCode publications
 # are self-owned by the `opencode github run` flow, so only copilot (local) and
 # remote-target opencode reach these scripts.
 publish_outcome="not-applicable"
@@ -132,78 +132,9 @@ if [[ "$agent_rc" -eq 0 ]]; then
   fi
 fi
 
-dispatch_local_validation() {
-  [[ "$mode" == "local" ]] || return 0
-  local branch="$agent_branch"
-  if [[ -z "$branch" && "$provider" == "github-copilot" ]]; then
-    branch="oc/copilot-$target_number-$GITHUB_RUN_ID-$attempt"
-  fi
-  if [[ -z "$branch" ]]; then
-    local prefix="opencode/issue$target_number-"
-    branch="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json headRefName,baseRefName --limit 50 |
-      jq -r --arg base "$base_ref" --arg prefix "$prefix" '
-        [.[] | select(.baseRefName == $base and (.headRefName | startswith($prefix)))]
-        | sort_by(.headRefName)
-        | .[-1].headRefName // empty')"
-  fi
-  if [[ -z "$branch" ]]; then
-    echo "::warning title=Validation dispatch skipped::No published local PR branch was discovered for attempt $attempt."
-    return 0
-  fi
-  echo "Dispatching enterprise-agent-validation for local PR branch: $branch"
-  if ! gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/enterprise-agent-validation.yml/dispatches" -f "ref=$branch"; then
-    echo "::warning title=Validation dispatch failed::The local PR was published, but the protected validate workflow could not be dispatched."
-    return 0
-  fi
-}
-
-if [[ "$agent_rc" -eq 0 && "$mode" == "local" ]]; then
-  dispatch_local_validation
-fi
-
-expected_head=""
-if [[ "$mode" == "remote" ]]; then
-  expected_head="$(read_back_output head_sha)"
-fi
-
-verify_run() {
-  EXPECTED_TARGET_HEAD="$expected_head" \
-    PROVIDER="$provider" \
-    ATTEMPT="$attempt" \
-    TARGET_NUMBER="$target_number" \
-    BASE_REF="$base_ref" \
-    INITIAL_SHA="$initial_sha" \
-    bash .github/scripts/verify-agent-result.sh
-}
-
-if [[ "$agent_rc" -eq 0 ]]; then
-  verify_rc=1
-  set +e
-  verify_run
-  verify_rc=$?
-  set -e
-  if [[ "$verify_rc" -ne 0 ]]; then
-    ci_run_id="$(read_back_output ci_run_id)"
-    recoveries_done="${OC_VERIFY_RECOVERIES:-0}"
-    max_recoveries="${OC_VERIFY_MAX_RECOVERIES:-1}"
-    if [[ "$ci_run_id" =~ ^[0-9]+$ ]] && [[ "$recoveries_done" =~ ^[0-9]+$ ]] && (( recoveries_done < max_recoveries )); then
-      echo "::warning title=CI recovery attempt for attempt ${attempt}::Verification failed with ci_run_id=$ci_run_id; requesting one exact-head CI recovery rerun."
-      CI_RUN_ID="$ci_run_id" bash .github/scripts/recover-verify-failure.sh || true
-      printf 'OC_VERIFY_RECOVERIES=%d\n' "$((recoveries_done + 1))" >> "${GITHUB_ENV:-/dev/null}"
-      set +e
-      verify_run
-      verify_rc=$?
-      set -e
-    fi
-  fi
-  verified="$(read_back_output verified)"
-  [[ -n "$verified" ]] || verified="false"
-  out verified "$verified"
-  verified_sha="$(read_back_output verified_sha)"
-  [[ -n "$verified_sha" ]] && out verified_sha "$verified_sha"
-  ci_surfaces="$(read_back_output ci_surfaces)"
-  [[ -n "$ci_surfaces" ]] && out ci_surfaces "$ci_surfaces"
-fi
+out verified "false"
+out verification_outcome "not-run-advisory"
+out ci_surfaces "unobserved"
 
 classify_outcome="not-applicable"
 classify_rc=""
