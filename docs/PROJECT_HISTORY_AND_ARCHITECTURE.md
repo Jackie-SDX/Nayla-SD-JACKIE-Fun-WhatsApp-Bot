@@ -164,3 +164,11 @@ package-name invariant. Pending/skipped mandatory checks are NOT treated as succ
   `docs/CONCURRENCY_AND_ISOLATION_AUDIT.md` §8.
 - PR #75 was closed without merging (empty diff against `main`); its test
   branch was removed.
+## 10. Live execution and recovery simplification
+
+- The OpenCode runner streams sanitized stdout/stderr directly into the GitHub Actions job log while the process is running. A periodic heartbeat records that the agent is still alive; sanitized per-attempt logs and progress logs are retained when the workflow can archive them. `[FACT]`
+- The runner bounds each attempt by the remaining workflow budget, so fallback attempts cannot knowingly outlive the six-hour Actions job. `[FACT]`
+- Verification remains an independent final acceptance gate, including exact-SHA CI/status inspection, but a verifier false-negative no longer automatically starts another full-budget agent attempt. Route recovery occurs after an actual agent/provider execution failure. `[FACT]`
+- The verifier's pull-request creation-window check explicitly requests `createdAt` before reading it. `[FACT]`
+- The route selector retains the legacy retry flag for compatibility but makes recovery forward-only; it never wraps back to the same route. `[FACT]`
+- Existing same-issue serialization, remote-target isolation/publication guards, optional Composio capability, exact-SHA verification, and the configured provider ladder remain unchanged. `[FACT]`

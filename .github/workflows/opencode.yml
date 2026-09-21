@@ -50,6 +50,9 @@ jobs:
       COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
       COPILOT_MAX_AI_CREDITS: "60"
       OC_CI_VERIFY_SETTLE_SECONDS: "30"
+      OC_JOB_BUDGET_SECONDS: "21600"
+      OC_JOB_SAFETY_MARGIN_SECONDS: "120"
+      OC_PROGRESS_INTERVAL_SECONDS: "30"
 
     steps:
       - name: Checkout repository
@@ -67,6 +70,7 @@ jobs:
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
           echo "OC_INITIAL_SHA=$sha" >> "$GITHUB_ENV"
           echo "OC_RUN_START_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          echo "OC_JOB_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
           echo "Initial checkout SHA: $sha"
 
       - name: Register /oc run marker
@@ -260,16 +264,10 @@ jobs:
       - name: Select route 2
         id: route_2
         if: |
-          (
-            steps.agent_1.outcome == 'failure' &&
-            steps.agent_1.outputs.termination_reason != 'timeout' &&
-            steps.classify_1.outcome == 'success'
-          ) || (
-            steps.agent_1.outcome == 'success' &&
-            steps.verify_1.outcome == 'failure' &&
-            steps.verify_1.outputs.retryable == 'true' &&
-            steps.verify_1.outputs.timed_out != 'true'
-          )
+          steps.agent_1.outcome == 'failure' &&
+          steps.agent_1.outputs.termination_reason != 'timeout' &&
+          steps.agent_1.outputs.termination_reason != 'signal' &&
+          steps.classify_1.outcome == 'success'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -356,16 +354,10 @@ jobs:
       - name: Select route 3
         id: route_3
         if: |
-          (
-            steps.agent_2.outcome == 'failure' &&
-            steps.agent_2.outputs.termination_reason != 'timeout' &&
-            steps.classify_2.outcome == 'success'
-          ) || (
-            steps.agent_2.outcome == 'success' &&
-            steps.verify_2.outcome == 'failure' &&
-            steps.verify_2.outputs.retryable == 'true' &&
-            steps.verify_2.outputs.timed_out != 'true'
-          )
+          steps.agent_2.outcome == 'failure' &&
+          steps.agent_2.outputs.termination_reason != 'timeout' &&
+          steps.agent_2.outputs.termination_reason != 'signal' &&
+          steps.classify_2.outcome == 'success'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
