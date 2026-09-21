@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 FILTER="$ROOT_DIR/.github/scripts/filter-opencode-live-output.awk"
-TMP="$(mktemp -d "\${RUNNER_TEMP:-/tmp}/oc-live-filter-XXXXXX")"
+TMP="$(mktemp -d "${RUNNER_TEMP:-/tmp}/oc-live-filter-XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
 cat > "$TMP/input" <<'EOF'
