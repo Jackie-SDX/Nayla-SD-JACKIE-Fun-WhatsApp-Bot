@@ -359,5 +359,183 @@ else
   ok "remote verifier rejects any failed check-run even when another check is green"
 fi
 
+# ---------------------------------------------------------------------------
+# 5. durable failure-comment idempotency (cross-attempt, cross-process)
+# ---------------------------------------------------------------------------
+# Verifies the local verifier only ever posts ONE CI-failure comment per run id
+# and ONE remote-verify-failed comment per (repo, branch), even when the same
+# failure is verified once per attempt (attempt 1, 2, 3) in separate processes.
+# Uses a stateful fake gh that records posted issue comments and replays them on
+# the next invocation, exactly like the real GitHub API would.
+DEDUPE_BIN="$TESTS/dedupe-bin"
+mkdir -p "$DEDUPE_BIN"
+DEDUPE_STATE="$TESTS/dedupe-state"
+mkdir -p "$DEDUPE_STATE"
+
+cat > "$DEDUPE_BIN/gh" <<'FAKE_DEDUPE'
+#!/usr/bin/env bash
+# Stateful fake gh: records `issue comment` bodies into a state file and serves
+# them back through the comments list API, mirroring real GitHub behavior so the
+# verifier can dedupe across processes/attempts.
+set -euo pipefail
+STATE="${DEDUPE_STATE_DIR:?}"
+CMDS="$STATE/commands.log"
+printf 'cmd: %s\n' "$*" >> "$CMDS"
+POSTED="$STATE/posted-comments.json"
+[[ -f "$POSTED" ]] || printf '[]\n' > "$POSTED"
+
+# gh issue comment <issue> --body <body>
+if [[ "$1" == "issue" && "$2" == "comment" ]]; then
+  issue="$3"
+  body="$5"
+  python3 - "$POSTED" "$issue" "$body" <<'PY'
+import json, sys
+posted, issue, body = sys.argv[1], sys.argv[2], sys.argv[3]
+data = json.load(open(posted))
+data.append({"issue": issue, "body": body})
+json.dump(data, open(posted, "w"))
+PY
+  exit 0
+fi
+
+# gh api /repos/<repo>/issues/<n>/comments  (with --paginate --slurp, gh returns
+# an array of pages; without it, a flat array. Mirror that so the verifier's
+# `add // []` flattening and its direct array access both behave like GitHub.)
+case "$*" in
+  *"/issues/"*"/comments"*)
+    if [[ "$*" == *"--paginate --slurp"* ]]; then
+      printf '[%s]\n' "$(cat "$POSTED")"
+    else
+      cat "$POSTED"
+    fi
+    ;;
+  *"/branches?per_page=100"*)
+    printf '%s\n' '[[{"name":"main"},{"name":"opencode/issue7-fake-ts"}]]'
+    ;;
+  *"pr list"*)
+    printf '%s\n' '[{"number":9,"url":"https://github.com/fixture/controller/pull/9","state":"OPEN","mergedAt":null,"headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main","createdAt":"2026-09-21T00:00:00Z","updatedAt":"2026-09-21T00:00:00Z"}]'
+    ;;
+  *"pr view"*)
+    printf '%s\n' '{"number":9,"url":"https://github.com/fixture/controller/pull/9","state":"OPEN","mergedAt":null,"headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main","createdAt":"2026-09-21T00:00:00Z"}'
+    ;;
+  *"/commits/"*"/check-runs"*)
+    printf '%s\n' '{"check_runs":[{"name":"validate","status":"completed","conclusion":"failure"}]}'
+    ;;
+  *"/commits/"*"/status"*)
+    printf '%s\n' '{"state":"success","total_count":0,"statuses":[]}'
+    ;;
+  *"/actions/runs?head_sha="*)
+    printf '%s\n' '{"workflow_runs":[{"name":"enterprise-agent-validation","id":424242}]}'
+    ;;
+  *"run view"*)
+    printf '%s\n' 'fake failure log line'
+    ;;
+  *) exit 0 ;;
+esac
+FAKE_DEDUPE
+chmod +x "$DEDUPE_BIN/gh"
+
+run_dedupe_verify() { # run_dedupe_verify <attempt> ; verifier exits 1 when it reports a failure, which is expected here
+  local attempt="$1" rc
+  new_output_files "dedupe-$attempt"
+  rc=0
+  ( cd "$VERIFY_WS" && PATH="$DEDUPE_BIN:$PATH" \
+    DEDUPE_STATE_DIR="$DEDUPE_STATE" \
+    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="$attempt" TARGET_NUMBER=7 BASE_REF="main" \
+    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+    OC_TARGET_MODE=local OC_RUN_START_ISO="1970-01-01T00:00:00Z" \
+    OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
+    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1 ) || rc=$?
+  echo "dedupe local-mode attempt $attempt verifier rc: $rc (expect 1)"
+}
+
+run_dedupe_verify 1
+run_dedupe_verify 2
+run_dedupe_verify 3
+posted_count="$(jq 'length' "$DEDUPE_STATE/posted-comments.json" 2>/dev/null || echo 0)"
+
+if [[ "$posted_count" == "1" ]]; then
+  ok "durable CI-failure comment dedupe: exactly one comment across 3 separate verifier attempts"
+else
+  bad "durable CI-failure comment dedupe: expected 1 posted comment across 3 attempts, got $posted_count"
+fi
+if jq -e '.[0].body | contains("<!-- oc-ci-failure-run-id:424242 attempt:1 -->")' "$DEDUPE_STATE/posted-comments.json" >/dev/null 2>&1; then
+  ok "durable CI-failure comment carries the run-id marker for exact-SHA auditing"
+else
+  bad "durable CI-failure comment carries the run-id marker for exact-SHA auditing"
+fi
+
+# Same idempotency for the remote-target failure notice: repeated attempts in
+# separate processes post exactly one remote-verify-failed comment.
+rm -f "$DEDUPE_STATE/posted-comments.json"
+printf '[]\n' > "$DEDUPE_STATE/posted-comments.json"
+run_remote_dedupe() {
+  local attempt="$1" rc
+  new_output_files "dedupe-remote-$attempt"
+  rc=0
+  ( cd "$VERIFY_WS" && PATH="$DEDUPE_BIN:$PATH" \
+    DEDUPE_STATE_DIR="$DEDUPE_STATE" \
+    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="$attempt" TARGET_NUMBER=7 BASE_REF="main" \
+    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+    OC_TARGET_MODE=remote OC_TARGET_REPO="fixture/target" OC_TARGET_BASE="main" \
+    OC_TARGET_BRANCH="oc/test2" OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA" \
+    OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
+    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1 ) || rc=$?
+  echo "dedupe remote-mode attempt $attempt verifier rc: $rc (expect 1)"
+}
+run_remote_dedupe 1
+run_remote_dedupe 2
+remote_posted="$(jq -r '[.[].body] | join("\n")' "$DEDUPE_STATE/posted-comments.json" 2>/dev/null | grep -c 'oc-remote-verify-failed' || true)"
+if [[ "$remote_posted" == "1" ]]; then
+  ok "durable remote-verify-failed comment dedupe: one notice across repeated attempts"
+else
+  bad "durable remote-verify-failed comment dedupe: expected 1, got ${remote_posted:-0}"
+fi
+
+printf '\nremote-target contract tests: %s passed, %s failed\n' "$PASS" "$FAIL"
+[[ "$FAIL" -eq 0 ]]
+
+# ---------------------------------------------------------------------------
+# 6. post-oc-continuation.sh candidate filtering and jq interpolation
+# ---------------------------------------------------------------------------
+# Regression: the open-PR summary line must interpolate the jq values (escaped
+# parens), not render literal "(.number)" text, so checkpoints actually name the
+# agent-created PRs on /oc continue.
+CONT_BIN="$TESTS/cont-bin"
+mkdir -p "$CONT_BIN"
+cat > "$CONT_BIN/gh" <<'FAKE_CONT'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "issue" && "$2" == "comment" ]]; then
+  printf 'ISSUE_COMMENT: %s\n' "$5"
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '%s\n' '[{"number":9,"url":"https://github.com/fixture/controller/pull/9","headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main"},{"number":99,"url":"https://github.com/fixture/controller/pull/99","headRefName":"oc/copilot-7-abc","headRefOid":"cccccccccccccccccccccccccccccccccccccccc","baseRefName":"main"},{"number":10,"url":"https://github.com/fixture/controller/pull/10","headRefName":"opencode/issue8-other","headRefOid":"dddddddddddddddddddddddddddddddddddddddd","baseRefName":"main"}]'
+  exit 0
+fi
+exit 0
+FAKE_CONT
+chmod +x "$CONT_BIN/gh"
+
+new_output_files continuation
+continuation_out="$( ( cd "$VERIFY_WS" && PATH="$CONT_BIN:$PATH" \
+  GITHUB_REPOSITORY=fixture/controller TARGET_NUMBER=7 BASE_REF=main GITHUB_RUN_ID=424242 \
+  GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_ENV="$GITHUB_ENV" \
+  bash "$SCRIPTS/post-oc-continuation.sh" 2>/dev/null ) )"
+if grep -Fq 'ISSUE_COMMENT: ' <<<"$continuation_out" \
+   && grep -Fq 'https://github.com/fixture/controller/pull/9' <<<"$continuation_out" \
+   && grep -Fq 'https://github.com/fixture/controller/pull/99' <<<"$continuation_out" \
+   && ! grep -Fq '#(.number) (.url) (.headRefName) (.headRefOid)' <<<"$continuation_out"; then
+  ok "continuation checkpoint reliably interpolates open-PR candidates (no literal jq operators)"
+else
+  bad "continuation checkpoint interpolates open-PR candidates (no literal jq operators)"
+fi
+if grep -Fq 'https://github.com/fixture/controller/pull/10' <<<"$continuation_out"; then
+  bad "continuation checkpoint excludes PRs outside the target prefix"
+else
+  ok "continuation checkpoint excludes PRs outside the target prefix"
+fi
+
 printf '\nremote-target contract tests: %s passed, %s failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

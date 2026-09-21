@@ -18,7 +18,7 @@ open_prs="$(
     jq -r --arg a "opencode/issue$target-" --arg c "oc/copilot-$target-" --arg base "$base_ref" '
       .[] | select(.baseRefName == $base) |
       select((.headRefName | startswith($a)) or (.headRefName | startswith($c))) |
-      "#(.number) (.url) (.headRefName) (.headRefOid)"
+      "#\(.number) \(.url) \(.headRefName) \(.headRefOid)"
     ' 2>/dev/null || true
 )"
 

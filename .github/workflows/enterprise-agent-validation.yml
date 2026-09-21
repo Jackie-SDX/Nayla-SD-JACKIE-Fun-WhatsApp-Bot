@@ -79,6 +79,7 @@ jobs:
           ctl = Path(".github/workflows/oc-control.yml").read_text()
           ins = Path(".opencode/instructions.md").read_text()
           verifier = Path(".github/scripts/verify-agent-result.sh").read_text()
+          continuation = Path(".github/scripts/post-oc-continuation.sh").read_text()
           assert "cancel-in-progress: false" in opencode and "cancel-in-progress: false" in ctl
           assert "commits/$head_sha/check-runs" in verifier
           assert "commits/$head_sha/status" in verifier
@@ -89,7 +90,16 @@ jobs:
           assert "ingest-evidence.sh" in ins and "test-ingest-evidence.sh" in ins
           assert "docs/CONCURRENCY_AND_ISOLATION_AUDIT.md" in ins
           assert "three-strike" not in ins
-          print("ci-surface / evidence-ingestion / concurrency contract: OK")
+          # Durable failure-notice idempotency: candidates carry interpolated
+          # PR values (not literal jq operators) and prior-attempt comments are
+          # checked against the issue before any new failure comment is posted.
+          assert "#(.number) (.url) (.headRefName) (.headRefOid)" not in continuation
+          assert "#\\(.number) \\(.url) \\(.headRefName) \\(.headRefOid)" in continuation
+          assert "issue_comments_marker" in verifier
+          assert "oc-ci-failure-run-id" in verifier
+          assert "repo:$rrepo branch:$rbranch" in verifier
+          assert "] | length > 0" in verifier
+          print("ci-surface / evidence-ingestion / concurrency / dedupe contract: OK")
           PY
           bash .github/scripts/test-ingest-evidence.sh
 
