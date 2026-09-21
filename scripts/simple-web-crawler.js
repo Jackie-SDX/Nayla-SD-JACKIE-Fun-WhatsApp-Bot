@@ -43,12 +43,18 @@ function findTagBoundary(html, from) {
 function attributeValue(tag, name) {
   // Extract a named attribute value from a single tag string. The negative
   // lookbehind stops this from matching attribute names like `data-href` or
-  // `ng-href` while still allowing `xlink:href`.
-  const pattern = new RegExp(`(?<![\\w-])${name}\\s*=\\s*(["'])(.*?)\\1`, "i");
+  // `ng-href` while still allowing `xlink:href`. We also accept unquoted
+  // attribute values, which are common in real-world HTML and friendlier to
+  // minimal parsers.
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(
+    String.raw`(?<![\w-])${escapedName}\s*=\s*(?:("|')([\s\S]*?)\1|([^\s"'>=]+))`,
+    "i",
+  );
   const match = tag.match(pattern);
-  return match ? match[2] : null;
+  if (!match) return null;
+  return (match[2] ?? match[3] ?? "").trim();
 }
-
 function scanTags(html, name) {
   const tags = [];
   const startPattern = new RegExp(`<${name}(?=[\\s>])`, "gi");
@@ -83,10 +89,13 @@ function scanAnchors(html) {
 
 function unquoteEntities(value) {
   return value
+    .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#([0-9]+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
     .replace(/&#0?39;/g, "'")
     .replace(/&apos;/g, "'");
 }
