@@ -48,7 +48,9 @@ oc_publish_auth_header() {
 #   oc_git_authed fetch origin main
 oc_git_authed() {
   oc_publish_auth_header || return 1
-  git -c credential.helper= -c "http.extraheader=$OC_PUBLISH_AUTH_HEADER" "$@"
+  local git_server="$GITHUB_SERVER_URL"
+  [[ -n "$git_server" ]] || git_server="https://github.com"
+  GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c core.askPass= -c "http.$git_server/.extraheader=$OC_PUBLISH_AUTH_HEADER" "$@"
 }
 
 # Pushes using the explicit auth mechanism; never relies on credential helpers.
