@@ -98,6 +98,8 @@ else
 fi
 out agent_outcome "$agent_outcome"
 [[ -n "$safe_log_path" ]] && out safe_log_path "$safe_log_path"
+agent_branch="$(read_back_output agent_branch)"
+[[ -n "$agent_branch" ]] && out agent_branch "$agent_branch"
 [[ -n "$termination_reason" ]] && out termination_reason "$termination_reason"
 
 # Publication runs only after a successful agent. Local opencode publications
@@ -128,6 +130,35 @@ if [[ "$agent_rc" -eq 0 ]]; then
     out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
     exit 1
   fi
+fi
+
+dispatch_local_validation() {
+  [[ "$mode" == "local" ]] || return 0
+  local branch="$agent_branch"
+  if [[ -z "$branch" && "$provider" == "github-copilot" ]]; then
+    branch="oc/copilot-$target_number-$GITHUB_RUN_ID-$attempt"
+  fi
+  if [[ -z "$branch" ]]; then
+    local prefix="opencode/issue$target_number-"
+    branch="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json headRefName,baseRefName --limit 50 |
+      jq -r --arg base "$base_ref" --arg prefix "$prefix" '
+        [.[] | select(.baseRefName == $base and (.headRefName | startswith($prefix)))]
+        | sort_by(.headRefName)
+        | .[-1].headRefName // empty')"
+  fi
+  if [[ -z "$branch" ]]; then
+    echo "::warning title=Validation dispatch skipped::No published local PR branch was discovered for attempt $attempt."
+    return 0
+  fi
+  echo "Dispatching enterprise-agent-validation for local PR branch: $branch"
+  if ! gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/enterprise-agent-validation.yml/dispatches" -f "ref=$branch"; then
+    echo "::warning title=Validation dispatch failed::The local PR was published, but the protected validate workflow could not be dispatched."
+    return 0
+  fi
+}
+
+if [[ "$agent_rc" -eq 0 && "$mode" == "local" ]]; then
+  dispatch_local_validation
 fi
 
 expected_head=""
