@@ -27,6 +27,7 @@ reason=""
 pr_url=""
 ci_run_id=""
 verified_sha=""
+failure_commented=false
 emit() { printf '%s=%s
 ' "$1" "$2" >> "$GITHUB_OUTPUT"; }
 emit verified false
@@ -357,6 +358,10 @@ check_pr() {
 
 emit_ci_failure_comment() {
   local pr_display="$1" failure_reason="$2"
+  if [[ "$failure_commented" == "true" ]]; then
+    return 0
+  fi
+  failure_commented=true
   if [[ "$target" == "0" ]]; then
     return 0
   fi
