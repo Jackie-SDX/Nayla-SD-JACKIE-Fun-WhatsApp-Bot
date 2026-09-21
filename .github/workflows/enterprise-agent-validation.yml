@@ -302,6 +302,24 @@ jobs:
           assert "route=github-copilot/auto" in pick("2","y")
           assert "route=none" in pick("2",None)
           assert "route=none" in pick("3","y")
+          # Legacy retry and the explicit advance flag must both move forward;
+          # neither is allowed to restart the same model route.
+          d=tempfile.mkdtemp()
+          env=dict(os.environ)
+          env.pop("COPILOT_GITHUB_TOKEN",None)
+          env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+                     OPENCODE_ROUTE_INDEX="0", OPENCODE_RETRY_CURRENT_ROUTE="1",
+                     GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
+          subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
+          assert "route=opencode/mimo-v2.5-free" in Path(os.path.join(d,"out")).read_text()
+          d=tempfile.mkdtemp()
+          env=dict(os.environ)
+          env.pop("COPILOT_GITHUB_TOKEN",None)
+          env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+                     OPENCODE_ROUTE_INDEX="0", OPENCODE_ADVANCE_ROUTE="1",
+                     GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
+          subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
+          assert "route=opencode/mimo-v2.5-free" in Path(os.path.join(d,"out")).read_text()
           print("routing/cache contract: OK")
           print("model ladder (big-pickle->mimo->copilot->none): OK")
           PY

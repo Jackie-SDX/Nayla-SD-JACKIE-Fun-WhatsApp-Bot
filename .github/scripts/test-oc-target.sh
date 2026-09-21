@@ -429,7 +429,11 @@ case "$*" in
     printf '%s\n' '[[{"created_at":"2026-09-21T11:56:33Z","body":"## report\nhttps://github.com/fixture/controller/pull/8\n"}]]'
     ;;
   *"pr view"*)
-    printf '%s\n' '{"number":8,"url":"https://github.com/fixture/controller/pull/8","state":"OPEN","mergedAt":null,"headRefName":"oc/demo-loop-regression-test","headRefOid":"8888888888888888888888888888888888888888","baseRefName":"main","createdAt":"2026-09-21T11:53:40Z"}'
+    if [[ "$*" == *"createdAt"* ]]; then
+      printf '%s\n' '{"number":8,"url":"https://github.com/fixture/controller/pull/8","state":"OPEN","mergedAt":null,"headRefName":"oc/demo-loop-regression-test","headRefOid":"8888888888888888888888888888888888888888","baseRefName":"main","createdAt":"2026-09-21T11:53:40Z"}'
+    else
+      printf '%s\n' '{"number":8,"url":"https://github.com/fixture/controller/pull/8","state":"OPEN","mergedAt":null,"headRefName":"oc/demo-loop-regression-test","headRefOid":"8888888888888888888888888888888888888888","baseRefName":"main"}'
+    fi
     ;;
   *"/commits/"*"/check-runs"*)
     printf '%s\n' '{"check_runs":[{"name":"validate","status":"completed","conclusion":"success"},{"name":"self-test","status":"completed","conclusion":"success"}]}'
@@ -679,7 +683,11 @@ case "$*" in
     printf '%s\n' '[{"number":9,"url":"https://github.com/fixture/controller/pull/9","state":"OPEN","mergedAt":null,"headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main","createdAt":"2026-09-21T00:00:00Z","updatedAt":"2026-09-21T00:00:00Z"}]'
     ;;
   *"pr view"*)
-    printf '%s\n' '{"number":9,"url":"https://github.com/fixture/controller/pull/9","state":"OPEN","mergedAt":null,"headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main","createdAt":"2026-09-21T00:00:00Z"}'
+    if [[ "$*" == *"createdAt"* ]]; then
+      printf '%s\n' '{"number":9,"url":"https://github.com/fixture/controller/pull/9","state":"OPEN","mergedAt":null,"headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main","createdAt":"2026-09-21T00:00:00Z"}'
+    else
+      printf '%s\n' '{"number":9,"url":"https://github.com/fixture/controller/pull/9","state":"OPEN","mergedAt":null,"headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main"}'
+    fi
     ;;
   *"/commits/"*"/check-runs"*)
     printf '%s\n' '{"check_runs":[{"name":"validate","status":"completed","conclusion":"failure"}]}'
@@ -802,3 +810,11 @@ fi
 
 printf '\nremote-target contract tests: %s passed, %s failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
+
+# ---------------------------------------------------------------------------
+# 4f. PR view fixture must expose createdAt only when requested by production
+# ---------------------------------------------------------------------------
+# This guards the exact regression from run 35598028680: production consumed
+# .createdAt without requesting it from gh pr view. The fake now mirrors GitHub's
+# field-selection behavior, so the test would fail again if the request regresses.
+ok "verifier fixtures model gh pr view field selection (createdAt requested explicitly)"
