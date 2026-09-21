@@ -106,6 +106,41 @@ else
   ok "conflicting remote targets are refused"
 fi
 
+# Documentation placeholder tokens (OWNER/REPO, USER/REPO, username/repo) appear
+# verbatim in the mission prompt and must never be parsed as a real remote target
+# (that previously made a run fail trying to clone the literal OWNER/REPO repo).
+for form in "repo=OWNER/REPO" "target=OWNER/REPO" "https://github.com/OWNER/REPO" "github.com/OWNER/REPO" "repo=user/repo" "target=USERNAME/REPO"; do
+  key="placeholder-${form//[^A-Za-z0-9]/_}"
+  new_output_files "resolver-$key"
+  make_event "event-$key" "/oc fix the pipeline $form now and report"
+  GITHUB_EVENT_PATH="$TESTS/event-$key.json" \
+  GITHUB_REPOSITORY="o/x" TARGET_NUMBER=0 bash "$SCRIPTS/resolve-oc-target.sh"
+  grep -q '^mode=local$' "$GITHUB_OUTPUT" && \
+  grep -Eq '^target_repo=$' "$GITHUB_OUTPUT" && \
+  ! grep -q 'OC_TARGET_REPO=' "$GITHUB_ENV" \
+    && ok "placeholder '$form' is ignored as a target (mode stays local)" \
+    || bad "placeholder '$form' is ignored as a target (mode stays local)"
+done
+
+new_output_files resolver-placeholder-flag
+make_event event-placeholder-flag "/oc --repo OWNER/REPO --base main fix the pipeline"
+GITHUB_EVENT_PATH="$TESTS/event-placeholder-flag.json" \
+GITHUB_REPOSITORY="o/x" TARGET_NUMBER=0 bash "$SCRIPTS/resolve-oc-target.sh"
+grep -q '^mode=local$' "$GITHUB_OUTPUT" && \
+! grep -q 'OC_TARGET_REPO=' "$GITHUB_ENV" \
+  && ok "placeholder OWNER/REPO after --repo/--base is kept as task text, not a target" \
+  || bad "placeholder OWNER/REPO after --repo/--base is kept as task text, not a target"
+
+new_output_files resolver-placeholder-mission
+make_event event-placeholder-mission "/oc inspect the workflow, then also consider github.com/OWNER/REPO and target=OWNER/REPO and --repo OWNER/REPO and repo=OWNER/REPO"
+GITHUB_EVENT_PATH="$TESTS/event-placeholder-mission.json" \
+GITHUB_REPOSITORY="o/x" TARGET_NUMBER=0 bash "$SCRIPTS/resolve-oc-target.sh"
+grep -q '^mode=local$' "$GITHUB_OUTPUT" && \
+grep -Eq '^target_repo=$' "$GITHUB_OUTPUT" && \
+! grep -q 'OC_TARGET_REPO=' "$GITHUB_ENV" \
+  && ok "mission-style comment with all placeholder forms stays local (would otherwise clone OWNER/REPO)" \
+  || bad "mission-style comment with all placeholder forms stays local (would otherwise clone OWNER/REPO)"
+
 new_output_files resolver-continue
 cat > "$TESTS/comments-continue.json" <<'JSON'
 [

@@ -13,7 +13,7 @@ This repository hosts two things in one tree:
    "vibe" personality memory, web search, image generation, photo/sticker/voice
    handling, movie-mode, gamification, MongoDB-persisted memory. `[FACT]`
 2. **The control plane**: a GitHub-Actions-hosted autonomous OpenCode agent platform
-   (`opencode.yml`, `oc-control.yml`, `.github/scripts/*`) that turns `/oc` comments
+   (`opencode.yml`, `.github/scripts/*`) that turns `/oc` comments
    into evidence-backed autonomous engineering runs. `[FACT]`
 
 ## 2. Repository lineage
@@ -99,8 +99,10 @@ Closed issues (all closed, no PR attached) mark completed acceptance loops:
 
 ## 6. Control-plane architecture (current, as verified)
 
-- Trigger layer: `opencode.yml` (main agent) + `oc-control.yml` (`/oc retry failed jobs`)
-  + `enterprise-agent-validation.yml` (validate job on `audit/**`,`feature/**`,`fix/**`,
+- Trigger layer: `opencode.yml` (single issue_comment listener with an agent lane
+  `oc-agent-<issue>-<true|false>` and the merged `/oc retry failed jobs` control lane
+  `oc-retry-<issue>`; the former second listener `oc-control.yml` is removed) +
+  `enterprise-agent-validation.yml` (validate job on `audit/**`,`feature/**`,`fix/**`,
   `oc/**`) + `oc-enterprise-e2e-self-test.yml` (app tests) + `opencode-cache.yml`
   (versioned OpenCode cache, digest-verified).
 - Route selector: zero-cost OpenCode Zen ladder

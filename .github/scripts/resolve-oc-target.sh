@@ -61,10 +61,31 @@ valid_ref() {
   [[ "$1" =~ ^[A-Za-z0-9._/-]+$ ]]
 }
 
+# Documentation placeholder tokens such as "OWNER/REPO", "USER/REPO" or
+# "username/repo" appear verbatim in the enterprise mission prompt. They must
+# never be parsed as a real remote target (that previously made a run fail by
+# attempting to clone the literal OWNER/REPO repository). When either segment
+# is a placeholder keyword the value is ignored as a target and kept as task
+# text, with a visible warning.
+is_placeholder_repo() {
+  local value="$1"
+  local owner="${value%%/*}"
+  local repo_part="${value#*/}"
+  case "$owner" in OWNER|owner|USER|user|USERNAME|username) return 0 ;; esac
+  case "$repo_part" in REPO|repo) return 0 ;; esac
+  return 1
+}
+
+# Non-fatal placeholder rejection: returns 1 so callers can preserve the token
+# as task text. Genuinely invalid syntax or conflicting targets still exit 2.
 set_target() {
   local value="$1"
   local value_clean
   value_clean="$(clean_arg "$value")"
+  if is_placeholder_repo "$value_clean"; then
+    echo "::warning title=Ignored target placeholder::$value_clean looks like documentation placeholder text (OWNER/REPO); keeping it as task text, not a remote target."
+    return 1
+  fi
   if ! valid_repo "$value_clean"; then
     echo "::error title=Invalid remote target::Target must be OWNER/REPO (alphanumeric, dash, dot, underscore). Got: $value_clean" >&2
     exit 2
@@ -91,7 +112,9 @@ while (( i < ${#tokens[@]} )); do
   tok="${tokens[$i]}"
   case "$tok" in
     repo=*|repository=*|target=*)
-      set_target "${tok#*=}"
+      if ! set_target "${tok#*=}"; then
+        kept+=("$tok")
+      fi
       ;;
     base=*)
       set_base "${tok#*=}"
@@ -101,7 +124,10 @@ while (( i < ${#tokens[@]} )); do
         echo "::error title=Missing remote target::$tok requires an OWNER/REPO value." >&2
         exit 2
       fi
-      set_target "${tokens[$((i + 1))]}"
+      if ! set_target "${tokens[$((i + 1))]}"; then
+        kept+=("$tok")
+        kept+=("${tokens[$((i + 1))]}")
+      fi
       i=$((i + 1))
       ;;
     --base)
@@ -116,13 +142,17 @@ while (( i < ${#tokens[@]} )); do
       value_clean="${tok#https://github.com/}"
       value_clean="${value_clean#http://github.com/}"
       value_clean="${value_clean#github.com/}"
-      set_target "$value_clean"
+      if ! set_target "$value_clean"; then
+        kept+=("$tok")
+      fi
       ;;
     *)
       # A bare OWNER/REPO token is accepted exactly when it is the first
       # positional token; selectors and URLs are recognized in any position.
       if (( ${#kept[@]} == 0 )) && valid_repo "$(clean_arg "$tok")"; then
-        set_target "$(clean_arg "$tok")"
+        if ! set_target "$(clean_arg "$tok")"; then
+          kept+=("$tok")
+        fi
       else
         # Once an explicit target has been selected, every other token is
         # task text. Colons and ordinary URLs are valid senior-engineering
