@@ -85,9 +85,10 @@ jobs:
           # agent lane and the merged retry control lane live in opencode.yml;
           # the former oc-control.yml is gone so one comment triggers one run.
           assert opencode.count("\n      cancel-in-progress: false") == 2
-          assert "oc-agent-${{ github.event.issue.number" in opencode
+          brace = "$" + "{{"
+          assert ("oc-agent-" + brace + " github.event.issue.number") in opencode
           assert "startsWith(github.event.comment.body, '/oc')" in opencode
-          assert "oc-retry-${{ github.event.issue.number" in opencode
+          assert ("oc-retry-" + brace + " github.event.issue.number") in opencode
           assert "retry-failed-jobs:" in opencode
           assert 'OC_CI_VERIFY_SETTLE_SECONDS: "30"' in opencode
           # The former oc-control.yml must not be reintroduced as a second
