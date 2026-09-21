@@ -1,0 +1,99 @@
+name: OpenCode attempt pipeline
+description: >-
+  Runs one route attempt of the hybrid OpenCode agent ladder as a single
+  composite step: copilot branch prep, agent run, publication, verification
+  with bounded exact-head CI recovery, failure classification, and model-memory
+  recording. All per-attempt inputs come in as action inputs so the parent
+  workflow never needs to replicate step copy-paste.
+inputs:
+  attempt:
+    description: Ladder position (1, 2 or 3).
+    required: true
+  provider:
+    description: Selected provider (opencode, github-copilot or none).
+    required: true
+  model:
+    description: Selected OpenCode model id (or auto for Copilot).
+    required: false
+    default: ""
+  target_number:
+    description: Issue or PR number the /oc command addressed.
+    required: false
+    default: "0"
+  base_ref:
+    description: Base branch the agent should publish against.
+    required: false
+    default: ""
+  initial_sha:
+    description: Controller checkout SHA captured at run start.
+    required: false
+    default: ""
+  mode:
+    description: Execution mode (local or remote).
+    required: false
+    default: local
+  verify_wait_minutes:
+    description: Verification wait window in minutes.
+    required: false
+    default: "20"
+  verify_poll_seconds:
+    description: Verification poll interval in seconds.
+    required: false
+    default: "20"
+outputs:
+  agent_outcome:
+    description: success, failure or none.
+    value: ${{ steps.run.outputs.agent_outcome }}
+  termination_reason:
+    description: completed, timeout, signal or failed.
+    value: ${{ steps.run.outputs.termination_reason }}
+  verified:
+    description: true when an exact-SHA green PR was independently verified.
+    value: ${{ steps.run.outputs.verified }}
+  retryable:
+    description: true when the verifier deemed the failure retryable.
+    value: ${{ steps.run.outputs.retryable }}
+  timed_out:
+    description: true when verification timed out.
+    value: ${{ steps.run.outputs.timed_out }}
+  pr_url:
+    description: URL of the published/verified pull request.
+    value: ${{ steps.run.outputs.pr_url }}
+  verified_sha:
+    description: Exact SHA that was independently verified green.
+    value: ${{ steps.run.outputs.verified_sha }}
+  ci_surfaces:
+    description: Observable CI surfaces that produced the verdict.
+    value: ${{ steps.run.outputs.ci_surfaces }}
+  ci_run_id:
+    description: Identified validation workflow run id on CI failure.
+    value: ${{ steps.run.outputs.ci_run_id }}
+  publish_outcome:
+    description: published, failed or not-applicable.
+    value: ${{ steps.run.outputs.publish_outcome }}
+  classify_outcome:
+    description: success, failure or not-applicable.
+    value: ${{ steps.run.outputs.classify_outcome }}
+  safe_log_path:
+    description: Sanitized agent output log path.
+    value: ${{ steps.run.outputs.safe_log_path }}
+  attempt_elapsed_seconds:
+    description: Wall-clock duration of the attempt.
+    value: ${{ steps.run.outputs.attempt_elapsed_seconds }}
+runs:
+  using: composite
+  steps:
+    - name: Execute attempt pipeline
+      id: run
+      shell: bash
+      env:
+        ATTEMPT: ${{ inputs.attempt }}
+        PROVIDER: ${{ inputs.provider }}
+        OC_SELECTED_MODEL: ${{ inputs.model }}
+        OC_TARGET_MODE: ${{ inputs.mode }}
+        TARGET_NUMBER: ${{ inputs.target_number }}
+        BASE_REF: ${{ inputs.base_ref }}
+        INITIAL_SHA: ${{ inputs.initial_sha }}
+        OC_CI_VERIFY_WAIT_MINUTES: ${{ inputs.verify_wait_minutes }}
+        OC_CI_VERIFY_POLL_SECONDS: ${{ inputs.verify_poll_seconds }}
+      run: bash .github/scripts/run-attempt-pipeline.sh

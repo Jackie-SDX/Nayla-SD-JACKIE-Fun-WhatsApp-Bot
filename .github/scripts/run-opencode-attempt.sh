@@ -2,7 +2,19 @@
 set -u
 
 attempt="${1:-unknown}"
-agent_timeout_minutes="${OPENCODE_AGENT_TIMEOUT_MINUTES:-350}"
+
+# Single source of truth for control-plane defaults (single-budget-source audit item).
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$script_dir/oc-control-plane-config.sh" ]]; then
+  source "$script_dir/oc-control-plane-config.sh"
+else
+  OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES=350
+  OC_CONTROL_PLANE_JOB_BUDGET_SECONDS=21600
+  OC_CONTROL_PLANE_JOB_SAFETY_MARGIN_SECONDS=120
+  OC_CONTROL_PLANE_PROGRESS_INTERVAL_SECONDS=30
+fi
+
+agent_timeout_minutes="${OPENCODE_AGENT_TIMEOUT_MINUTES:-${OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES:-350}}"
 if [[ ! "$agent_timeout_minutes" =~ ^[0-9]+$ ]] || (( agent_timeout_minutes < 1 || agent_timeout_minutes >= 360 )); then
   echo "::error title=Invalid OpenCode timeout::OPENCODE_AGENT_TIMEOUT_MINUTES must be an integer from 1 to 359."
   exit 2
@@ -30,6 +42,15 @@ cleanup() {
   rm -f "$fifo"
 }
 trap cleanup EXIT
+
+# When Composio MCP is not active (or was explicitly disabled), do not hand the
+# agent a broken `npx mcp-remote` stdio bridge. OpenCode loads inline runtime
+# config from OPENCODE_CONFIG_CONTENT AFTER the project config, so this value
+# deep-merges and disables the composio server entirely (hygiene audit item 8c).
+if [[ -z "${COMPOSIO_MCP_URL:-}" || "${COMPOSIO_MCP_ENABLED:-true}" != "true" ]]; then
+  export OPENCODE_CONFIG_CONTENT='{"mcp":{"composio":{"enabled":false}}}'
+  echo "[OC][attempt=${attempt}] Composio MCP is inactive; disabled the composio server via runtime OpenCode config."
+fi
 
 agent_cmd=()
 if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
@@ -74,8 +95,8 @@ sanitize_line() {
 
 configured_timeout_seconds=$((agent_timeout_minutes * 60))
 effective_timeout_seconds="$configured_timeout_seconds"
-job_budget_seconds="${OC_JOB_BUDGET_SECONDS:-}"
-job_safety_seconds="${OC_JOB_SAFETY_MARGIN_SECONDS:-120}"
+job_budget_seconds="${OC_JOB_BUDGET_SECONDS:-${OC_CONTROL_PLANE_JOB_BUDGET_SECONDS:-}}"
+job_safety_seconds="${OC_JOB_SAFETY_MARGIN_SECONDS:-${OC_CONTROL_PLANE_JOB_SAFETY_MARGIN_SECONDS:-120}}"
 job_start_epoch="${OC_JOB_START_EPOCH:-}"
 
 if [[ -n "$job_budget_seconds" && "$job_budget_seconds" =~ ^[0-9]+$ &&
@@ -100,7 +121,7 @@ if (( effective_timeout_seconds < 1 )); then
   exit 124
 fi
 
-heartbeat_interval="${OC_PROGRESS_INTERVAL_SECONDS:-30}"
+heartbeat_interval="${OC_PROGRESS_INTERVAL_SECONDS:-${OC_CONTROL_PLANE_PROGRESS_INTERVAL_SECONDS:-30}}"
 if [[ ! "$heartbeat_interval" =~ ^[0-9]+$ ]] || (( heartbeat_interval < 1 )); then
   heartbeat_interval=30
 fi
@@ -129,7 +150,7 @@ heartbeat_pid=$!
 while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   safe_line="$(sanitize_line "$raw_line")"
   printf "%s\n" "$safe_line"
-done < "$fifo" | awk -f .github/scripts/filter-opencode-live-output.awk | tee -a "$safe_log"
+done < "$fifo" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
 wait "$agent_pid"
 exit_code=$?
 set -e

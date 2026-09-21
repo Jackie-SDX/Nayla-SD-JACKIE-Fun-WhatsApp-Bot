@@ -130,8 +130,10 @@ evaluate_ci_state() {
 issue_comments_marker() {
   local want="$1"
   [[ "$target" =~ ^[0-9]+$ && "$target" != "0" ]] || return 1
-  if gh api "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null |
-    jq -e --arg w "$want" '[.[] | select((.body // "") | contains($w))] | length > 0' >/dev/null 2>&1; then
+  # Paginated and slurped so issue-comment dedup stays correct even when a
+  # long-lived issue thread spans multiple comment pages (audit item 4).
+  if gh api --paginate --slurp "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null |
+    jq -e --arg w "$want" 'add // [] | [.[] | select((.body // "") | contains($w))] | length > 0' >/dev/null 2>&1; then
     return 0
   fi
   return 1

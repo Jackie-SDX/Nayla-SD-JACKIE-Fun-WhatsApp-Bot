@@ -17,6 +17,10 @@ if [[ -f scripts/test-simple-web-crawler.js ]]; then
   node scripts/test-simple-web-crawler.js
 fi
 
+if [[ -f scripts/test-agent-invariants.js ]]; then
+  node scripts/test-agent-invariants.js
+fi
+
 if jq -e '.scripts.test? and (.scripts.test != null)' package.json >/dev/null; then
   npm test
 fi

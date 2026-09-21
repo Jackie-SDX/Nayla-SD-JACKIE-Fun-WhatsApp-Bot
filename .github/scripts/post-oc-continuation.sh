@@ -6,6 +6,14 @@ base_ref="$BASE_REF"
 repo="$GITHUB_REPOSITORY"
 [[ "$target" =~ ^[0-9]+$ && "$target" != "0" ]] || exit 0
 
+# Single source of truth for control-plane defaults (see oc-control-plane-config.sh).
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$script_dir/oc-control-plane-config.sh" ]]; then
+  source "$script_dir/oc-control-plane-config.sh"
+else
+  OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES=350
+fi
+
 branch="$(git branch --show-current 2>/dev/null || printf '%s' 'unknown')"
 sha="$(git rev-parse HEAD 2>/dev/null || printf '%s' 'unknown')"
 status="$(git status --short 2>/dev/null || true)"
@@ -36,7 +44,7 @@ $target_marker
 <!-- oc-checkpoint-run-id:$run_id issue:$target -->
 ## /oc execution checkpoint
 
-The autonomous agent reached its controlled long-running execution budget (${OPENCODE_AGENT_TIMEOUT_MINUTES:-350}) without claiming task completion.
+The autonomous agent reached its controlled long-running execution budget (${OPENCODE_AGENT_TIMEOUT_MINUTES:-${OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES:-350}}) without claiming task completion.
 
 This is a recoverable timeout, not a success claim.
 

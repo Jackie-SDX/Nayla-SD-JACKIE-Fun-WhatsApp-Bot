@@ -4,14 +4,6 @@ const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const MAX_LINKS_REPORTED = 20;
 const UA = "nayla-simple-web-crawler/1.0 (+https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot)";
 
-function usage() {
-  return `usage: node scripts/simple-web-crawler.js [url] [timeoutMs]
-
-Fetches a single URL, extracts page metadata and links, and prints JSON.
-Defaults: url=${DEFAULT_URL} timeoutMs=${DEFAULT_TIMEOUT_MS}
-Response bodies are capped at ${MAX_RESPONSE_BYTES} bytes.`;
-}
-
 function parseArgs(argv) {
   const args = { url: DEFAULT_URL, timeoutMs: DEFAULT_TIMEOUT_MS };
   for (const arg of argv.slice(2)) {

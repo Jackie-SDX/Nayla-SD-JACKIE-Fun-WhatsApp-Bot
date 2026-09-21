@@ -818,3 +818,37 @@ printf '\nremote-target contract tests: %s passed, %s failed\n' "$PASS" "$FAIL"
 # .createdAt without requesting it from gh pr view. The fake now mirrors GitHub's
 # field-selection behavior, so the test would fail again if the request regresses.
 ok "verifier fixtures model gh pr view field selection (createdAt requested explicitly)"
+
+# ---------------------------------------------------------------------------
+# 7. route selector: lost-openCode-model memory skips only fresh records
+# ---------------------------------------------------------------------------
+# Audit item 6: a model remembered after a model-specific failure must be
+# skipped at ladder position 0 so the next lane is used, but only while the
+# record is fresh. An expired record must be ignored so the default model can
+# recover and the advertised zero-cost lane is never permanently poisoned.
+now="$(date +%s)"
+
+new_output_files badmodel-fresh
+GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_ENV="$GITHUB_ENV" \
+OPENCODE_API_KEY="x" OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free" \
+OPENCODE_ROUTE_INDEX="0" OPENCODE_BAD_MODELS="big-pickle=$now" \
+OPENCODE_BAD_MODELS_MAX_AGE_HOURS="24" \
+bash "$SCRIPTS/select-opencode-route.sh" >/dev/null 2>&1
+grep -q '^route=opencode/mimo-v2.5-free$' "$GITHUB_OUTPUT" \
+  && grep -Eq '^OPENCODE_ROUTE_INDEX=1$' "$GITHUB_ENV" \
+  && ok "fresh bad-model record (audit item 6) is skipped and the ladder advances to the next lane" \
+  || bad "fresh bad-model record (audit item 6) is skipped and the ladder advances to the next lane"
+
+new_output_files badmodel-expired
+GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_ENV="$GITHUB_ENV" \
+OPENCODE_API_KEY="x" OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free" \
+OPENCODE_ROUTE_INDEX="0" OPENCODE_BAD_MODELS="big-pickle=$(( now - 25*3600 ))" \
+OPENCODE_BAD_MODELS_MAX_AGE_HOURS="24" \
+bash "$SCRIPTS/select-opencode-route.sh" >/dev/null 2>&1
+grep -q '^route=opencode/big-pickle$' "$GITHUB_OUTPUT" \
+  && grep -Eq '^OPENCODE_ROUTE_INDEX=0$' "$GITHUB_ENV" \
+  && ok "expired bad-model record is ignored so the default zero-cost model stays first" \
+  || bad "expired bad-model record is ignored so the default zero-cost model stays first"
+
+printf '\nroute-selector bad-model regressions: %s passed, %s failed\n' "$PASS" "$FAIL"
+[[ "$FAIL" -eq 0 ]]

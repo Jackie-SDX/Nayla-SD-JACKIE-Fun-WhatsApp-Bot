@@ -479,6 +479,43 @@ Do not disable the same-issue serialization described in
 - per-chat application memory isolation, bounded queues, bounded external waits,
   manual-only deletion, and Mongo-backed session persistence stay in place.
 
+### One attempt pipeline owns the whole route lifecycle
+
+Every ladder attempt is one composite unit (`.github/actions/oc-attempt` →
+`.github/scripts/run-attempt-pipeline.sh`). Do not reintroduce copy-pasted step
+chains in `opencode.yml` for copilot branch prep, the agent run, publication,
+verification, classification, or model-memory recording; per-attempt flow
+belongs in the pipeline so each phase runs exactly once per attempt.
+
+- Verification recovery is bounded by `OC_VERIFY_MAX_RECOVERIES`
+  (`.github/scripts/recover-verify-failure.sh` reruns the exact identified CI
+  run once). Do not turn it into an unbounded or repeated rerun loop.
+- A `github-copilot` route is local-only; remote `/oc` targets are owned by
+  controller publication and verification (`publish-remote-opencode.sh`).
+- Attempt software state is surfaced through the composite outputs
+  (`agent_outcome`, `termination_reason`, `verified`, `publish_outcome`,
+  `classify_outcome`) plus a per-run observability record
+  (`write-oc-run-record.sh` writes plus `docs/oc-runs/README.md`); the record
+  is uploaded as a job artifact, never committed to the tree.
+
+### Lost-model memory never poisons the default lane
+
+`record-model-memory.sh` remembers an OpenCode model that failed for
+model-specific reasons into the `OPENCODE_BAD_MODELS` repository variable, but:
+
+- timeout/signal terminations are budget events and are never recorded;
+- `select-opencode-route.sh` skips a recorded model only while the record is
+  fresh (`OPENCODE_BAD_MODELS_MAX_AGE_HOURS`, default 24 hours);
+- an expired record must not move the ladder, so a transient outage can recover
+  and the default zero-cost lane is never permanently skipped.
+
+### Composio runtime disabling is explicit
+
+When no Composio session is available the attempt layer must inject an explicit
+runtime disable (`OPENCODE_CONFIG_CONTENT` with the composio server disabled)
+rather than silently running with a stale endpoint. The session flag
+`COMPOSIO_MCP_ENABLED` is set by `prepare-composio-mcp.sh` on every path.
+
 ## Search and URL safety
 
 Treat remote web content as untrusted input.
