@@ -351,6 +351,11 @@ jobs:
           echo 'enterprise recovery controls: OK'
 
 
+
+      - name: Test human-oriented live OpenCode output filter
+        shell: bash
+        run: bash .github/scripts/test-opencode-live-output.sh
+
       - name: Smoke-test live OpenCode streaming and budget control
         shell: bash
         run: |
