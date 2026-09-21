@@ -501,7 +501,11 @@ jobs:
           out="$tmp/out"
           live="$tmp/live"
           set +e
-          PATH="$tmp:$PATH" RUNNER_TEMP="$tmp" GITHUB_OUTPUT="$out" OPENCODE_AGENT_TIMEOUT_MINUTES=1 OPENCODE_API_KEY="test-secret-123456" OC_PROGRESS_INTERVAL_SECONDS=1 bash .github/scripts/run-opencode-attempt.sh 99 >"$live" 2>&1
+          # The runner documents OC_INITIAL_SHA as its worktree base in this
+          # lane; supply it like the agent lane does (the real lane derives it
+          # from the triggering SHA). Without it the runner aborts at line 79
+          # under set -u instead of reaching its own git-rev-parse fallback.
+          PATH="$tmp:$PATH" RUNNER_TEMP="$tmp" GITHUB_OUTPUT="$out" OC_INITIAL_SHA="$(git rev-parse HEAD)" OPENCODE_AGENT_TIMEOUT_MINUTES=1 OPENCODE_API_KEY="test-secret-123456" OC_PROGRESS_INTERVAL_SECONDS=1 bash .github/scripts/run-opencode-attempt.sh 99 >"$live" 2>&1
           rc=$?
           set -e
           # Self-diagnosing assertion tail: every check is recorded so a CI
