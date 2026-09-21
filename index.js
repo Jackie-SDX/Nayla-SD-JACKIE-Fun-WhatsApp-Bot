@@ -334,7 +334,7 @@ setInterval(() => {
     // log line: this fires under real memory pressure, which is exactly
     // the wrong moment to add new async work (e.g. a Mongo flush) into an
     // otherwise synchronous, fast emergency-relief path.
-    console.warn(`🚨 [MEM MONITOR] Cache sizes at flush — chatRateLimits:${chatRateLimits.size} apiRequestQueue:${apiRequestQueue.length} lastAIReplyTime:${lastAIReplyTime.size} recentJoins:${recentJoins.size} recentRudenessFlag:${recentRudenessFlag.size} lastReactionTime:${lastReactionTime.size} lastAmbientTime:${lastAmbientTime.size} lastEasterEggTime:${lastEasterEggTime.size} providerCooldowns:${providerCooldowns.size} duplicateSpamTracker:${duplicateSpamTracker.size} chatEmojiHistory:${chatEmojiHistory.size} shutUpStrikes:${shutUpStrikes.size} temporaryIgnore:${temporaryIgnore.size} todActiveSessions:${todActiveSessions.size} quoteSessionActive:${quoteSessionActive.size} recentQuotesCache:${recentQuotesCache.size} heavyCommandCooldowns:${heavyCommandCooldowns.size} adminCache:${adminCache.size}`);
+    console.warn(`🚨 [MEM MONITOR] Cache sizes at flush — chatRateLimits:${chatRateLimits.size} apiRequestQueue:${apiRequestQueue.length} lastAIReplyTime:${lastAIReplyTime.size} recentJoins:${recentJoins.size} recentRudenessFlag:${recentRudenessFlag.size} lastReactionTime:${lastReactionTime.size} lastAmbientTime:${lastAmbientTime.size} lastEasterEggTime:${lastEasterEggTime.size} providerCooldowns:${providerCooldowns.size} duplicateSpamTracker:${duplicateSpamTracker.size} chatEmojiHistory:${chatEmojiHistory.size} shutUpStrikes:${shutUpStrikes.size} temporaryIgnore:${temporaryIgnore.size} todActiveSessions:${todActiveSessions.size} quoteSessionActive:${quoteSessionActive.size} storySessionActive:${storySessionActive.size} recentQuotesCache:${recentQuotesCache.size} heavyCommandCooldowns:${heavyCommandCooldowns.size} adminCache:${adminCache.size}`);
     chatRateLimits.clear();
     apiRequestQueue.length = 0;
     lastAIReplyTime.clear();
@@ -350,6 +350,7 @@ setInterval(() => {
     temporaryIgnore.clear();
     todActiveSessions.clear();
     quoteSessionActive.clear();
+    storySessionActive.clear();
     recentQuotesCache.clear();
     heavyCommandCooldowns.clear();
     adminCache.clear();
@@ -1496,7 +1497,7 @@ async function handleCommand(sock, jid, senderJid, sender, text, msg) {
 
     if (cmd === ".help" || cmd === ".menu") {
       await sock.sendMessage(jid, {
-        text: `🤖 *${BOT_CONFIG.name} Commands*\n\n👤 *About You*\n*.rank* — your XP & title\n*.myfacts* — what I remember about you here\n*.forgetme* — clear that\n*.remind* <10m/2h/1d> <msg> — set a reminder\n*.reminders* / *.unremind* <n> — view or cancel them\n\n🎨 *Chat & Media*\n*.search* <query> — I'll look it up\n*.imagine* <prompt> — generate an image (or just ask naturally, like "draw me a cat")\n*.sticker* — (reply to an image/sticker) make it a proper sticker\n*.react* <emoji> — (reply to a message) react to it\n*.tts* <question> — (optionally reply to anything) I'll explain it as a voice note\n*.eli5* <topic> — explain it like I'm 5\n\n🎉 *Fun*\n*.truth* / *.dare* — fresh every time (or just say "let's play")\n*.quote* — something to sit with\n*.poll* Q? | Opt 1 | Opt 2 — quick single-choice poll\n*.calc* <expr> — safe calculator\n*.ship* Name1 & Name2 — compatibility %\n*.ping* / *.flip* / *.roll* [sides] / *.8ball*\n\nℹ️ *About Me*\n*.about* / *.owner* — what I am, who made me\n*.stats* / *.health* — status & diagnostics\n\n🛡️ *Admins Only*\n*.lock* / *.unlock* — admin-only messaging\n*.mood* <name> — ${AVAILABLE_MOODS.join(", ")}\n*.mute* / *.unmute* — I go fully silent here\n*.ignore* / *.undoignore* — stop/resume responding to someone (reply or @mention)\n*.ignorelist* — see who's ignored\n*.kick* / *.promote* / *.demote* — (reply or @mention)\n*.tagall* — mention everyone\n*.del* — (reply) delete a message\n*.settings* — this group's current setup\n*.activity* — 7-day heatmap\n*.moviemode* on/off — daily recap\n*.newsletter* on/off/time <0-23> — Daily Newspaper toggle & schedule\n\n💬 Tag me or say my name to chat — I understand photos, stickers & voice notes directly too, and I'll auto-decline calls (I'm text-only!). I'm a vibe bot, not a moderator — no deleting or warnings from me, ever.`
+        text: `🤖 *${BOT_CONFIG.name} Commands*\n\n👤 *About You*\n*.rank* — your XP & title\n*.myfacts* — what I remember about you here\n*.forgetme* — clear that\n*.remind* <10m/2h/1d> <msg> — set a reminder\n*.reminders* / *.unremind* <n> — view or cancel them\n\n🎨 *Chat & Media*\n*.search* <query> — I'll look it up\n*.imagine* <prompt> — generate an image (or just ask naturally, like "draw me a cat")\n*.sticker* — (reply to an image/sticker) make it a proper sticker\n*.react* <emoji> — (reply to a message) react to it\n*.tts* <question> — (optionally reply to anything) I'll explain it as a voice note\n*.eli5* <topic> — explain it like I'm 5\n\n🎉 *Fun*\n*.truth* / *.dare* — fresh every time (or just say "let's play")\n*.quote* — something to sit with\n*.story* — a short, simple story (or just say "tell me a story")\n*.poll* Q? | Opt 1 | Opt 2 — quick single-choice poll\n*.calc* <expr> — safe calculator\n*.ship* Name1 & Name2 — compatibility %\n*.ping* / *.flip* / *.roll* [sides] / *.8ball*\n\nℹ️ *About Me*\n*.about* / *.owner* — what I am, who made me\n*.stats* / *.health* — status & diagnostics\n\n🛡️ *Admins Only*\n*.lock* / *.unlock* — admin-only messaging\n*.mood* <name> — ${AVAILABLE_MOODS.join(", ")}\n*.mute* / *.unmute* — I go fully silent here\n*.ignore* / *.undoignore* — stop/resume responding to someone (reply or @mention)\n*.ignorelist* — see who's ignored\n*.kick* / *.promote* / *.demote* — (reply or @mention)\n*.tagall* — mention everyone\n*.del* — (reply) delete a message\n*.settings* — this group's current setup\n*.activity* — 7-day heatmap\n*.moviemode* on/off — daily recap\n*.newsletter* on/off/time <0-23> — Daily Newspaper toggle & schedule\n\n💬 Tag me or say my name to chat — I understand photos, stickers & voice notes directly too, and I'll auto-decline calls (I'm text-only!). I'm a vibe bot, not a moderator — no deleting or warnings from me, ever.`
       }, { quoted: msg });
       return true;
     }
@@ -1855,6 +1856,15 @@ async function handleCommand(sock, jid, senderJid, sender, text, msg) {
       startQuoteSession(jid);
       const { quote, author } = await generateQuote(vibeForCmd, jid);
       await sock.sendMessage(jid, { text: author ? `"${quote}"\n— ${author}` : `"${quote}"` }, { quoted: msg });
+      return true;
+    }
+
+    if (cmd === ".story" || cmd.startsWith(".story ")) {
+      const vibeForCmd = jid.endsWith("@g.us") ? getGroupConfig(jid).mood : BOT_CONFIG.vibe;
+      startStorySession(jid);
+      const topic = text.replace(/^\.story\s*/i, "").trim();
+      const story = await generateSimpleStory(vibeForCmd, topic);
+      await sock.sendMessage(jid, { text: story }, { quoted: msg });
       return true;
     }
 
@@ -3116,6 +3126,31 @@ function isQuoteFollowup(text, jid) {
   return /^(give me )?(new|another|one more|more|next)(\s+(one|quotes?))?(\s+please)?[.!?]*$|^again[.!?]*$/i.test(stripped);
 }
 
+// Natural story request — "tell me a story", "storytime", "gimme a story".
+// Same verb+noun generalization trick as the quote matcher (specific fixed
+// phrases miss real-world phrasing), plus a dedicated catch-all for the
+// classic opener so "tell me a simple story" lands here and not in generic
+// chat. The same 5-minute follow-up window covers "another one"/"new one"
+// racing into generateAIChatReply's generic task-execution path, which has
+// no anti-repetition history or session awareness.
+const STORY_REQUEST_VERB_REGEX = /\b(tell|gimme|give|got|share|read|hear|want|need|spin|write|make)\b/i;
+const STORY_REQUEST_NOUN_REGEX = /\bstory\b|\bstories\b/i;
+const STORY_SPECIAL_PHRASES_REGEX = /\bstorytime\b|\bonce upon a time\b|\ba simple story\b|\btell (me|us|everyone|them) (a|another|one) story\b/i;
+function isStoryRequest(text) {
+  if (STORY_SPECIAL_PHRASES_REGEX.test(text)) return true;
+  return STORY_REQUEST_VERB_REGEX.test(text) && STORY_REQUEST_NOUN_REGEX.test(text);
+}
+const storySessionActive = new Map(); // chatJid -> expiresAt
+const STORY_SESSION_WINDOW_MS = 5 * 60 * 1000;
+function startStorySession(jid) {
+  storySessionActive.set(jid, Date.now() + STORY_SESSION_WINDOW_MS);
+}
+function isStoryFollowup(text, jid) {
+  if ((storySessionActive.get(jid) || 0) <= Date.now()) return false;
+  const stripped = text.replace(/\bnayla\b/gi, "").trim();
+  return /^(give me )?(new|another|one more|more|next)(\s+(one|story|stories))?(\s+please)?[.!?]*$|^again[.!?]*$/i.test(stripped);
+}
+
 // Natural "reply as a voice note" request — same trigger the .tts command
 // uses under the hood, just phrased conversationally instead of typed.
 const TTS_REQUEST_REGEX = /\b(voice note|\bvn\b|voice message|voice reply|say (it|that) (out loud|as a voice)|reply (with|in) (a )?voice|explain in (a )?vn)\b/i;
@@ -3786,6 +3821,45 @@ Respond ONLY with raw JSON, no other text:
   }
 }
 
+// --- .story: AI-generated simple story. Meant to be SHORT and simple —
+// this is the "PlayTime" brand's casual ask, not a task-execution novel.
+// The prompt pushes hard against two known LLM failure modes for stories:
+// (1) preamble-only replies ("Let me tell you a story...") with no actual
+// story, and (2) mode-collapse toward the same handful of overused tale
+// shapes (a sock, a seed, the moon). A randomly-rolled prompt key fights
+// the second, mirroring the theme-rotation fix that was needed for quotes.
+// Falls back to an original short line if the AI call fails rather than
+// dead-ending the command.
+const STORY_PROMPT_SEEDS = [
+  "a sock and a sandal who argue every morning until a rainy day makes them work together",
+  "a star that decides to spend one night on Earth and the small creature that shows it around",
+  "a frog whose only dream is to see what's on the other side of the pond",
+  "a teapot that remembers every conversation it has overheard on the kitchen shelf",
+  "a little lighthouse proud of the one boat it gets to guide"
+];
+async function generateSimpleStory(vibe, topic = "") {
+  const seed = topic && topic.length > 0 ? topic : STORY_PROMPT_SEEDS[Math.floor(Math.random() * STORY_PROMPT_SEEDS.length)];
+  const scenario = topic && topic.length > 0
+    ? `A person asked for a simple story ${/^about\b/i.test(topic) ? topic : `about ${topic}`}. Spin a very short, simple, original story around that.`
+    : `Spin a very short, simple, original story around this spark: ${seed}`;
+  try {
+    const raw = await callAIProvider([
+      { role: "system", content: `You are ${BOT_CONFIG.name}, "${vibe}" personality, in a WhatsApp chat. Someone asked for a SIMPLE, SHORT story — this is a casual PlayTime request, not an essay. Write one small, warm, complete story in 60-120 words: it must have a clear beginning, middle, and end, feel genuinely original (avoid the overused sock/seed/moon stock-tale shapes and any famous fairy-tale retelling), and suit a kid-friendly tone without being childish or preachy.
+
+${scenario}
+
+Rules:
+- The reply must CONTAIN the actual story itself, not an announcement about telling one. No "Let me tell you a story...", no "Here's mine:", no setup lines — go straight into the story.
+- No title, no "The End" label. Plain prose, 3-6 short sentences.
+- Plain text only.` },
+      { role: "user", content: "Tell me a simple story, please!" }
+    ], { json: false, temperature: 1.0, timeoutMs: 9000 });
+    return raw.trim();
+  } catch (e) {
+    return "Once, a sock and a sandal lived by the door and argued every morning about who was more important. On a stormy day, the sock got soaked and the sandal slid in the mud — until the sock wiped and the sandal gripped, and they got home together. From then on, they simply asked each other, \"Need a grip or a dry spot?\" and quietly agreed: best together.";
+  }
+}
+
 // --- .eli5 <topic>: standard AI call with a dedicated "explain simply"
 // prompt. searchContext is optional grounding (see the .eli5 command
 // handler, which auto-searches for current-events-flavored topics the same
@@ -3894,7 +3968,7 @@ ${BASELINE_TONE_RULES}
 Self-awareness (know this about yourself, bring it up naturally/funnily if asked — never say "no one hosts me" or that you're just floating around):
 - You were built and are hosted by your creator, ${BOT_CONFIG.creator} (${BOT_CONFIG.creatorPronouns}), on a cloud server (Render or similar) — you don't need deep infra details, just that a real person made and runs you. You yourself (${BOT_CONFIG.name.replace(/\s*😎\s*/, "").trim()}) are referred to with ${BOT_CONFIG.pronouns}.
 - You CAN now search the web (results get fed to you when relevant), understand photos and stickers people send you, listen to voice notes, and generate REAL images — either via *.imagine <prompt>* or just by being asked naturally in conversation ("draw me a cat", "generate an image of the moon"). NEVER say you can't create/display/generate images, and NEVER describe yourself as "just a language model" that can only produce text — image generation is a real, working feature of yours. If this specific message is asking you for an image, that request is handled separately before you ever see it, so if you're generating this reply at all, it means the request is something else — answer THAT, don't second-guess or refuse an image capability question.
-- You can ALSO: play Truth or Dare (*.truth*/*.dare*, or just "let's play truth or dare"), share a quote (*.quote*), explain things simply (*.eli5 <topic>*), turn a replied-to image into a sticker (*.sticker*), and reply with an actual spoken voice note instead of text (*.tts*, or just ask to "explain this in a voice note") — all real, working features. If asked to reply in a voice note or play a game, that's handled separately before you ever see this prompt, so don't second-guess those either.
+- You can ALSO: play Truth or Dare (*.truth*/*.dare*, or just "let's play truth or dare"), share a quote (*.quote*), tell a short simple story (*.story*, or just "tell me a story"), explain things simply (*.eli5 <topic>*), turn a replied-to image into a sticker (*.sticker*), and reply with an actual spoken voice note instead of text (*.tts*, or just ask to "explain this in a voice note") — all real, working features. If asked to reply in a voice note or play a game, that's handled separately before you ever see this prompt, so don't second-guess those either.
 - If someone replies to an existing message (an image, a link, a phone number, any combination) and asks you to explain/summarize/analyze it, you genuinely can — that's handled by a separate combined-analysis step before you ever see this prompt, so if you ARE generating this specific reply, it means something else is being asked.
 - You still CANNOT understand video or read PDF/document files. You don't actually visit/fetch links people paste (no live browsing) — but you CAN recognize a link was shared and reason about its domain/topic.
 - If someone asks for something absurd (like "give me a million dollars"), respond with humor, not a flat refusal.
@@ -5104,6 +5178,13 @@ async function startBot() {
           const reply = author ? `"${quote}"\n— ${author}` : `"${quote}"`;
           await sendLikeAHuman(sock, jid, msg, reply);
           if (isGroup) await bufferGroupMessage(jid, BOT_CONFIG.name, reply);
+          continue;
+        }
+        if (!incomingMediaType && (isStoryRequest(text) || isStoryFollowup(text, jid))) {
+          startStorySession(jid); // refresh the window so "another one" keeps working
+          const story = await generateSimpleStory(vibe);
+          await sendLikeAHuman(sock, jid, msg, story);
+          if (isGroup) await bufferGroupMessage(jid, BOT_CONFIG.name, story);
           continue;
         }
 

@@ -458,7 +458,7 @@ All commands are case-insensitive and prefixed with `.`. Nayla also responds wit
 ### Everyone
 
 <details open>
-<summary><strong>Show all 15 general commands</strong></summary>
+<summary><strong>Show all 16 general commands</strong></summary>
 
 <br/>
 
@@ -476,6 +476,7 @@ All commands are case-insensitive and prefixed with `.`. Nayla also responds wit
 | `.tts <question>` | Answers as a spoken voice note instead of text — can reply to an image/voice-note/link too | `.tts explain quantum tunneling` |
 | `.truth` / `.dare` | A fresh, AI-generated truth or dare — also triggers on "let's play truth or dare" | `.dare` |
 | `.quote` | An AI-generated quote — never a fabricated attribution | `.quote` |
+| `.story [topic]` | A short, simple, original story — also triggers on "tell me a story" | `.story a frog who wants to cross a pond` |
 | `.eli5 <topic>` | Explains a topic like you're 5 — topic is optional if you're replying to a message | `.eli5 black holes` |
 | `.ping` | Latency check | `.ping` |
 | `.flip` / `.roll [sides]` / `.8ball` | Zero-cost fun commands | `.roll 20` |
@@ -512,7 +513,7 @@ All commands are case-insensitive and prefixed with `.`. Nayla also responds wit
 
 **Available moods:** `cool` (default) · `gen_z` · `strict_mod` · `playful` · `sarcastic` · `flirty` · `motivational` · `empathic` · `inquisitive` · `chill` · `therapist` · `professor` · `lecturer` · `grandma`
 
-**Natural-language triggers (no command needed):** "draw me a cat" → `.imagine` · "let's play truth or dare" → Truth/Dare session · "gimme a quote" → `.quote` · "explain this in a voice note" → `.tts`-style reply · replying to media + "what's this?"/"explain"/"analyze" → combined analysis
+**Natural-language triggers (no command needed):** "draw me a cat" → `.imagine` · "let's play truth or dare" → Truth/Dare session · "gimme a quote" → `.quote` · "tell me a story" → `.story` · "explain this in a voice note" → `.tts`-style reply · replying to media + "what's this?"/"explain"/"analyze" → combined analysis
 
 ---
 
