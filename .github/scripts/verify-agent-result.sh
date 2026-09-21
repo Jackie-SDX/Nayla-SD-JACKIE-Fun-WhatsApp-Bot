@@ -118,6 +118,20 @@ evaluate_ci_state() {
   CI_EVAL="verified"
 }
 
+# issue_comments_marker <marker> returns 0 when an existing issue comment
+# already carries the given exact marker fragment; used to make failure
+# reporting idempotent across attempts/processes, not only within a single
+# verifier invocation.
+issue_comments_marker() {
+  local want="$1"
+  [[ "$target" =~ ^[0-9]+$ && "$target" != "0" ]] || return 1
+  if gh api "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null |
+    jq -e --arg w "$want" '[.[] | select((.body // "") | contains($w))] | length > 0' >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 # ---- Remote-target verification -------------------------------------------
 # Remote targets are verified against the target repository's PR/head state
 # and its own observable checks/statuses/workflows. No success is claimed when
@@ -238,7 +252,8 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   [[ -n "$pr_url" ]] && emit pr_url "$pr_url"
   emit verified_sha "$head_sha"
   echo "::warning title=Remote target not independently verified::$reason"
-  [[ -n "$target" && "$target" != "0" ]] && gh issue comment "$target" --body "<!-- oc-remote-verify-failed attempt:$attempt repo:$rrepo branch:$rbranch -->
+  if [[ -n "$target" && "$target" != "0" ]] && ! issue_comments_marker "repo:$rrepo branch:$rbranch"; then
+    gh issue comment "$target" --body "<!-- oc-remote-verify-failed attempt:$attempt repo:$rrepo branch:$rbranch -->
 ## /oc remote-target verification did not pass
 
 - Target: $rrepo
@@ -247,6 +262,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
 - Reason: $reason
 
 No success is claimed. Inspect the target repository state and continue." 2>/dev/null || true
+  fi
   exit 1
 fi
 
@@ -365,13 +381,19 @@ emit_ci_failure_comment() {
   if [[ "$target" == "0" ]]; then
     return 0
   fi
+  local ci_display="$ci_run_id"; [[ -n "$ci_display" ]] || ci_display="unknown"
+  # Durable idempotency: if a prior attempt already posted a CI-failure
+  # comment for this exact run id, do not duplicate it on a later attempt.
+  if [[ "$ci_display" != "unknown" ]] && issue_comments_marker "<!-- oc-ci-failure-run-id:$ci_display "; then
+    echo "CI-failure comment for run $ci_display already exists; skipping duplicate."
+    return 0
+  fi
   local safe_tail=""
   if [[ "$ci_run_id" =~ ^[0-9]+$ ]]; then
     safe_tail="$(gh run view "$ci_run_id" --log-failed 2>/dev/null | tail -n 120 || true)"
     safe_tail="$(printf '%s' "$safe_tail" | sed -E         -e 's/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g'         -e 's/(sk-or-v1-[[:alnum:]_-]{20,})/[REDACTED_EXTERNAL_API_KEY]/g'         -e 's/Bearer[[:space:]]+[^[:space:]]+/Bearer [REDACTED]/g')"
   fi
   [[ -n "$pr_display" ]] || pr_display="not identified"
-  local ci_display="$ci_run_id"; [[ -n "$ci_display" ]] || ci_display="unknown"
   local evidence="$safe_tail"; [[ -n "$evidence" ]] || evidence="No sanitized CI log was available."
   gh issue comment "$target" --body "$(cat <<EOF
 <!-- oc-ci-failure-run-id:$ci_display attempt:$attempt -->
