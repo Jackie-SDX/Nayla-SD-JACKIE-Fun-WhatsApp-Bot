@@ -28,6 +28,9 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          MODEL: opencode/big-pickle
+          AGENT: build
+          SHARE: false
         with:
           model: opencode/big-pickle
           use_github_token: false
