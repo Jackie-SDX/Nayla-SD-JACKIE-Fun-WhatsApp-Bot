@@ -102,9 +102,10 @@ jobs:
           assert ("oc-retry-" + brace + " github.event.issue.number") in opencode
           assert "retry-failed-jobs:" in opencode
           assert 'OC_CI_VERIFY_SETTLE_SECONDS: "30"' in opencode
-          # The agent lane no longer requests an OIDC token: it is a plain
-          # GitHub API consumer scoped by repository-issued secrets.
-          assert "id-token: write" not in opencode
+          # The agent lane requests an OIDC token: the OpenCode GitHub
+          # integration authenticates its branch/commit/push/PR lifecycle
+          # through the Actions OIDC token (restored and live-tested in e215ff1).
+          assert "id-token: write" in opencode
           # The former oc-control.yml must not be reintroduced as a second
           # comment listener; the invariant is file-existence based so a
           # documentation comment in opencode.yml may still name it.
@@ -298,7 +299,10 @@ jobs:
           assert "classify-provider-failure.sh" in pipeline
           assert "EXPECTED_TARGET_HEAD" in pipeline and "verify-agent-result.sh" in pipeline
           assert "Copilot lane is local-only" in pipeline
-          assert "OC_VERIFY_MAX_RECOVERIES" in pipeline and "OC_VERIFY_RECOVERIES" in pipeline
+          # Verification-recovery bounds live in recover-verify-failure.sh,
+          # which the single-attempt pipeline invokes; the constants were
+          # never string-matched by run-attempt-pipeline.sh itself.
+          assert "OC_VERIFY_MAX_RECOVERIES" in recover and "OC_VERIFY_RECOVERIES" in recover
           assert "record-model-memory.sh" in pipeline
           assert 'actions/runs' in recover and "/rerun" in recover
           assert "OPENCODE_BAD_MODELS" in recorder and "gh variable set" in recorder
@@ -497,14 +501,31 @@ jobs:
           out="$tmp/out"
           live="$tmp/live"
           set +e
-          PATH="$tmp:$PATH" RUNNER_TEMP="$tmp" GITHUB_OUTPUT="$out" OPENCODE_AGENT_TIMEOUT_MINUTES=1 OPENCODE_API_KEY="test-secret-123456" OC_PROGRESS_INTERVAL_SECONDS=1 bash .github/scripts/run-opencode-attempt.sh 99 >"$live" 2>&1
+          # The runner documents OC_INITIAL_SHA as its worktree base in this
+          # lane; supply it like the agent lane does (the real lane derives it
+          # from the triggering SHA). Without it the runner aborts at line 79
+          # under set -u instead of reaching its own git-rev-parse fallback.
+          PATH="$tmp:$PATH" RUNNER_TEMP="$tmp" GITHUB_OUTPUT="$out" OC_INITIAL_SHA="$(git rev-parse HEAD)" OPENCODE_AGENT_TIMEOUT_MINUTES=1 OPENCODE_API_KEY="test-secret-123456" OC_PROGRESS_INTERVAL_SECONDS=1 bash .github/scripts/run-opencode-attempt.sh 99 >"$live" 2>&1
           rc=$?
           set -e
-          [[ "$rc" == "7" ]]
-          grep -Fq "FIRST-LIVE-LINE" "$live"
-          grep -Fq "SECOND-LIVE-LINE" "$live"
-          grep -Fq "[REDACTED]" "$live"
-          ! grep -Fq "test-secret-123456" "$live"
-          grep -Fq "heartbeat state=running" "$live"
-          grep -Fq "exit_code=7" "$out"
-          grep -Fq "terminat¢ëiºÛkºwµç_ºYhºÚn¶Æ¯yÛhşiíıø¥zÏÜ¢jh²*?¢ëiºßÛjÈf‰Ç¬µÚ.¶ÜmFéÜjßæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆÛ¢ëiºÛkºwµç_ºYhºÚn¶Æ¯yÛhşiíıø¥zÏÜ¢jh²*?¢ëiºßÛjÈajx,µÚ.¶ÜmFéÜjßæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†§‚Ë]¢ëmÆÛh¾'°¶ŸºYhºÚn¶Šî±è^iÙõÓOæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†§‚Ë]¢ëmÆßíj)g×M?š{~)^³÷(šš,ŠèºÚn·öÚ²Z-v‹­·m¢øÂ–«¶ÊŠ
+          # Self-diagnosing assertion tail: every check is recorded so a CI
+          # failure names the exact failed assertion instead of a silent grep.
+          set +e
+          ok=0; fail=0
+          note() { if [ "$1" = ok ]; then ok=$((ok+1)); else fail=$((fail+1)); echo "  ASSERTION FAILED: $2"; fi; }
+          [[ "$rc" == "7" ]] && note ok rc || note fail "mock rc=$rc"
+          grep -Fq "FIRST-LIVE-LINE" "$live" && note ok first-live-line || note fail first-live-line
+          grep -Fq "SECOND-LIVE-LINE" "$live" && note ok second-live-line || note fail second-live-line
+          grep -Fq "[REDACTED]" "$live" && note ok redacted-live-line || note fail redacted-live-line
+          ! grep -Fq "test-secret-123456" "$live" && note ok secret-redacted || note fail secret-leaked-in-live
+          # The runner writes heartbeat telemetry to the progress log, whose
+          # path is exported through GITHUB_OUTPUT; the live stream carries
+          # the sanitized agent stdout only.
+          hb_log="$(sed -n 's/^progress_log_path=//p' "$out")"
+          grep -Fq "heartbeat state=running" "$hb_log" && note ok heartbeat-in-progress-log || note fail "heartbeat-in-progress-log ($hb_log)"
+          grep -Fq "exit_code=7" "$out" && note ok exit-code-7-in-out || note fail exit-code-7-in-out
+          grep -Fq "termination_reason=failed" "$out" && note ok termination-reason-failed-in-out || note fail termination-reason-failed-in-out
+          echo "smoke-test report: ok=${ok} failed=${fail} rc=${rc} live_bytes=$(wc -c < "$live")"
+          echo "--- progress log ($hb_log):"; cat "$hb_log"
+          echo "--- live stream:"; cat "$live"
+          [ "${fail}" = "0" ]

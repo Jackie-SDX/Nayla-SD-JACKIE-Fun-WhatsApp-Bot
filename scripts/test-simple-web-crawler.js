@@ -43,6 +43,20 @@ function serverForFixture() {
   <a href="#frag">fragment (ignored)</a>
 </body>
 </html>`);
+    } else if (req.url === "/malformed-anchor") {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(`<!doctype html>
+<html lang="en">
+<head>
+  <title>Malformed anchor</title>
+</head>
+<body>
+  <a href="/first">first</a>
+  <a href="/unclosed.jpg">never closed (an <a> cannot nest in HTML)
+  <a href="/second">second</a>
+  <a href="/third">third</a>
+</body>
+</html>`);
     } else {
       res.writeHead(404);
       res.end();
@@ -120,6 +134,20 @@ async function main() {
     assert.ok(!trickyHrefs.some((href) => href.endsWith("/decoy")), "data-href must not be treated as a link");
     assert.ok(!trickyHrefs.some((href) => href.startsWith("mailto:") || href.endsWith("#frag")), "mailto: and fragment links still ignored");
     console.log("PASS tricky-html: attribute with '>', apostrophe meta, data-href, '<' in title");
+
+    const malformed = await crawl(`${fixtureUrl}/malformed-anchor`, 3000);
+    const malformedHrefs = malformed.links.map((link) => link.href);
+    assert.deepStrictEqual(
+      malformedHrefs,
+      [`${fixtureUrl}/first`, `${fixtureUrl}/second`, `${fixtureUrl}/third`],
+      "a malformed/unclosed <a> must not swallow or drop the healthy links that follow it",
+    );
+    assert.strictEqual(
+      malformed.links.find((link) => link.href.endsWith("/second")).text,
+      "second",
+      "anchor text after a malformed <a> survives intact",
+    );
+    console.log("PASS malformed-anchor resilience: unclosed <a> no longer corrupts later links");
 
     await expectRejects(
       () => crawl(hangUrl, 300),
