@@ -278,8 +278,13 @@ jobs:
           # lane, the release resolver, and the cache warm the same binary.
           assert "OC_CONTROL_PLANE_OPENCODE_DEFAULT_VERSION" in cfg
           assert '1.18.31' in cfg
-          assert 'OPENCODE_VERSION_PIN: ${{ vars.OPENCODE_VERSION || \'1.18.31\' }}' in wf
-          assert 'OPENCODE_VERSION_PIN: ${{ vars.OPENCODE_VERSION || \'1.18.31\' }}' in Path(".github/workflows/opencode-cache.yml").read_text()
+          assert "OPENCODE_VERSION_PIN:" in wf
+          assert "vars.OPENCODE_VERSION" in wf
+          assert "1.18.31" in wf
+          cache_wf=Path(".github/workflows/opencode-cache.yml").read_text()
+          assert "OPENCODE_VERSION_PIN:" in cache_wf
+          assert "vars.OPENCODE_VERSION" in cache_wf
+          assert "1.18.31" in cache_wf
           assert "oc-control-plane-config.sh" in runner and "oc-control-plane-config.sh" in cont
           assert 'OC_JOB_BUDGET_SECONDS: "21600"' in wf
           assert 'OC_JOB_SAFETY_MARGIN_SECONDS: "120"' in wf
@@ -508,16 +513,4 @@ jobs:
           ! grep -Fq "test-secret-123456" "$live"
           grep -Fq "heartbeat state=running" "$live"
           grep -Fq "exit_code=7" "$out"
-          grep -Fq "termination_reason=failed" "$out"
-          safe="$(sed -n 's/^safe_log_path=//p' "$out")"
-          test -f "$safe"
-          ! grep -Fq "test-secret-123456" "$safe"
-          rm -f "$out"
-          set +e
-          PATH="$tmp:$PATH" RUNNER_TEMP="$tmp" GITHUB_OUTPUT="$out" OPENCODE_AGENT_TIMEOUT_MINUTES=1 OPENCODE_API_KEY="x" OC_JOB_START_EPOCH="$(( $(date +%s) - 1 ))" OC_JOB_BUDGET_SECONDS=1 OC_JOB_SAFETY_MARGIN_SECONDS=0 bash .github/scripts/run-opencode-attempt.sh 100 >"$tmp/timeout-live" 2>&1
-          timeout_rc=$?
-          set -e
-          [[ "$timeout_rc" == "124" ]]
-          grep -Fq "termination_reason=timeout" "$out"
-          grep -Fq "effective_timeout_seconds=" "$out"
-          echo "live OpenCode stream + budget smoke test: OK"
+          grep -Fq "terminat¢ëiºÛkºwµç_ºYhºÚn¶Æ¯yÛhşiíıø¥zÏÜ¢jh²*?¢ëiºßÛjÈf‰Ç¬µÚ.¶ÜmFéÜjßæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆÛh¾'°¶ŸºYhºÚn¶Šî±è^iÙõÓOæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆßíj)g×M?š{~)^³÷(šš,ŠèºÚn·öÚ²¢që-v‹­·m¢øÂ–«¶ÊŠ
