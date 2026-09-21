@@ -73,8 +73,19 @@ function scanAnchors(html) {
     const tagEnd = findTagBoundary(html, open);
     const afterTag = html.slice(tagEnd);
     const closeMatch = /<\/a[\s>]/i.exec(afterTag);
+    const textEnd = closeMatch ? tagEnd + closeMatch.index : html.length;
+    // An <a> cannot legally nest, so anchor text that contains another <a>
+    // opening means this anchor is malformed/unclosed: the closing tag found
+    // above actually belongs to a later anchor. Reusing it would drop that
+    // later link and mislabel its text. Skip this anchor and resume scanning
+    // at the nested opening instead of corrupting the rest of the page.
+    const textWindow = closeMatch ? afterTag.slice(0, closeMatch.index) : afterTag;
+    const nestedOpen = /<a(?=[\s>])/i.exec(textWindow);
+    if (nestedOpen) {
+      index = tagEnd + nestedOpen.index;
+      continue;
+    }
     if (!closeMatch) break;
-    const textEnd = tagEnd + closeMatch.index;
     anchors.push({ tag: html.slice(open, tagEnd), text: html.slice(tagEnd, textEnd) });
     index = textEnd + closeMatch[0].length;
   }
