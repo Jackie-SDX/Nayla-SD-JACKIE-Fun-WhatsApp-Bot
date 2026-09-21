@@ -110,7 +110,12 @@ evaluate_ci_state() {
     return
   fi
 
-  if [[ "$CI_TOTAL" -gt 0 && "$((CI_SUCCESS + CI_SKIPPED + CI_NEUTRAL))" -lt "$CI_TOTAL" ]]; then
+  # Skipped is never success. A snapshot is only green when at least one
+  # observable check-run demonstrably completed with success/neutral. A SHA
+  # whose only observable checks were all skipped stays pending (it can never
+  # be declared verified), while partial skips next to real green checks remain
+  # acceptable -- exactly like GitHub treats a path-filtered job as n/a.
+  if [[ "$CI_TOTAL" -gt 0 && "$((CI_SUCCESS + CI_NEUTRAL))" -lt 1 ]]; then
     CI_EVAL="pending"
     return
   fi
@@ -292,13 +297,24 @@ target_prefix="opencode/issue"$target"-"
 copilot_prefix="oc/copilot-"$target"-"$run_id"-"
 agent_branch="$(jq -r --arg a "$target_prefix" --arg c "$copilot_prefix" '[.[] | select((.name | startswith($a)) or (.name | startswith($c)))] | sort_by(.name) | last | (.name // "")' <<<"$branches")"
 
-candidate_prs="$(
+# Candidate PRs come from two independent windows:
+#   1. The controller naming window (opencode/issueN-* / oc/copilot-N-run-*) --
+#      the branch/PR the /oc run itself publishes through. Requires the prefix.
+#   2. The issue-comment window -- pull requests explicitly referenced in this
+#      issue's thread after the run started (e.g. an agent that publishes onto a
+#      task-specific branch such as the demo-loop PR). These carry their own
+#      authorship evidence (created within this run's window + base match) and
+#      every observable CI surface on the exact head must still be green, so
+#      the strict prefix is not required for them.
+branch_candidate_prs="$(
+  jq -r --arg a "$target_prefix" --arg c "$copilot_prefix" --arg branch "$agent_branch" --arg base "$base_ref" '
+    .[] | select(.baseRefName == $base) |
+    select((.headRefName | startswith($a)) or (.headRefName | startswith($c)) or (.headRefName == $branch)) |
+    .number
+  ' <<<"$prs"
+)"
+scan_candidate_prs="$(
   {
-    jq -r --arg a "$target_prefix" --arg c "$copilot_prefix" --arg branch "$agent_branch" --arg base "$base_ref" '
-      .[] | select(.baseRefName == $base) |
-      select((.headRefName | startswith($a)) or (.headRefName | startswith($c)) or (.headRefName == $branch)) |
-      .number
-    ' <<<"$prs"
     if (( target > 0 )); then
       gh api --paginate --slurp "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null |
         jq -r --arg since "${OC_RUN_START_ISO:-1970-01-01T00:00:00Z}" '
@@ -312,16 +328,25 @@ candidate_prs="$(
     fi
   } | awk 'NF' | sort -nu
 )"
+candidate_prs="$( { printf '%s\n' "$branch_candidate_prs"; printf '%s\n' "$scan_candidate_prs"; } | awk 'NF' | sort -nu )"
 
 # check_pr evaluates one candidate pull request. Exit codes:
 #   0 verified, 1 failed with reason/retryable set, 2 still pending.
+# The second argument allows candidates sourced from the issue-comment window
+# to skip the strict controller branch-prefix requirement; they are still bound
+# by the run-window creation timestamp, the base-branch match, and the exact-SHA
+# all-surface CI verdict.
 check_pr() {
-  local number="$1" pr head_sha checks validate pr_state status surfaces_ok
+  local number="$1" allow_unprefixed="${2:-0}" pr head_sha checks validate pr_state status surfaces_ok prefix_ok
   pr="$(gh pr view "$number" --json number,url,state,mergedAt,headRefName,headRefOid,baseRefName 2>/dev/null || true)"
   [[ -n "$pr" ]] || return 1
   [[ "$(jq -r '.baseRefName' <<<"$pr")" == "$base_ref" ]] || return 1
   head_ref="$(jq -r '.headRefName // ""' <<<"$pr")"
-  [[ "$head_ref" == "$target_prefix"* || "$head_ref" == "$copilot_prefix"* ]] || return 1
+  prefix_ok=0
+  [[ "$head_ref" == "$target_prefix"* || "$head_ref" == "$copilot_prefix"* ]] && prefix_ok=1
+  if [[ "$prefix_ok" == "0" && "$allow_unprefixed" != "1" ]]; then
+    return 1
+  fi
   created_at="$(jq -r '.createdAt // ""' <<<"$pr")"
   start_iso="${OC_RUN_START_ISO:-1970-01-01T00:00:00Z}"
   [[ "$created_at" == "$start_iso" || "$created_at" > "$start_iso" ]] || return 1
@@ -421,14 +446,26 @@ while :; do
   local_verified_candidate=""
   while IFS= read -r n; do
     [[ -n "$n" ]] || continue
-    if check_pr "$n"; then
+    if check_pr "$n" 0; then
       local_verified_candidate="$n"
       break
     else
       rc=$?
       [[ "$rc" -eq 2 ]] && pending=true
     fi
-  done <<<"$candidate_prs"
+  done <<<"$branch_candidate_prs"
+  if [[ -z "$local_verified_candidate" ]]; then
+    while IFS= read -r n; do
+      [[ -n "$n" ]] || continue
+      if check_pr "$n" 1; then
+        local_verified_candidate="$n"
+        break
+      else
+        rc=$?
+        [[ "$rc" -eq 2 ]] && pending=true
+      fi
+    done <<<"$scan_candidate_prs"
+  fi
   if [[ -n "$local_verified_candidate" ]]; then
     # Late-status settle: a green snapshot only becomes verified after the
     # same all-surface state is re-confirmed after a bounded settle window,
@@ -474,6 +511,13 @@ if [[ "$pending" == "true" && "$SECONDS" -ge "$deadline" ]]; then
   reason="required validate check or CI status remained pending beyond the verification wait window"
   timed_out=true
 fi
+if [[ -z "$reason" ]]; then
+  # The agent published (or attempted to publish) work but none of the
+  # candidate pull requests ended up verifiably green in this run's window.
+  # Surface a concrete reason so the run failure is never a silent red step.
+  reason="no candidate pull request was verifiably green on its exact head within this run window"
+  [[ "$retryable" == "true" ]] || retryable=true
+fi
 if [[ "$retryable" == "true" && "$provider" == "opencode" ]]; then
   echo "OPENCODE_RETRY_CURRENT_ROUTE=1" >> "$GITHUB_ENV"
 fi
@@ -483,5 +527,18 @@ emit timed_out "$timed_out"
 [[ -n "$pr_url" ]] && emit pr_url "$pr_url"
 [[ -n "$verified_sha" ]] && emit verified_sha "$verified_sha"
 emit ci_observation_end "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-[[ -n "$reason" ]] && echo "::warning title=Agent completion not independently verified::$reason"
+echo "::warning title=Agent completion not independently verified::$reason" >&2
+if [[ "$failure_commented" != "true" && "$target" != "0" ]] && ! issue_comments_marker "<!-- oc-unverified-run-id:$run_id "; then
+  gh issue comment "$target" --body "<!-- oc-unverified-run-id:$run_id attempt:$attempt -->
+## /oc agent completed but publication could not be independently verified
+
+Provider: $provider
+Attempt: $attempt
+Reason: $reason
+
+The agent reported completion, but no published pull request on this repository
+was verifiably green on its exact head inside this run's verification window.
+No success is claimed. Inspect the open pull requests and their exact-SHA CI
+state before continuing." 2>/dev/null || true
+fi
 exit 1

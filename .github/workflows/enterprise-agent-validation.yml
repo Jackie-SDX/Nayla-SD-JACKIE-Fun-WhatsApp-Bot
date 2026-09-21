@@ -117,6 +117,39 @@ jobs:
           PY
           bash .github/scripts/test-ingest-evidence.sh
 
+      - name: Validate publication-window verification contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A successful /oc attempt may publish onto a task-specific branch that
+          # is not inside the controller prefix namespace when the PR is
+          # explicitly referenced in this issue's thread after the run started.
+          # The strict prefix is then not required, but the run-window creation
+          # timestamp, the base-branch match, and the exact-SHA all-surface CI
+          # state still bind the candidate. Regression: demo-loop failure that
+          # rejected PR #76 (branch oc/demo-loop-regression-test).
+          grep -Fq 'branch_candidate_prs' .github/scripts/verify-agent-result.sh
+          grep -Fq 'scan_candidate_prs' .github/scripts/verify-agent-result.sh
+          grep -Fq 'pull/([0-9]+)' .github/scripts/verify-agent-result.sh
+          grep -Fq 'allow_unprefixed' .github/scripts/verify-agent-result.sh
+          # Skipped check-runs are never success: at least one observable check
+          # must demonstrably complete success/neutral or the SHA stays pending
+          # and can never be declared verified.
+          grep -Fq 'CI_SUCCESS + CI_NEUTRAL' .github/scripts/verify-agent-result.sh
+          # Failure is never silent-red: when no candidate PR was verifiably
+          # green an explicit reason is emitted and an idempotent issue notice
+          # is posted for the exact run id.
+          grep -Fq 'no candidate pull request was verifiably green' .github/scripts/verify-agent-result.sh
+          grep -Fq 'oc-unverified-run-id' .github/scripts/verify-agent-result.sh
+          # Deterministic offline regressions must cover the new contracts.
+          grep -Fq 'non-prefix branch (demo-loop regression)' .github/scripts/test-oc-target.sh
+          grep -Fq 'OC_CI_VERIFY_SETTLE_SECONDS  -- default fallback' .github/scripts/test-oc-target.sh
+          grep -Fq 'OC_CI_VERIFY_WAIT_MINUTES  -- default fallback' .github/scripts/test-oc-target.sh
+          grep -Fq 'OC_CI_VERIFY_POLL_SECONDS  -- default fallback' .github/scripts/test-oc-target.sh
+          grep -Fq 'all skipped is never verified' .github/scripts/test-oc-target.sh
+          grep -Fq 'late-arriving external-status failure' .github/scripts/test-oc-target.sh
+          echo 'publication-window verification contract: OK'
+
       - name: Validate hybrid architecture
         shell: bash
         run: |
