@@ -103,7 +103,6 @@ set +e
   --stream=on \
   --max-ai-credits "$max_credits" \
   --no-ask-user \
-  -s \
   --allow-tool "shell" \
   --allow-tool "write" \
   --deny-tool "shell(git commit)" \
@@ -117,7 +116,7 @@ set +e
   -p "$prompt" >"$copilot_fifo" 2>&1 &
 copilot_pid=$!
 
-cat "$copilot_fifo" | tee "$stream_log" | sanitize_stream_line | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
+cat "$copilot_fifo" | sanitize_stream_line | tee "$stream_log" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
 
 wait "$copilot_pid"
 exit_code=$?
