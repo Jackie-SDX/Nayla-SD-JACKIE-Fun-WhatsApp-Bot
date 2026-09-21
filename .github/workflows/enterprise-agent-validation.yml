@@ -102,9 +102,10 @@ jobs:
           assert ("oc-retry-" + brace + " github.event.issue.number") in opencode
           assert "retry-failed-jobs:" in opencode
           assert 'OC_CI_VERIFY_SETTLE_SECONDS: "30"' in opencode
-          # The agent lane no longer requests an OIDC token: it is a plain
-          # GitHub API consumer scoped by repository-issued secrets.
-          assert "id-token: write" not in opencode
+          # The agent lane requests an OIDC token: the OpenCode GitHub
+          # integration authenticates its branch/commit/push/PR lifecycle
+          # through the Actions OIDC token (restored and live-tested in e215ff1).
+          assert "id-token: write" in opencode
           # The former oc-control.yml must not be reintroduced as a second
           # comment listener; the invariant is file-existence based so a
           # documentation comment in opencode.yml may still name it.
@@ -298,7 +299,10 @@ jobs:
           assert "classify-provider-failure.sh" in pipeline
           assert "EXPECTED_TARGET_HEAD" in pipeline and "verify-agent-result.sh" in pipeline
           assert "Copilot lane is local-only" in pipeline
-          assert "OC_VERIFY_MAX_RECOVERIES" in pipeline and "OC_VERIFY_RECOVERIES" in pipeline
+          # Verification-recovery bounds live in recover-verify-failure.sh,
+          # which the single-attempt pipeline invokes; the constants were
+          # never string-matched by run-attempt-pipeline.sh itself.
+          assert "OC_VERIFY_MAX_RECOVERIES" in recover and "OC_VERIFY_RECOVERIES" in recover
           assert "record-model-memory.sh" in pipeline
           assert 'actions/runs' in recover and "/rerun" in recover
           assert "OPENCODE_BAD_MODELS" in recorder and "gh variable set" in recorder
@@ -505,6 +509,9 @@ jobs:
           grep -Fq "SECOND-LIVE-LINE" "$live"
           grep -Fq "[REDACTED]" "$live"
           ! grep -Fq "test-secret-123456" "$live"
-          grep -Fq "heartbeat state=running" "$live"
+          # The runner writes heartbeat telemetry to the progress log, whose
+          # path is exported through GITHUB_OUTPUT; the live stream carries
+          # the sanitized agent stdout only.
+          grep -Fq "heartbeat state=running" "$(sed -n 's/^progress_log_path=//p' "$out")"
           grep -Fq "exit_code=7" "$out"
           grep -Fq "termination_reason=failed" "$out"

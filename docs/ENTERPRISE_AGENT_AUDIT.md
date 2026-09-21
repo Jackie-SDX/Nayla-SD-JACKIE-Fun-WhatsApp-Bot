@@ -167,7 +167,7 @@ The staged configuration includes:
 - immutable GitHub Action references;
 - release-artifact SHA-256 verification;
 - `persist-credentials: false` on checkout;
-- no OIDC `id-token: write` permission;
+- `id-token: write` (OIDC) held by the agent lane for the OpenCode GitHub integration's branch/commit/push/PR authentication;
 - no interactive cache save.
 
 OpenCode is invoked as the pinned/current CLI path rather than using a floating `@latest` GitHub Action reference.
