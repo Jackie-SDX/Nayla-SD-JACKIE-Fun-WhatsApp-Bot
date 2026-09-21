@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -u
+# Verifier/recovery utilities are retained for audit and manual forensic use only.
+# verify-agent-result.sh and recover-verify-failure.sh MUST NEVER control route selection,
+# agent_outcome, publication success, or fallback decisions. EXPECTED_TARGET_HEAD remains
+# an audit concept only; the agent result is authoritative for this attempt.
 # One consolidated run unit for a single /oc route attempt (audit item 5).
 #
 # Executed as the only step of the oc-attempt composite action. It owns the
