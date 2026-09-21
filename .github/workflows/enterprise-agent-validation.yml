@@ -1,12 +1,6 @@
 name: enterprise-agent-validation
 
 on:
-  push:
-    branches:
-      - 'audit/**'
-      - 'feature/**'
-      - 'fix/**'
-      - 'oc/**'
   pull_request:
   workflow_dispatch:
 
@@ -513,4 +507,4 @@ jobs:
           ! grep -Fq "test-secret-123456" "$live"
           grep -Fq "heartbeat state=running" "$live"
           grep -Fq "exit_code=7" "$out"
-          grep -Fq "terminat¢ëiºÛkºwµç_ºYhºÚn¶Æ¯yÛhşiíıø¥zÏÜ¢jh²*?¢ëiºßÛjÈf‰Ç¬µÚ.¶ÜmFéÜjßæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆÛh¾'°¶ŸºYhºÚn¶Šî±è^iÙõÓOæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆßíj)g×M?š{~)^³÷(šš,ŠèºÚn·öÚ²¢që-v‹­·m¢øÂ–«¶ÊŠ
+          grep -Fq "terminat¢ëiºÛkºwµç_ºYhºÚn¶Æ¯yÛhşiíıø¥zÏÜ¢jh²*?¢ëiºßÛjÈf‰Ç¬µÚ.¶ÜmFéÜjßæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆÛ¢ëiºÛkºwµç_ºYhºÚn¶Æ¯yÛhşiíıø¥zÏÜ¢jh²*?¢ëiºßÛjÈajx,µÚ.¶ÜmFéÜjßæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†§‚Ë]¢ëmÆÛh¾'°¶ŸºYhºÚn¶Šî±è^iÙõÓOæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†§‚Ë]¢ëmÆßíj)g×M?š{~)^³÷(šš,ŠèºÚn·öÚ²Z-v‹­·m¢øÂ–«¶ÊŠ

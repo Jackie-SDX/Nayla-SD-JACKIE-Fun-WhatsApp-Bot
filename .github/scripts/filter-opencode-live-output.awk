@@ -88,7 +88,7 @@ BEGIN {
     next
   }
 
-  if (line ~ /\] INFO \(#[0-9]+\): (process|stream|llm runtime selected|evaluated)[[:space:]]*\{/) {
+  if (line ~ /\] INFO \(#[0-9]+\): (process|stream|llm runtime selected|evaluated|tracking|loop|snapshot|telemetry)[[:space:]]*\{/) {
     suppress_depth=brace_delta(line)
     if (suppress_depth > 0) suppress=1
     next

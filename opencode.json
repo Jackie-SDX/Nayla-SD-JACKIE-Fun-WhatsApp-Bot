@@ -1,7 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode/big-pickle",
-  "small_model": "opencode/big-pickle",
   "default_agent": "build",
   "instructions": [
     ".opencode/instructions.md"

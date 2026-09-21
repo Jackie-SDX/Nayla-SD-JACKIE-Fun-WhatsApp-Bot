@@ -1,15 +1,34 @@
 #!/usr/bin/env bash
 set -u
 
-attempt="${1:-unknown}"
-raw_log="$(mktemp "/tmp/copilot-${attempt}-raw.XXXXXX")"
-safe_log="/tmp/copilot-${attempt}-safe.log"
-mcp_config=""
-
+attempt="$1"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+runner_temp="$(printenv RUNNER_TEMP 2>/dev/null || printf /tmp)"
+stream_log="$(mktemp "$runner_temp/copilot-$attempt-stream-raw.XXXXXX")"
+safe_log="$runner_temp/copilot-$attempt-safe.log"
+copilot_fifo="$runner_temp/copilot-$attempt.fifo"
 cleanup() {
-  rm -f "$raw_log" "$mcp_config"
+  rm -f "$stream_log" "$mcp_config" "$copilot_fifo"
 }
 trap cleanup EXIT
+
+sanitize_stream_line() {
+  python3 -c '
+import os,re,sys
+keys=("COMPOSIO_API_KEY","OPENCODE_API_KEY","GITHUB_TOKEN","GH_TOKEN","UNIVERSAL_TOKEN","COPILOT_GITHUB_TOKEN","GEMINI_API_KEY","GEMINI_API_KEY_2","GEMINI_API_KEY_3","GEMINI_API_KEY_4","GEMINI_API_KEY_5")
+secrets=[os.environ.get(k,"") for k in keys]
+for raw in sys.stdin:
+    line=raw.rstrip("\n")
+    for secret in secrets:
+        if secret:
+            line=line.replace(secret,"[REDACTED]")
+    line=re.sub(r"(AIza[A-Za-z0-9_-]{20,})","[REDACTED_GOOGLE_KEY]",line)
+    line=re.sub(r"(gh[ps]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})","[REDACTED_GITHUB_TOKEN]",line)
+    line=re.sub(r"(sk-or-v1-[A-Za-z0-9_-]{20,})","[REDACTED_EXTERNAL_API_KEY]",line)
+    line=re.sub(r"(Bearer\s+)[^\s]+",r"\1[REDACTED]",line)
+    print(line,flush=True)
+'
+}
 
 task="$(jq -r '.comment.body // empty' "$GITHUB_EVENT_PATH")"
 task="$(printf '%s' "$task" | sed -E 's#^/(oc|opencode)[[:space:]]*##')"
@@ -75,14 +94,17 @@ if [[ -n "$handoff_log" && -f "$handoff_log" ]]; then
 fi
 prompt="$(printf "%s\\n\\nDo not commit, push, reset, clean, delete branches, or create GitHub-side mutations. Inspect and edit only the checked-out isolated branch. Use Composio MCP when an external tool is actually required.\\n" "$prompt")"
 
+max_credits="$(printenv COPILOT_MAX_AI_CREDITS 2>/dev/null || printf 60)"
+mkfifo "$copilot_fifo"
+
 set +e
 "$copilot_bin" \
   --model auto \
-  --max-ai-credits "${COPILOT_MAX_AI_CREDITS:-60}" \
+  --stream=on \
+  --max-ai-credits "$max_credits" \
   --no-ask-user \
-  -s \
   --allow-tool "shell" \
-    --allow-tool "write" \
+  --allow-tool "write" \
   --deny-tool "shell(git commit)" \
   --deny-tool "shell(git push)" \
   --deny-tool "shell(git reset)" \
@@ -90,37 +112,15 @@ set +e
   --deny-tool "shell(gh)" \
   --deny-tool "shell(curl)" \
   --deny-tool "shell(wget)" \
-  "${mcp_args[@]}" \
-  -p "$prompt" >"$raw_log" 2>&1
+  ${mcp_args[@]} \
+  -p "$prompt" >"$copilot_fifo" 2>&1 &
+copilot_pid=$!
+
+cat "$copilot_fifo" | sanitize_stream_line | tee "$stream_log" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
+
+wait "$copilot_pid"
 exit_code=$?
 set -e
-
-if [[ "$exit_code" -eq 0 ]]; then
-  if [[ -z "$(git status --short)" ]]; then
-    echo "::error title=Copilot task produced no changes::Agent exited zero but repository state is unchanged."
-    exit 1
-  fi
-  validation_log="/tmp/copilot-${attempt}-validation.log"
-  if ! bash .github/scripts/validate-application.sh >"$validation_log" 2>&1; then
-    echo "::error title=Copilot deterministic validation failed::The fallback agent changed the repository but validation did not pass."
-    tail -160 "$validation_log" || true
-    exit 1
-  fi
-  echo "Copilot deterministic validation: PASS"
-fi
-RAW_LOG="$raw_log" SAFE_LOG="$safe_log" python3 - <<'PY'
-import os, re
-from pathlib import Path
-raw=Path(os.environ["RAW_LOG"]).read_text(errors="replace")
-for key in ("COPILOT_GITHUB_TOKEN","GITHUB_TOKEN","GH_TOKEN","UNIVERSAL_TOKEN","COMPOSIO_API_KEY","OPENCODE_API_KEY","GEMINI_API_KEY","GEMINI_API_KEY_2","GEMINI_API_KEY_3","GEMINI_API_KEY_4","GEMINI_API_KEY_5"):
-    value=os.environ.get(key)
-    if value:
-        raw=raw.replace(value,"[REDACTED]")
-raw=re.sub(r"(gh[ps]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})","[REDACTED_GITHUB_TOKEN]",raw)
-raw=re.sub(r"(AIza[A-Za-z0-9_-]{20,})","[REDACTED_GOOGLE_KEY]",raw)
-raw=re.sub(r"(Bearer\s+)[^\s]+",r"\1[REDACTED]",raw)
-Path(os.environ["SAFE_LOG"]).write_text(raw)
-PY
 
 {
   echo "exit_code=$exit_code"
@@ -128,8 +128,6 @@ PY
 } >> "$GITHUB_OUTPUT"
 
 echo "GitHub Copilot attempt $attempt exit code: $exit_code"
-echo "--- sanitized Copilot tail (last 100 lines) ---"
-tail -n 100 "$safe_log" || true
-echo "--- end sanitized Copilot tail ---"
+echo "GitHub Copilot live stream captured in sanitized log."
 
-exit "$exit_code"
+

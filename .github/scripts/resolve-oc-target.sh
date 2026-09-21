@@ -48,7 +48,7 @@ task="$raw_task"
 declare -a tokens=()
 while IFS= read -r -d '' tok; do
   tokens+=("$tok")
-done < <(printf '%s' "$task" | awk '{ for (i = 1; i <= NF; i++) printf "%s\0", $i }')
+done < <(printf '%s' "$task" | awk '{ for (i = 1; i <= NF; i++) printf "%s%c", $i, 0 }')
 
 declare -a kept=()
 clean_arg() { printf '%s' "$1" | sed -E 's#(\.git)?/?$##'; }

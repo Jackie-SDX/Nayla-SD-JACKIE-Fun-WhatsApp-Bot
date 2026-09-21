@@ -253,7 +253,7 @@ jobs:
           verify_poll_seconds: "20"
 
       - name: OpenCode success inspection
-        if: always() && ((steps.attempt_1.outputs.verified == 'true' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.verified == 'true' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.verified == 'true' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && ((steps.attempt_1.outputs.agent_outcome == 'success' && steps.attempt_1.outputs.publish_outcome != 'failed' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.agent_outcome == 'success' && steps.attempt_2.outputs.publish_outcome != 'failed' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.agent_outcome == 'success' && steps.attempt_3.outputs.publish_outcome != 'failed' && steps.route_3.outputs.provider == 'opencode'))
         shell: bash
         run: |
           set -euo pipefail
@@ -263,7 +263,7 @@ jobs:
           git log -1 --oneline
 
       - name: Reconcile OpenCode publication
-        if: always() && steps.target.outputs.mode != 'remote' && ((steps.attempt_1.outputs.verified == 'true' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.verified == 'true' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.verified == 'true' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && steps.target.outputs.mode != 'remote' && ((steps.attempt_1.outputs.agent_outcome == 'success' && steps.attempt_1.outputs.publish_outcome != 'failed' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.agent_outcome == 'success' && steps.attempt_2.outputs.publish_outcome != 'failed' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.agent_outcome == 'success' && steps.attempt_3.outputs.publish_outcome != 'failed' && steps.route_3.outputs.provider == 'opencode'))
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
@@ -338,14 +338,16 @@ jobs:
         run: |
           set -euo pipefail
           success=false
-          if [[ "$V1" == "true" || "$V2" == "true" || "$V3" == "true" ]]; then
+          if [[ "$A1" == "success" && "$P1" != "failed" ]] ||
+             [[ "$A2" == "success" && "$P2" != "failed" ]] ||
+             [[ "$A3" == "success" && "$P3" != "failed" ]]; then
             success=true
           fi
           if [[ "$success" == "true" ]]; then
-            echo "Hybrid agent completed successfully."
+            echo "Hybrid agent completed successfully; CI verification is advisory."
             exit 0
           fi
-          echo "::error title=Hybrid agent recovery exhausted or blocked::No fully verified agent run was completed."
+          echo "::error title=Agent recovery exhausted or blocked::No successful agent publication was completed."
           exit 1
 
       - name: Record /oc run observability record

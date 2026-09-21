@@ -18,6 +18,15 @@ Running deterministic checks.
   "session.id": "ses_example",
   messageID: "msg_example",
 }
+[19:02:10.000] INFO (#8293): tracking {
+  hash: "bc4f449ba226a7ba340b0104f7eb2505d1f09083",
+  cwd: "/home/runner/work/example/example",
+  git: "/home/runner/.local/share/opencode/snapshot/example/git",
+}
+[19:02:11.000] INFO (#8293): loop {
+  "session.id": "ses_example",
+  step: 4,
+}
 [19:01:54.184] INFO (#8293): stream {
   providerID: "opencode",
   modelID: "big-pickle",
@@ -53,5 +62,9 @@ grep -Fq '|  Shell {"command":"git log --oneline -25"}' "$TMP/output"
 ! grep -Fq 'permission: "read"' "$TMP/output"
 ! grep -Fq 'llm.runtime' "$TMP/output"
 ! grep -Fq 'evaluated {' "$TMP/output"
+! grep -Fq 'loop {' "$TMP/output"
+! grep -Fq 'snapshot/example/git' "$TMP/output"
+! grep -Fq 'hash: "bc4f449ba226a7ba340b0104f7eb2505d1f09083"' "$TMP/output"
+! grep -Fq 'tracking {' "$TMP/output"
 
 echo "human-oriented live OpenCode output filter: OK"

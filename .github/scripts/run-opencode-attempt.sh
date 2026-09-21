@@ -88,7 +88,7 @@ else
     exit 2
   fi
   agent_cwd="$agent_worktree"
-  echo "[OC][attempt=$attempt] isolated OpenCode workspace: $agent_worktree"
+  echo "[OC][attempt=$attempt] isolated OpenCode workspace is ready"
   agent_cmd=(opencode github run)
 fi
 
@@ -157,7 +157,7 @@ heartbeat() {
     sleep "$heartbeat_interval"
     kill -0 "$agent_pid" 2>/dev/null || break
     elapsed=$(( $(date +%s) - start_epoch ))
-    printf "[OC][attempt=%s][elapsed=%ss] heartbeat state=running\n" "$attempt" "$elapsed" | tee -a "$progress_log"
+    printf "[OC][attempt=%s][elapsed=%ss] heartbeat state=running\n" "$attempt" "$elapsed" >> "$progress_log"
   done
 }
 
