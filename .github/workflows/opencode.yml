@@ -28,11 +28,10 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          MODEL: opencode/big-pickle
-          AGENT: build
-          SHARE: false
         with:
           model: opencode/big-pickle
+          agent: build
+          share: false
           use_github_token: false
           prompt: |
             Perform a read-only smoke test of this repository. Read README.md and package.json, report three concrete facts about the project, and stop. Do not edit files, create commits, create branches, push changes, open pull requests, or post issue comments.
