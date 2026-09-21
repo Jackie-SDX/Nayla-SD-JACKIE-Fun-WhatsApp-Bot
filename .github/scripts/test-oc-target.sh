@@ -73,6 +73,16 @@ grep -q 'OC_TARGET_TASK=Task: fix repository: parser behavior and inspect https:
   && ok "explicit target preserves colon-containing task text and ordinary URLs" \
   || bad "explicit target preserves colon-containing task text and ordinary URLs"
 
+new_output_files resolver-url-task-text
+make_event url-task-text "/oc check https://example.com/x:y and note repo: fix pipeline only"
+GITHUB_EVENT_PATH="$TESTS/event-url-task-text.json" \
+GITHUB_REPOSITORY="o/x" TARGET_NUMBER=0 bash "$SCRIPTS/resolve-oc-target.sh"
+grep -q '^mode=local$' "$GITHUB_OUTPUT" && \
+grep -Eq '^target_repo=$' "$GITHUB_OUTPUT" && \
+! grep -q 'OC_TARGET_REPO=' "$GITHUB_ENV" \
+  && ok "URL with colon and lowercase 'repo:' word in task text stays local, never a remote target" \
+  || bad "URL with colon and lowercase 'repo:' word in task text stays local, never a remote target"
+
 for form in "repo=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot" "repository=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot" "target=Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot"; do
   key="${form%%=*}"
   new_output_files "resolver-$key"
