@@ -163,3 +163,20 @@ Deterministic fix (`verify-agent-result.sh`, pinned by `test-oc-target.sh` and
 No concurrency-rule change was made: `cancel-in-progress: false` stays, the
 `oc-agent-<issue>-<true|false>` / `oc-retry-<issue>` groups stay, and
 `oc-control.yml` stays removed.
+## 9. Addendum: one attempt pipeline and command-aware prefix tightening (issue #80)
+
+The three copy-pasted attempt chains in `opencode.yml` were consolidated into a
+single composite unit per attempt (`.github/actions/oc-attempt` →
+`.github/scripts/run-attempt-pipeline.sh`). No concurrency-rule change was made:
+`cancel-in-progress: false` stays on both lanes, the per-issue
+`oc-agent-<issue>-<true|false>` and `oc-retry-<issue>` groups stay, and
+`oc-control.yml` stays removed. The `/oc` trigger was tightened from
+`startsWith(body, '/oc')` to `startsWith(body, '/oc ') || body == '/oc'` so that
+a bare `/oc continue` (an exact string) still triggers while noise comments
+starting with `/oc` but not matching the command shape are skipped instantly
+instead of queuing behind the active agent run.
+
+The same-issue serialization property is preserved exactly: one `issue_comment`
+event still starts exactly one workflow run per triggering lane, the pinned
+`/oc` prefix cannot be used to hide behind another workflow, and cross-issue
+parallelism is untouched.

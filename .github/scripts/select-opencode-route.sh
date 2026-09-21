@@ -27,6 +27,38 @@ is_free_model() {
   [[ "$model" == "big-pickle" || "$model" == *"-free" ]]
 }
 
+# Emits the base names of models remembered as broken (model=unix_epoch CSV in
+# OPENCODE_BAD_MODELS), dropping entries older than
+# OPENCODE_BAD_MODELS_MAX_AGE_HOURS so a temporarily-broken model can recover
+# without manual edits. Only the base name (e.g. "big-pickle") is compared; the
+# selected model keeps its real ladder index so retry/advance math is unchanged.
+bad_models() {
+  local bad_csv="${OPENCODE_BAD_MODELS:-}"
+  local max_age_hours="${OPENCODE_BAD_MODELS_MAX_AGE_HOURS:-24}"
+  [[ "$max_age_hours" =~ ^[0-9]+$ ]] || max_age_hours=24
+  local now
+  now="$(date +%s)"
+  if [[ -n "$bad_csv" ]]; then
+    local entry name ts age_seconds max_seconds
+    max_seconds=$((max_age_hours * 3600))
+    while IFS=',' read -r entry; do
+      [[ -n "$entry" ]] || continue
+      name="${entry%%=*}"
+      ts="${entry#*=}"
+      [[ "$ts" =~ ^[0-9]+$ ]] || continue
+      age_seconds=$((now - 10#$ts))
+      if (( age_seconds >= 0 && age_seconds < max_seconds )); then
+        printf '%s\n' "$name"
+      fi
+    done <<< "$bad_csv"
+  fi
+}
+
+is_bad_model() {
+  local model="$1"
+  bad_models | grep -qx "$model"
+}
+
 select_route() {
   local index="$1" provider="$2" model="$3" route="$4"
   echo "Selected route $((index + 1)): $route"
@@ -52,6 +84,13 @@ if [[ ",$excluded," != *,opencode,* && -n "${OPENCODE_API_KEY:-}" ]]; then
       continue
     fi
     if (( index < start )); then
+      index=$((index + 1))
+      continue
+    fi
+    # Only a fresh selection (start == 0) consults model memory: an explicit
+    # retry or advance should still be able to target a formerly-bad model.
+    if [[ "$start" == "0" ]] && is_bad_model "$model"; then
+      echo "Skipping remembered-bad free Zen model '$model' for this task."
       index=$((index + 1))
       continue
     fi

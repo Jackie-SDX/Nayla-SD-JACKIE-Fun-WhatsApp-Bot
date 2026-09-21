@@ -2,7 +2,19 @@
 set -u
 
 attempt="${1:-unknown}"
-agent_timeout_minutes="${OPENCODE_AGENT_TIMEOUT_MINUTES:-350}"
+
+# Single source of truth for control-plane defaults (single-budget-source audit item).
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$script_dir/oc-control-plane-config.sh" ]]; then
+  source "$script_dir/oc-control-plane-config.sh"
+else
+  OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES=350
+  OC_CONTROL_PLANE_JOB_BUDGET_SECONDS=21600
+  OC_CONTROL_PLANE_JOB_SAFETY_MARGIN_SECONDS=120
+  OC_CONTROL_PLANE_PROGRESS_INTERVAL_SECONDS=30
+fi
+
+agent_timeout_minutes="${OPENCODE_AGENT_TIMEOUT_MINUTES:-${OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES:-350}}"
 if [[ ! "$agent_timeout_minutes" =~ ^[0-9]+$ ]] || (( agent_timeout_minutes < 1 || agent_timeout_minutes >= 360 )); then
   echo "::error title=Invalid OpenCode timeout::OPENCODE_AGENT_TIMEOUT_MINUTES must be an integer from 1 to 359."
   exit 2
@@ -22,14 +34,30 @@ safe_log="$runner_temp/opencode-${attempt}-safe.log"
 progress_log="$runner_temp/opencode-${attempt}-progress.log"
 fifo="$runner_temp/opencode-${attempt}.fifo"
 output_file="${GITHUB_OUTPUT:-/dev/null}"
+controller_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+agent_worktree=""
+agent_cwd=""
 : > "$safe_log"
 : > "$progress_log"
 
 cleanup() {
   [[ -n "${heartbeat_pid:-}" ]] && kill "$heartbeat_pid" 2>/dev/null || true
+  if [[ -n "$agent_worktree" && -d "$agent_worktree" ]]; then
+    git -C "$controller_root" worktree remove --force "$agent_worktree" >/dev/null 2>&1 || true
+  fi
   rm -f "$fifo"
 }
+
 trap cleanup EXIT
+
+# When Composio MCP is not active (or was explicitly disabled), do not hand the
+# agent a broken `npx mcp-remote` stdio bridge. OpenCode loads inline runtime
+# config from OPENCODE_CONFIG_CONTENT AFTER the project config, so this value
+# deep-merges and disables the composio server entirely (hygiene audit item 8c).
+if [[ -z "${COMPOSIO_MCP_URL:-}" || "${COMPOSIO_MCP_ENABLED:-true}" != "true" ]]; then
+  export OPENCODE_CONFIG_CONTENT='{"mcp":{"composio":{"enabled":false}}}'
+  echo "[OC][attempt=${attempt}] Composio MCP is inactive; disabled the composio server via runtime OpenCode config."
+fi
 
 agent_cmd=()
 if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
@@ -48,6 +76,19 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
   agent_cmd+=(--agent build --title "oc remote ${OC_TARGET_REPO:-target}" "$task_prompt")
 else
+  initial_sha="$OC_INITIAL_SHA"
+  [[ -n "$initial_sha" ]] || initial_sha="$(git rev-parse HEAD)"
+  agent_worktree="$runner_temp/opencode-agent-$$-$attempt"
+  if ! git -C "$controller_root" config extensions.worktreeConfig true >/dev/null 2>&1; then
+    echo "::error title=Agent worktree configuration failed::Could not enable per-worktree Git configuration." >&2
+    exit 2
+  fi
+  if ! git -C "$controller_root" worktree add --detach "$agent_worktree" "$initial_sha" >/dev/null 2>&1; then
+    echo "::error title=Agent worktree setup failed::Could not create an isolated OpenCode worktree from $initial_sha." >&2
+    exit 2
+  fi
+  agent_cwd="$agent_worktree"
+  echo "[OC][attempt=$attempt] isolated OpenCode workspace: $agent_worktree"
   agent_cmd=(opencode github run)
 fi
 
@@ -74,8 +115,8 @@ sanitize_line() {
 
 configured_timeout_seconds=$((agent_timeout_minutes * 60))
 effective_timeout_seconds="$configured_timeout_seconds"
-job_budget_seconds="${OC_JOB_BUDGET_SECONDS:-}"
-job_safety_seconds="${OC_JOB_SAFETY_MARGIN_SECONDS:-120}"
+job_budget_seconds="${OC_JOB_BUDGET_SECONDS:-${OC_CONTROL_PLANE_JOB_BUDGET_SECONDS:-}}"
+job_safety_seconds="${OC_JOB_SAFETY_MARGIN_SECONDS:-${OC_CONTROL_PLANE_JOB_SAFETY_MARGIN_SECONDS:-120}}"
 job_start_epoch="${OC_JOB_START_EPOCH:-}"
 
 if [[ -n "$job_budget_seconds" && "$job_budget_seconds" =~ ^[0-9]+$ &&
@@ -100,7 +141,7 @@ if (( effective_timeout_seconds < 1 )); then
   exit 124
 fi
 
-heartbeat_interval="${OC_PROGRESS_INTERVAL_SECONDS:-30}"
+heartbeat_interval="${OC_PROGRESS_INTERVAL_SECONDS:-${OC_CONTROL_PLANE_PROGRESS_INTERVAL_SECONDS:-30}}"
 if [[ ! "$heartbeat_interval" =~ ^[0-9]+$ ]] || (( heartbeat_interval < 1 )); then
   heartbeat_interval=30
 fi
@@ -121,17 +162,32 @@ heartbeat() {
 }
 
 set +e
-timeout --signal=TERM --kill-after=60s "${effective_timeout_seconds}s" "${agent_cmd[@]}" >"$fifo" 2>&1 &
-agent_pid=$!
+if [[ -n "$agent_cwd" ]]; then
+  pushd "$agent_cwd" >/dev/null || {
+    echo "::error title=Agent worktree entry failed::Could not enter $agent_cwd." >&2
+    exit 2
+  }
+  timeout --signal=TERM --kill-after=60s "${effective_timeout_seconds}s" "${agent_cmd[@]}" >"$fifo" 2>&1 &
+  agent_pid=$!
+  popd >/dev/null
+else
+  timeout --signal=TERM --kill-after=60s "${effective_timeout_seconds}s" "${agent_cmd[@]}" >"$fifo" 2>&1 &
+  agent_pid=$!
+fi
 heartbeat &
 heartbeat_pid=$!
 
 while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   safe_line="$(sanitize_line "$raw_line")"
   printf "%s\n" "$safe_line"
-done < "$fifo" | awk -f .github/scripts/filter-opencode-live-output.awk | tee -a "$safe_log"
+done < "$fifo" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
 wait "$agent_pid"
 exit_code=$?
+agent_branch=""
+if [[ -n "$agent_worktree" && -e "$agent_worktree/.git" ]]; then
+  agent_branch="$(git -C "$agent_worktree" branch --show-current 2>/dev/null || true)"
+fi
+printf "agent_branch=%s\n" "$agent_branch" >> "$output_file"
 set -e
 
 elapsed=$(( $(date +%s) - start_epoch ))

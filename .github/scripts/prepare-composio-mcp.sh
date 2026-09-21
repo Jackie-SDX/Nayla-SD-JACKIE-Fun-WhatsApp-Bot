@@ -5,6 +5,7 @@ disable_composio_mcp() {
   echo "::warning title=Composio optional integration unavailable::COMPOSIO_API_KEY is not configured; continuing without Composio MCP."
   printf 'COMPOSIO_MCP_URL=\n' >> "$GITHUB_ENV"
   printf 'COMPOSIO_MCP_HEADERS_FILE=\n' >> "$GITHUB_ENV"
+  printf 'COMPOSIO_MCP_ENABLED=false\n' >> "$GITHUB_ENV"
 }
 
 
@@ -12,6 +13,7 @@ fail_composio_mcp() {
   echo "::warning title=Composio MCP unavailable::Session-backed Composio MCP could not be established; continuing without Composio tools."
   printf '%s\n' 'COMPOSIO_MCP_URL=' >> "$GITHUB_ENV"
   printf '%s\n' 'COMPOSIO_MCP_HEADERS_FILE=' >> "$GITHUB_ENV"
+  printf '%s\n' 'COMPOSIO_MCP_ENABLED=false' >> "$GITHUB_ENV"
   return 0
 }
 if [[ -z "${COMPOSIO_API_KEY:-}" ]]; then
@@ -66,6 +68,7 @@ echo "::add-mask::$session_id"
 echo "::add-mask::$mcp_url"
 printf 'COMPOSIO_MCP_URL=%s\n' "$mcp_url" >> "$GITHUB_ENV"
 printf 'COMPOSIO_MCP_HEADERS_FILE=%s\n' "$headers_file" >> "$GITHUB_ENV"
+printf 'COMPOSIO_MCP_ENABLED=true\n' >> "$GITHUB_ENV"
 printf 'session_id=%s\n' "$session_id" >> "$GITHUB_OUTPUT"
 printf 'headers_file=%s\n' "$headers_file" >> "$GITHUB_OUTPUT"
 

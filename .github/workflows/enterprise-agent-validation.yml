@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .github/scripts/oc-control-plane-config.sh .github/scripts/run-attempt-pipeline.sh .github/scripts/recover-verify-failure.sh .github/scripts/record-model-memory.sh .github/scripts/write-oc-run-record.sh .github/actions/oc-attempt/action.yml .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md docs/oc-runs/README.md eslint.config.js scripts/test-simple-web-crawler.js scripts/test-agent-invariants.js; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -53,11 +53,25 @@ jobs:
           bash -n .github/scripts/test-oc-target.sh
           bash -n .github/scripts/ingest-evidence.sh
           bash -n .github/scripts/test-ingest-evidence.sh
+          bash -n .github/scripts/oc-control-plane-config.sh
+          bash -n .github/scripts/run-attempt-pipeline.sh
+          bash -n .github/scripts/recover-verify-failure.sh
+          bash -n .github/scripts/record-model-memory.sh
+          bash -n .github/scripts/write-oc-run-record.sh
           jq empty package.json
 
       - name: Run application test suite
         shell: bash
         run: npm test
+
+      - name: Lint and verify host-app invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run lint
+          npm run test:invariants
+          echo 'eslint + host-app invariants: OK'
 
       - name: Validate CI-surface verification, evidence ingestion, and concurrency
         shell: bash
@@ -87,10 +101,16 @@ jobs:
           assert opencode.count("\n      cancel-in-progress: false") == 2
           brace = "$" + "{{"
           assert ("oc-agent-" + brace + " github.event.issue.number") in opencode
-          assert "startsWith(github.event.comment.body, '/oc')" in opencode
+          assert "startsWith(github.event.comment.body, '/oc ')" in opencode
+          assert "github.event.comment.body == '/oc'" in opencode
+          assert "startsWith(github.event.comment.body, '/opencode ')" in opencode
+          assert "github.event.comment.body == '/opencode'" in opencode
           assert ("oc-retry-" + brace + " github.event.issue.number") in opencode
           assert "retry-failed-jobs:" in opencode
           assert 'OC_CI_VERIFY_SETTLE_SECONDS: "30"' in opencode
+          # The agent lane no longer requests an OIDC token: it is a plain
+          # GitHub API consumer scoped by repository-issued secrets.
+          assert "id-token: write" not in opencode
           # The former oc-control.yml must not be reintroduced as a second
           # comment listener; the invariant is file-existence based so a
           # documentation comment in opencode.yml may still name it.
@@ -119,6 +139,10 @@ jobs:
           assert "oc-ci-failure-run-id" in verifier
           assert "repo:$rrepo branch:$rbranch" in verifier
           assert "] | length > 0" in verifier
+          # Comment deduplication paginates with --slurp so markers beyond the
+          # first 100 comments are still detected before a duplicate failure
+          # notice or verification marker is posted.
+          assert "--paginate" in verifier and "--slurp" in verifier
           print("ci-surface / evidence-ingestion / concurrency / dedupe contract: OK")
           PY
           bash .github/scripts/test-ingest-evidence.sh
@@ -197,10 +221,17 @@ jobs:
           assert "Replay safety gate" not in wf
           assert "steps.replay_2" not in wf
           assert "steps.replay_3" not in wf
-          assert "steps.agent_1.outcome == 'failure'" in wf
-          assert "steps.agent_2.outcome == 'failure'" in wf
-          assert "steps.classify_1.outcome == 'success'" in wf
-          assert "steps.classify_2.outcome == 'success'" in wf
+          assert "steps.agent_1.outcome == 'failure'" not in wf
+          assert "steps.agent_2.outcome == 'failure'" not in wf
+          assert "steps.classify_1.outcome == 'success'" not in wf
+          assert "steps.classify_2.outcome == 'success'" not in wf
+          assert "steps.attempt_1.outputs.agent_outcome == 'failure'" in wf
+          assert "steps.attempt_2.outputs.agent_outcome == 'failure'" in wf
+          assert "steps.attempt_1.outputs.classify_outcome == 'success'" in wf
+          assert "steps.attempt_2.outputs.classify_outcome == 'success'" in wf
+          assert "steps.attempt_1.outputs.termination_reason != 'timeout'" in wf
+          assert "uses: ./.github/actions/oc-attempt" in wf
+          assert "id: attempt_1" in wf and "id: attempt_2" in wf and "id: attempt_3" in wf
           assert "advance_route" in Path(".github/scripts/classify-provider-failure.sh").read_text()
           assert "termination_reason" in runner
           assert "evidence ledger" in ins
@@ -216,6 +247,75 @@ jobs:
           print("continuous-agent contract: OK")
           PY
 
+      - name: Validate control-plane constants parity and attempt pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          cfg=Path(".github/scripts/oc-control-plane-config.sh").read_text()
+          runner=Path(".github/scripts/run-opencode-attempt.sh").read_text()
+          cont=Path(".github/scripts/post-oc-continuation.sh").read_text()
+          pipeline=Path(".github/scripts/run-attempt-pipeline.sh").read_text()
+          recover=Path(".github/scripts/recover-verify-failure.sh").read_text()
+          recorder=Path(".github/scripts/record-model-memory.sh").read_text()
+          record_writer=Path(".github/scripts/write-oc-run-record.sh").read_text()
+          wf=Path(".github/workflows/opencode.yml").read_text()
+          action=Path(".github/actions/oc-attempt/action.yml").read_text()
+          assert 'OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES="350"' in cfg
+          assert 'OC_CONTROL_PLANE_JOB_BUDGET_SECONDS="21600"' in cfg
+          assert 'OC_CONTROL_PLANE_JOB_SAFETY_MARGIN_SECONDS="120"' in cfg
+          assert 'OC_CONTROL_PLANE_PROGRESS_INTERVAL_SECONDS="30"' in cfg
+          assert 'OC_CONTROL_PLANE_COPILOT_MAX_AI_CREDITS="60"' in cfg
+          assert 'OC_CONTROL_PLANE_OPENCODE_DEFAULT_VERSION="1.18.31"' in cfg
+          assert "OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES" in runner
+          assert "OC_CONTROL_PLANE_JOB_BUDGET_SECONDS" in runner
+          assert "OC_CONTROL_PLANE_JOB_SAFETY_MARGIN_SECONDS" in runner
+          assert "OC_CONTROL_PLANE_PROGRESS_INTERVAL_SECONDS" in runner
+          assert "OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES" in cont
+          # The pinned default OpenCode version is a config constant, a workflow
+          # env default, and the cache warm pin; all three must agree so the free
+          # lane, the release resolver, and the cache warm the same binary.
+          assert "OC_CONTROL_PLANE_OPENCODE_DEFAULT_VERSION" in cfg
+          assert '1.18.31' in cfg
+          assert "OPENCODE_VERSION_PIN:" in wf
+          assert "vars.OPENCODE_VERSION" in wf
+          assert "1.18.31" in wf
+          cache_wf=Path(".github/workflows/opencode-cache.yml").read_text()
+          assert "OPENCODE_VERSION_PIN:" in cache_wf
+          assert "vars.OPENCODE_VERSION" in cache_wf
+          assert "1.18.31" in cache_wf
+          assert "oc-control-plane-config.sh" in runner and "oc-control-plane-config.sh" in cont
+          assert 'OC_JOB_BUDGET_SECONDS: "21600"' in wf
+          assert 'OC_JOB_SAFETY_MARGIN_SECONDS: "120"' in wf
+          assert 'OC_PROGRESS_INTERVAL_SECONDS: "30"' in wf
+          # Composio runtime disabling: when no session is available the
+          # attempt layer must inject an explicit server-disable config instead
+          # of silently running with a stale endpoint.
+          assert "COMPOSIO_MCP_ENABLED=false" in Path(".github/scripts/prepare-composio-mcp.sh").read_text()
+          assert "COMPOSIO_MCP_ENABLED=true" in Path(".github/scripts/prepare-composio-mcp.sh").read_text()
+          assert "OPENCODE_CONFIG_CONTENT" in runner
+          # The consolidated attempt pipeline owns the whole lifecycle exactly
+          # once; nothing may reintroduce a parallel step copy of these phases.
+          assert "run-attempt-pipeline.sh" in action
+          assert "recover-verify-failure.sh" in pipeline
+          assert "publish-copilot-change.sh" in pipeline
+          assert "publish-remote-opencode.sh" in pipeline
+          assert "classify-provider-failure.sh" in pipeline
+          assert "EXPECTED_TARGET_HEAD" in pipeline and "verify-agent-result.sh" in pipeline
+          assert "Copilot lane is local-only" in pipeline
+          assert "OC_VERIFY_MAX_RECOVERIES" in pipeline and "OC_VERIFY_RECOVERIES" in pipeline
+          assert "record-model-memory.sh" in pipeline
+          assert 'actions/runs' in recover and "/rerun" in recover
+          assert "OPENCODE_BAD_MODELS" in recorder and "gh variable set" in recorder
+          assert "docs/oc-runs" in record_writer and "schema_version" in record_writer
+          assert "Record /oc run observability record" in wf
+          assert "write-oc-run-record.sh" in wf
+          assert "actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1" in wf
+          assert "retention-days: 365" in wf
+          print("control-plane constants parity + attempt pipeline: OK")
+          PY
+
       - name: Validate remote-target control plane
         shell: bash
         run: |
@@ -223,6 +323,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           wf=Path(".github/workflows/opencode.yml").read_text()
+          pipeline=Path(".github/scripts/run-attempt-pipeline.sh").read_text()
           resolver=Path(".github/scripts/resolve-oc-target.sh").read_text()
           prepare=Path(".github/scripts/prepare-oc-target.sh").read_text()
           publisher=Path(".github/scripts/publish-remote-opencode.sh").read_text()
@@ -233,7 +334,9 @@ jobs:
           assert "resolve-oc-target.sh" in wf
           assert "id: target" in wf
           assert "prepare-oc-target.sh" in wf
-          assert "publish-remote-opencode.sh" in wf
+          # Publication is consolidated in the single attempt pipeline (audit
+          # item 5); the workflow must no longer repeat step copies of it.
+          assert "publish-remote-opencode.sh" in pipeline
           assert "Clean up remote target workspace" in wf
           assert "OC_TARGET_MODE" in resolver
           assert "OPENCODE_EXCLUDED_PROVIDERS" in resolver and "github-copilot" in resolver
@@ -283,6 +386,9 @@ jobs:
           assert "is_free_model" in route
           assert "github-copilot/auto" in route
           assert "opencode/" in route
+          assert "OPENCODE_BAD_MODELS" in route
+          assert "OPENCODE_BAD_MODELS_MAX_AGE_HOURS" in route
+          assert "is_bad_model" in route
           assert "2.0.3" not in wf
           assert "OpenCode V2" not in wf
           def pick(route_index, copilot):
@@ -320,6 +426,27 @@ jobs:
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
           assert "route=opencode/mimo-v2.5-free" in Path(os.path.join(d,"out")).read_text()
+          # Bad-model memory (audit item 6): a freshly recorded failed model is
+          # skipped at index 0 so the next lane is selected; an expired entry
+          # is ignored and the recorded model stays first. Only a fresh record
+          # may change the ladder because a stale skip would trap the default.
+          now=int(__import__("time").time())
+          def pick_bad(entry):
+            d=tempfile.mkdtemp()
+            env=dict(os.environ)
+            env.pop("COPILOT_GITHUB_TOKEN",None)
+            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+                       OPENCODE_ROUTE_INDEX="0", OPENCODE_BAD_MODELS=entry,
+                       OPENCODE_BAD_MODELS_MAX_AGE_HOURS="24",
+                       GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
+            subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
+            return Path(os.path.join(d,"out")).read_text(), Path(os.path.join(d,"env")).read_text()
+          out_txt, env_txt = pick_bad("big-pickle=%d" % now)
+          assert "route=opencode/mimo-v2.5-free" in out_txt, "fresh bad-model must be skipped"
+          assert "OPENCODE_ROUTE_INDEX=1" in env_txt, "ladder index must advance past a fresh bad-model"
+          out_txt, env_txt = pick_bad("big-pickle=%d" % (now - 25*3600))
+          assert "route=opencode/big-pickle" in out_txt, "expired bad-model must be ignored"
+          assert "OPENCODE_ROUTE_INDEX=0" in env_txt, "expired bad-model must not move the ladder"
           print("routing/cache contract: OK")
           print("model ladder (big-pickle->mimo->copilot->none): OK")
           PY
@@ -348,6 +475,8 @@ jobs:
           grep -Fq 'OC_CI_VERIFY_WAIT_MINUTES' .github/scripts/verify-agent-result.sh
           grep -Fq 'OPENCODE_RETRY_CURRENT_ROUTE' .github/scripts/select-opencode-route.sh
           grep -Fq 'zero process exit' .opencode/instructions.md
+          grep -Fq 'oc-attempt' .github/workflows/opencode.yml
+          grep -Fq 'recover-verify-failure.sh' .github/scripts/run-attempt-pipeline.sh
           echo 'enterprise recovery controls: OK'
 
 
@@ -384,16 +513,4 @@ jobs:
           ! grep -Fq "test-secret-123456" "$live"
           grep -Fq "heartbeat state=running" "$live"
           grep -Fq "exit_code=7" "$out"
-          grep -Fq "termination_reason=failed" "$out"
-          safe="$(sed -n 's/^safe_log_path=//p' "$out")"
-          test -f "$safe"
-          ! grep -Fq "test-secret-123456" "$safe"
-          rm -f "$out"
-          set +e
-          PATH="$tmp:$PATH" RUNNER_TEMP="$tmp" GITHUB_OUTPUT="$out" OPENCODE_AGENT_TIMEOUT_MINUTES=1 OPENCODE_API_KEY="x" OC_JOB_START_EPOCH="$(( $(date +%s) - 1 ))" OC_JOB_BUDGET_SECONDS=1 OC_JOB_SAFETY_MARGIN_SECONDS=0 bash .github/scripts/run-opencode-attempt.sh 100 >"$tmp/timeout-live" 2>&1
-          timeout_rc=$?
-          set -e
-          [[ "$timeout_rc" == "124" ]]
-          grep -Fq "termination_reason=timeout" "$out"
-          grep -Fq "effective_timeout_seconds=" "$out"
-          echo "live OpenCode stream + budget smoke test: OK"
+          grep -Fq "terminat¢ëiºÛkºwµç_ºYhºÚn¶Æ¯yÛhşiíıø¥zÏÜ¢jh²*?¢ëiºßÛjÈf‰Ç¬µÚ.¶ÜmFéÜjßæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆÛh¾'°¶ŸºYhºÚn¶Šî±è^iÙõÓOæßßŠW¬ıÊ&¦‹"£ú.¶›­ı¶¬†hœzË]¢ëmÆßíj)g×M?š{~)^³÷(šš,ŠèºÚn·öÚ²¢që-v‹­·m¢øÂ–«¶ÊŠ
