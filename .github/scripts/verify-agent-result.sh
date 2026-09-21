@@ -338,7 +338,7 @@ candidate_prs="$( { printf '%s\n' "$branch_candidate_prs"; printf '%s\n' "$scan_
 # all-surface CI verdict.
 check_pr() {
   local number="$1" allow_unprefixed="${2:-0}" pr head_sha checks validate pr_state status surfaces_ok prefix_ok
-  pr="$(gh pr view "$number" --json number,url,state,mergedAt,headRefName,headRefOid,baseRefName 2>/dev/null || true)"
+  pr="$(gh pr view "$number" --json number,url,state,mergedAt,headRefName,headRefOid,baseRefName,createdAt 2>/dev/null || true)"
   [[ -n "$pr" ]] || return 1
   [[ "$(jq -r '.baseRefName' <<<"$pr")" == "$base_ref" ]] || return 1
   head_ref="$(jq -r '.headRefName // ""' <<<"$pr")"

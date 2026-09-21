@@ -7,10 +7,14 @@ if [[ "$route_index" =~ ^[0-9]+$ ]]; then
   start=$route_index
 fi
 retry_current="${OPENCODE_RETRY_CURRENT_ROUTE:-0}"
-if [[ "$retry_current" == "1" && "$route_index" =~ ^[0-9]+$ ]]; then
-  start="$route_index"
+advance_route="${OPENCODE_ADVANCE_ROUTE:-0}"
+if [[ "$route_index" =~ ^[0-9]+$ ]] && [[ "$retry_current" == "1" || "$advance_route" == "1" ]]; then
+  start=$((10#$route_index + 1))
   if [[ -n "$GITHUB_ENV" ]]; then
-    echo "OPENCODE_RETRY_CURRENT_ROUTE=0" >> "$GITHUB_ENV"
+    {
+      echo "OPENCODE_RETRY_CURRENT_ROUTE=0"
+      echo "OPENCODE_ADVANCE_ROUTE=0"
+    } >> "$GITHUB_ENV"
   fi
 fi
 
