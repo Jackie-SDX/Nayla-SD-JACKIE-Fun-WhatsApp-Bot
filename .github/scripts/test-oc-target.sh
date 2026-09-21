@@ -278,6 +278,19 @@ case "$*" in
       printf '%s\n' '{"check_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"skipped"}]}'
     fi
     ;;
+  *"/commits/"*"/status"*)
+    case "${FAKE_GH_STATUS_MODE:-ok}" in
+      fail)
+        printf '%s\n' '{"state":"failure","total_count":1,"statuses":[{"context":"ci/circleci","state":"failure"}]}'
+        ;;
+      pending)
+        printf '%s\n' '{"state":"pending","total_count":1,"statuses":[{"context":"ci/circleci","state":"pending"}]}'
+        ;;
+      *)
+        printf '%s\n' '{"state":"success","total_count":1,"statuses":[{"context":"ci/circleci","state":"success"}]}'
+        ;;
+    esac
+    ;;
   *)
     exit 0
     ;;
@@ -291,20 +304,55 @@ if PATH="$FAKE_BIN:$PATH" \
    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
    OC_TARGET_MODE="remote" OC_TARGET_REPO="fixture/target" OC_TARGET_BASE="main" \
    OC_TARGET_BRANCH="oc/test" OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA" \
-   OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 \
+   OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1; then
   ok "remote verifier accepts exact target PR/check head when local workspace SHA differs"
 else
   bad "remote verifier accepts exact target PR/check head when local workspace SHA differs"
 fi
+grep -q "^ci_surfaces=check-runs,commit-status$" "$GITHUB_OUTPUT" \
+  && ok "remote verifier records the observed CI surfaces (check-runs + commit statuses)" \
+  || bad "remote verifier records the observed CI surfaces (check-runs + commit statuses)"
+grep -q "^verified_sha=$EXPECTED_VERIFY_SHA$" "$GITHUB_OUTPUT" \
+  && ok "remote verifier records the exact verified SHA in its output" \
+  || bad "remote verifier records the exact verified SHA in its output"
 
-new_output_files verifier-failure
+new_output_files verifier-status-fail
+if PATH="$FAKE_BIN:$PATH" FAKE_GH_STATUS_MODE=fail \
+   GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=0 BASE_REF="main" \
+   INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+   OC_TARGET_MODE="remote" OC_TARGET_REPO="fixture/target" OC_TARGET_BASE="main" \
+   OC_TARGET_BRANCH="oc/test" OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA" \
+   OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
+   bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1; then
+  bad "remote verifier fails closed when an external status provider reports failure on the same SHA"
+else
+  ok "remote verifier fails closed when an external status provider reports failure on the same SHA"
+fi
+
+new_output_files verifier-status-pending
+if PATH="$FAKE_BIN:$PATH" FAKE_GH_STATUS_MODE=pending \
+   GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=0 BASE_REF="main" \
+   INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+   OC_TARGET_MODE="remote" OC_TARGET_REPO="fixture/target" OC_TARGET_BASE="main" \
+   OC_TARGET_BRANCH="oc/test" OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA" \
+   OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
+   bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1; then
+  bad "remote verifier waits for a pending external status instead of declaring success"
+else
+  ok "remote verifier waits for a pending external status instead of declaring success"
+fi
+grep -q "^timed_out=true$" "$GITHUB_OUTPUT" \
+  && ok "remote verifier marks an unresolved pending status as timed out, never green" \
+  || bad "remote verifier marks an unresolved pending status as timed out, never green"
+
+new_output_files verifier-mixed-fail
 if PATH="$FAKE_BIN:$PATH" FAKE_GH_FAIL=1 \
    GITHUB_REPOSITORY="fixture/controller" PROVIDER="opencode" ATTEMPT="1" TARGET_NUMBER=0 BASE_REF="main" \
    INITIAL_SHA="$LOCAL_VERIFY_SHA" GITHUB_RUN_ID=1 GITHUB_OUTPUT="$GITHUB_OUTPUT" \
    OC_TARGET_MODE="remote" OC_TARGET_REPO="fixture/target" OC_TARGET_BASE="main" \
    OC_TARGET_BRANCH="oc/test" OC_TARGET_WORKSPACE="$VERIFY_WS" EXPECTED_TARGET_HEAD="$EXPECTED_VERIFY_SHA" \
-   OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 \
+   OC_CI_VERIFY_WAIT_MINUTES=0 OC_CI_VERIFY_POLL_SECONDS=5 OC_CI_VERIFY_SETTLE_SECONDS=0 \
    bash "$SCRIPTS/verify-agent-result.sh" >/dev/null 2>&1; then
   bad "remote verifier rejects any failed check-run even when another check is green"
 else
