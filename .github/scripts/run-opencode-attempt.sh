@@ -65,10 +65,10 @@ task_mode="${TASK_MODE:-code}"
 # Inline runtime config has highest precedence, so the selected route model is
 # honored by the same OpenCode runner without changing the project policy.
 if [[ -z "${COMPOSIO_MCP_URL:-}" || "${COMPOSIO_MCP_ENABLED:-true}" != "true" ]]; then
-  export OPENCODE_CONFIG_CONTENT="{\"model\":\"$runtime_model\",\"mcp\":{\"composio\":{\"enabled\":false}}}"
+  export OPENCODE_CONFIG_CONTENT="{\"model\":\"$runtime_model\",\"mcp\":{\"composio\":{\"enabled\":false}},\"permission\":{\"external_directory\":\"allow\",\"bash\":{\"git push --force *\":\"deny\",\"git push -f *\":\"deny\",\"git push --force-with-lease *\":\"deny\",\"rm -rf /\":\"deny\",\"rm -rf /*\":\"deny\"}}}"
   echo "[OC][attempt=${attempt}] Composio MCP inactive; selected model: $runtime_model"
 else
-  export OPENCODE_CONFIG_CONTENT="{\"model\":\"$runtime_model\"}"
+  export OPENCODE_CONFIG_CONTENT="{\"model\":\"$runtime_model\",\"permission\":{\"external_directory\":\"allow\",\"bash\":{\"git push --force *\":\"deny\",\"git push -f *\":\"deny\",\"git push --force-with-lease *\":\"deny\",\"rm -rf /\":\"deny\",\"rm -rf /*\":\"deny\"}}}"
 fi
 
 agent_cmd=()
