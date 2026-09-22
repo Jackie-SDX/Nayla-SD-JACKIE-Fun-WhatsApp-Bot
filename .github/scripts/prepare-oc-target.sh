@@ -28,7 +28,7 @@ repo="${OC_TARGET_REPO:?OC_TARGET_REPO is required}"
 base="${OC_TARGET_BASE:-main}"
 resume="${OC_TARGET_RESUME:-0}"
 task="${OC_TARGET_TASK:-}"
-controller_root="${runner_temp="${RUNNER_TEMP:-/tmp}"
+runner_temp="${RUNNER_TEMP:-/tmp}"
 clone_url="${OC_TARGET_CLONE_URL:-https://github.com/$repo.git}"
 
 if [[ ! "$repo" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]/[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]$ ]]; then
