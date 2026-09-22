@@ -231,7 +231,10 @@ jobs:
           grep -Fq 'prepare-oc-session.sh' .github/scripts/oc-command-control.sh
           grep -Fq 'checkpoint-oc-working-tree.sh' .github/scripts/run-opencode-attempt.sh
           grep -Fq 'COPILOT_PEER_MODE' .github/scripts/run-opencode-attempt.sh
-          grep -Fq 'code-review' .github/scripts/invite-copilot-peer.sh
+          # Custom critic callbacks are optional; the regression contract requires
+          # prompt-only review fallback when that callback is unavailable.
+          grep -Fq 'custom-agent callback' .github/scripts/invite-copilot-peer.sh
+          grep -Fq 'run_copilot 0' .github/scripts/invite-copilot-peer.sh
           grep -Fq 'publish_requested' .github/scripts/select-oc-task-mode.sh
           grep -Fq 'resume_requested' .github/scripts/select-oc-task-mode.sh
           grep -Fq 'PUBLISH_REQUESTED' .github/scripts/run-attempt-pipeline.sh
