@@ -108,9 +108,9 @@ jobs:
           # integration authenticates its branch/commit/push/PR lifecycle
           # through the Actions OIDC token (restored and live-tested in e215ff1).
           assert "id-token: write" in opencode
-           assert "copilot-requests: write" in opencode
-           assert "secrets.COPILOT_GITHUB_TOKEN || github.token" in opencode
-           assert "COPILOT_PEER_MAX_AI_CREDITS: \"30\"" in opencode
+          assert "copilot-requests: write" in opencode
+          assert "secrets.COPILOT_GITHUB_TOKEN || github.token" in opencode
+          assert "COPILOT_PEER_MAX_AI_CREDITS: \"30\"" in opencode
           # The former oc-control.yml must not be reintroduced as a second
           # comment listener; the invariant is file-existence based so a
           # documentation comment in opencode.yml may still name it.
