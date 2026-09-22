@@ -57,7 +57,7 @@ echo "[4/6] OpenRouter selects the same OpenCode runtime"
 router_out="$tmp/router-out"
 router_env="$tmp/router-env"
 GITHUB_ENV="$router_env" GITHUB_OUTPUT="$router_out" OPENCODE_API_KEY=x OPENROUTER_API_KEY=test-router OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free" OPENCODE_ROUTE_INDEX=1 OPENCODE_ROUTE_HINT=openrouter OPENCODE_EXCLUDED_PROVIDERS=opencode bash "$script_dir/select-opencode-route.sh"
-grep -Fq "route=openrouter/free" "$router_out"
+grep -Fq "route=openrouter/openrouter/free" "$router_out"
 grep -Fq "provider=openrouter" "$router_out"
 
 echo "[5/6] full attempt pipeline advances after Zen 403"

@@ -109,7 +109,7 @@ fi
 # A Zen free-tier context rejection is provider-level. Prefer the next
 # OpenCode runtime through OpenRouter when explicitly hinted.
 if [[ "$route_hint" == "openrouter" && "$start" -gt 0 && "$start" -lt "$index" && -n "${OPENROUTER_API_KEY:-}" && ",$excluded," != *,openrouter,* ]]; then
-  select_route "$start" openrouter "openrouter/free" "openrouter/free"
+  select_route "$start" openrouter "openrouter/openrouter/free" "openrouter/openrouter/free"
   if [[ -n "$GITHUB_ENV" ]]; then
     echo "OPENCODE_ROUTE_HINT=" >> "$GITHUB_ENV"
   fi

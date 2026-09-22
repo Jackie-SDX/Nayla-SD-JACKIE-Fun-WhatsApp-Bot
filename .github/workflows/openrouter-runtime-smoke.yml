@@ -90,7 +90,7 @@ jobs:
           git commit -q --allow-empty -m init
           export OPENCODE_CONFIG_CONTENT='{"model":"openrouter/free"}'
           set +e
-          timeout 120s opencode run --model openrouter/free --title "OpenRouter runtime smoke" "Return exactly OPENROUTER-LIVE-SMOKE and do not edit files." >"$tmp/output.log" 2>&1
+          timeout 120s opencode run --model openrouter/openrouter/free --title "OpenRouter runtime smoke" "Return exactly OPENROUTER-LIVE-SMOKE and do not edit files." >"$tmp/output.log" 2>&1
           rc=$?
           set -e
           sed -E "s/${OPENROUTER_API_KEY}/[REDACTED]/g" "$tmp/output.log" | tail -120

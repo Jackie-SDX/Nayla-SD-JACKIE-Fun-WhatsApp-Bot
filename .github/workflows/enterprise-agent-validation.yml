@@ -215,7 +215,7 @@ jobs:
           assert "timeout --signal=TERM" in runner
           assert "opencode github run" in runner
           assert "github-copilot/auto" in selector
-          assert "openrouter/free" in selector
+          assert "openrouter/openrouter/free" in selector
           assert "OPENCODE_ROUTE_HINT" in selector
           assert cfg["mcp"]["composio"]["type"]=="local"
           assert cfg["mcp"]["composio"]["enabled"] is True
@@ -271,7 +271,7 @@ jobs:
           assert 'OC_CONTROL_PLANE_PROGRESS_INTERVAL_SECONDS="30"' in cfg
           assert 'OC_CONTROL_PLANE_COPILOT_MAX_AI_CREDITS="60"' in cfg
           assert 'OC_CONTROL_PLANE_OPENCODE_DEFAULT_VERSION="1.18.31"' in cfg
-          assert 'OC_CONTROL_PLANE_OPENROUTER_FALLBACK_MODEL="openrouter/free"' in cfg
+          assert 'OC_CONTROL_PLANE_OPENROUTER_FALLBACK_MODEL="openrouter/openrouter/free"' in cfg
           assert "OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES" in runner
           assert "OC_CONTROL_PLANE_JOB_BUDGET_SECONDS" in runner
           assert "OC_CONTROL_PLANE_JOB_SAFETY_MARGIN_SECONDS" in runner
