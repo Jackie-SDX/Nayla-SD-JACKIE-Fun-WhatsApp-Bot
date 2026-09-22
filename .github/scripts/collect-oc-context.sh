@@ -25,12 +25,12 @@ gh api --paginate --slurp "/repos/$GITHUB_REPOSITORY/pulls/$target/comments?per_
 {
   echo "# /oc task context"
   echo "Read the complete issue context in chronological order; retrieve source comments in batches when the local bound is reached."
-  jq -r '"## Issue\n\n- Number: #(.number)\n- Title: (.title // "")\n- Author: @(.user.login // "unknown")\n- State: (.state // "unknown")\n- Created: (.created_at // "")\n\n### Issue body\n\n(.body // "")\n"' "$issue_json"
+  jq -r '"## Issue\n\n- Number: #\(.number)\n- Title: \(.title // "")\n- Author: @\(.user.login // "unknown")\n- State: \(.state // "unknown")\n- Created: \(.created_at // "")\n\n### Issue body\n\n\(.body // "")\n"' "$issue_json"
   echo "## Issue comments (chronological)"
-  jq -r 'add // [] | sort_by(.created_at)[] | "### Comment #(.id) — @(.user.login // "unknown") — (.created_at // "")\n\n(.body // "")\n\n---\n"' "$comments_json"
+  jq -r 'add // [] | sort_by(.created_at)[] | "### Comment #\(.id) — @\(.user.login // "unknown") — \(.created_at // "")\n\n\(.body // "")\n\n---\n"' "$comments_json"
   if jq -e 'add // [] | length > 0' "$reviews_json" >/dev/null 2>&1; then
     echo "## Pull-request review comments (chronological)"
-    jq -r 'add // [] | sort_by(.created_at)[] | "### Review comment #(.id) — @(.user.login // "unknown") — (.created_at // "")\n\n(.body // "")\n\n---\n"' "$reviews_json"
+    jq -r 'add // [] | sort_by(.created_at)[] | "### Review comment #\(.id) — @\(.user.login // "unknown") — \(.created_at // "")\n\n\(.body // "")\n\n---\n"' "$reviews_json"
   fi
 } > "$out"
 
