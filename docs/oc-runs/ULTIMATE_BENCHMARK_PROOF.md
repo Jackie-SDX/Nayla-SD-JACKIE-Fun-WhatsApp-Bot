@@ -17,7 +17,7 @@
 ### Round 2: Peer Edit
 - **Hypothesis:** The proof file needs the exact edit specified by the acceptance criteria.
 - **Evidence:** Acceptance criterion 6 requires Copilot to make exactly one small visible edit.
-- **Action:** Peer edited line 63 of the proof file, changing "plugin-defined" to "agents defined by Markdown profiles".
+- **Action:** Peer edited line 63 of the proof file, changing "plugin-defined" to "agents defined by Markdown profiles". The proof file originally described Copilot CLI agents as "plugin-defined" but the correct terminology per GitHub Docs is "agents defined by Markdown profiles".
 - **Result:** `COPILOT_PEER_RESULT=completed`, round 2.
 
 ## §3 — Composio Research
