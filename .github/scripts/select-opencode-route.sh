@@ -24,6 +24,43 @@ recovery_model="${OPENCODE_RECOVERY_MODEL:-}"
 route_hint="${OPENCODE_ROUTE_HINT:-}"
 IFS=',' read -r -a models <<< "$models_csv"
 
+refresh_free_models() {
+  local catalog line model base found_any=false
+  command -v opencode >/dev/null 2>&1 || return 0
+  catalog="$(opencode models opencode 2>/dev/null || true)"
+  while IFS= read -r line; do
+    case "$line" in
+      opencode/*)
+        model="${line#opencode/}"
+        if [[ "$model" == "big-pickle" || "$model" == *"-free" ]]; then
+          found_any=true
+          if ! printf '%s\n' "${models[@]}" | grep -Fxq "$model"; then
+            models+=( "$model" )
+          fi
+        fi
+        ;;
+    esac
+  done <<< "$catalog"
+
+  if [[ "$found_any" != "true" ]]; then
+    catalog="$(opencode models --refresh 2>/dev/null || true)"
+    while IFS= read -r line; do
+      case "$line" in
+        opencode/*)
+          model="${line#opencode/}"
+          if [[ "$model" == "big-pickle" || "$model" == *"-free" ]]; then
+            if ! printf '%s\n' "${models[@]}" | grep -Fxq "$model"; then
+              models+=( "$model" )
+            fi
+          fi
+          ;;
+      esac
+    done <<< "$catalog"
+  fi
+}
+
+refresh_free_models
+
 is_free_model() {
   local model="$1"
   [[ "$model" == "big-pickle" || "$model" == *"-free" ]]
