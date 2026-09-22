@@ -72,7 +72,15 @@ jobs:
           git config user.email smoke@example.invalid
           git commit -q --allow-empty -m init
           export OPENCODE_CONFIG_CONTENT='{"model":"openrouter/free"}'
+          set +e
           timeout 120s opencode run --model openrouter/free --title "OpenRouter runtime smoke" "Return exactly OPENROUTER-LIVE-SMOKE and do not edit files." >"$tmp/output.log" 2>&1
+          rc=$?
+          set -e
+          sed -E "s/${OPENROUTER_API_KEY}/[REDACTED]/g" "$tmp/output.log" | tail -120
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::error title=OpenRouter runtime failed::OpenCode exit code: $rc"
+            exit "$rc"
+          fi
           grep -Fq "OPENROUTER-LIVE-SMOKE" "$tmp/output.log"
           ! grep -Eiq '(401|403|FreeTierError|unauthorized)' "$tmp/output.log" || { echo "::error title=OpenRouter runtime rejected::The live OpenRouter request produced an authentication/provider error."; exit 1; }
           echo "OPENROUTER LIVE RUNTIME: PASS"
