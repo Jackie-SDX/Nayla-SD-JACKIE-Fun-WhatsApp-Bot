@@ -101,6 +101,7 @@ sanitize_line() {
   for secret in \
     "${COMPOSIO_API_KEY:-}" \
     "${OPENCODE_API_KEY:-}" \
+    "${OPENROUTER_API_KEY:-}" \
     "${GITHUB_TOKEN:-}" \
     "${GH_TOKEN:-}" \
     "${UNIVERSAL_TOKEN:-}" \
