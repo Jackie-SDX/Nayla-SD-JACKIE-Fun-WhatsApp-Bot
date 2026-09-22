@@ -47,7 +47,7 @@ read_back_output() {
 
 run_agent() {
   case "$provider" in
-    opencode)
+    opencode|openrouter)
       MODEL="$model" VARIANT="$variant" SHARE="false" AGENT="build" \
         bash .github/scripts/run-opencode-attempt.sh "$attempt" ;;
     github-copilot)
