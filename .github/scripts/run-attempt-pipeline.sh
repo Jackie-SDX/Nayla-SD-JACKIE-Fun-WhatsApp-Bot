@@ -116,17 +116,27 @@ if [ "$agent_rc" -ne 0 ] &&
    [ "$mode" = "local" ] &&
    [[ "$target_number" =~ ^[0-9]+$ ]] &&
    [ "$target_number" != "0" ]; then
-  run_since="$(printenv OC_RUN_START_ISO 2>/dev/null || printf '%s' '')"
+  attempt_since="$(date -u -d "@$attempt_start" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || printenv OC_RUN_START_ISO 2>/dev/null || printf '%s' '')"
   repo="$(printenv GITHUB_REPOSITORY 2>/dev/null || printf '%s' '')"
   pr_candidates="$(gh pr list --repo "$repo" --base "$base_ref" --state open --limit 100 --json number,url,headRefName,headRefOid,createdAt 2>/dev/null || printf '%s' '[]')"
-  prefix="opencode/issue$target_number-"
-  published_pr="$(jq -c --arg prefix "$prefix" --arg initial "$initial_sha" --arg since "$run_since" '
-    [ .[] |
-      select((.headRefName|startswith($prefix))) |
-      select((.headRefOid // "") != $initial) |
-      select(($since == "") or ((.createdAt // "") >= $since))
-    ] | sort_by(.createdAt) | last // {}
-  ' <<<"$pr_candidates" 2>/dev/null || printf '%s' '{}')"
+
+  if [ -n "$agent_branch" ]; then
+    published_pr="$(jq -c --arg branch "$agent_branch" --arg initial "$initial_sha" '
+      [ .[] |
+        select(.headRefName == $branch) |
+        select((.headRefOid // "") != $initial)
+      ] | sort_by(.createdAt) | last // {}
+    ' <<<"$pr_candidates" 2>/dev/null || printf '%s' '{}')"
+  else
+    prefix="opencode/issue$target_number-"
+    published_pr="$(jq -c --arg prefix "$prefix" --arg initial "$initial_sha" --arg since "$attempt_since" '
+      [ .[] |
+        select((.headRefName|startswith($prefix))) |
+        select((.headRefOid // "") != $initial) |
+        select(($since == "") or ((.createdAt // "") >= $since))
+      ] | sort_by(.createdAt) | last // {}
+    ' <<<"$pr_candidates" 2>/dev/null || printf '%s' '{}')"
+  fi
   published_number="$(jq -r '.number // 0' <<<"$published_pr" 2>/dev/null || printf '0')"
   if [[ "$published_number" =~ ^[1-9][0-9]*$ ]]; then
     agent_rc=0
