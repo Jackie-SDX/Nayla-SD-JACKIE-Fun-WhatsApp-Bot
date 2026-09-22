@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# Prepares an isolated remote-target workspace for a task-isolated /oc run.
+# Prepare an isolated remote-target workspace for an /oc run.
 #
-# - Clones the target repository into RUNNER_TEMP (never into the workflow
-#   worktree, so its .git can never be staged by a later publication step).
-# - Quarantines target-owned OpenCode policy (.opencode, opencode.json/.jsonc,
-#   AGENTS.md, plugins) away from the run and installs the workflow's
-#   OpenCode config/instructions into the workspace, so the workflow's
-#   enterprise policy is authoritative for the target run. Target policy files
-#   are restored before publication so the target keeps its own files.
-# - Creates one stable branch per (repo, base, task) and reuses an existing
-#   branch on resume, so /oc continue continues the exact branch.
+# The target repository stays a real working tree: its own OpenCode config,
+# AGENTS.md, plugins, and project instructions are preserved. The agent may use
+# normal Git/GitHub lifecycle operations required by the task.
+#
+# A stable target branch is reused on resume, so /oc continue continues the
+# exact branch.
 #
 # The workspace is intentionally left in place for the agent and publisher
 # steps; the workflow's "Clean up remote target workspace" step removes it.
 #
 # Env: OC_TARGET_REPO, OC_TARGET_BASE, OC_TARGET_BRANCH, OC_TARGET_RESUME,
-#      OC_TARGET_TASK, OC_CONTROLLER_ROOT, RUNNER_TEMP, GH_TOKEN
+#      OC_TARGET_TASK, RUNNER_TEMP, GH_TOKEN
 # Test seam: OC_TARGET_CLONE_URL overrides the clone source (a local file://
 #            URL is used by test-oc-target.sh; default https://github.com/$repo.git)
 
