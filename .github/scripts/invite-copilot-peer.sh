@@ -91,6 +91,7 @@ fi
 
 state="$(git status --short 2>/dev/null | head -80)"
 diff_stat="$(git diff --stat 2>/dev/null | head -40)"
+context_path="${OC_ISSUE_CONTEXT_FILE:-$runner_temp/oc-issue-context.md}"
 policy_root="${OC_CONTROLLER_ROOT:-$PWD}"
 copilot_rules="$(cat "$policy_root/.github/copilot-instructions.md" 2>/dev/null || true)"
 
@@ -105,6 +106,9 @@ $task
 You are operating in the SAME isolated worktree that OpenCode is using.
 
 Give concise visible engineering notes before material actions: hypothesis, evidence, next action, result. Do not flood the shared stage with timestamps, hashes, or token-level narration. Read the shared task context in bounded batches before consequential changes.
+Shared task context: $context_path
+Read that file in bounded batches before consequential action; it contains the complete issue body/comments/review comments captured by the controller.
+
 Current state:
 $state
 
