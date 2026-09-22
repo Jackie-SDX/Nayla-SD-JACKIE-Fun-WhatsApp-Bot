@@ -93,6 +93,10 @@ else
 fi
 
 safe_log_path="$(read_back_output safe_log_path)"
+copilot_peer_result="$(read_back_output copilot_peer_result)"
+copilot_peer_elapsed_seconds="$(read_back_output copilot_peer_elapsed_seconds)"
+copilot_peer_rounds_used="$(read_back_output copilot_peer_rounds_used)"
+copilot_peer_log_path="$(read_back_output copilot_peer_log_path)"
 termination_reason="$(read_back_output termination_reason)"
 provider_failure_kind="$(read_back_output provider_failure_kind)"
 
@@ -103,6 +107,10 @@ else
 fi
 out agent_outcome "$agent_outcome"
 [[ -n "$safe_log_path" ]] && out safe_log_path "$safe_log_path"
+[[ -n "$copilot_peer_result" ]] && out copilot_peer_result "$copilot_peer_result"
+[[ -n "$copilot_peer_elapsed_seconds" ]] && out copilot_peer_elapsed_seconds "$copilot_peer_elapsed_seconds"
+[[ -n "$copilot_peer_rounds_used" ]] && out copilot_peer_rounds_used "$copilot_peer_rounds_used"
+[[ -n "$copilot_peer_log_path" ]] && out copilot_peer_log_path "$copilot_peer_log_path"
 agent_branch="$(read_back_output agent_branch)"
 [[ -n "$agent_branch" ]] && out agent_branch "$agent_branch"
 [[ -n "$termination_reason" ]] && out termination_reason "$termination_reason"
@@ -113,7 +121,9 @@ agent_branch="$(read_back_output agent_branch)"
 publish_outcome="not-applicable"
 if [[ "$agent_rc" -eq 0 ]]; then
   publish_rc=0
-  if [[ "$provider" == "github-copilot" ]] && [[ "$mode" == "local" ]]; then
+  if [[ "$task_mode" == "report" ]] && [[ "$provider" == "opencode" ]]; then
+    publish_outcome="report-only"
+  elif [[ "$provider" == "github-copilot" ]] && [[ "$mode" == "local" ]]; then
     set +e
     bash .github/scripts/publish-copilot-change.sh
     publish_rc=$?
