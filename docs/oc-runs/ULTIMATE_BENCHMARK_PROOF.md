@@ -194,6 +194,10 @@ The temporary workflow must be absent from the final PR diff.
   — run `35752579172` conclusion failure (`benchmark-108-intentional-failure`).
 - **Repair head (observed green):** `1f41378bc94df447d6d1624a58eef45914e9f9c9`
   — run `35752676244` success (`validate` check-run).
+- **Final verified PR head:** `6b308ae33b7bb670fa40f372797b3aae01202067`
+  — run [`35752840726`](https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/actions/runs/35752840726)
+  `validate` **success**; `gh pr checks 111` → validate pass;
+  `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`.
 - **Diff vs main:** `docs/oc-runs/ULTIMATE_BENCHMARK_PROOF.md` only
   (`git diff --name-only main...HEAD` and `gh pr diff 111 --name-only`).
 - **Temp workflow:** absent from final tree (removed in repair commit).
