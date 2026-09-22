@@ -69,7 +69,7 @@ while IFS= read -r encoded; do
 done < <(gh api --paginate --jq '.[] | [.id, .user.login, .created_at, .body] | @base64' "/repos/$repo/pulls/$target/comments?per_page=100" 2>/dev/null || true)
 
 request="$(cat "$request_file" 2>/dev/null || jq -r '.comment.body // ""' "${GITHUB_EVENT_PATH:-/dev/null}" 2>/dev/null || true)"
-grep -Eo 'https?://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(issues|pull)/[0-9]+' <<<"$request" 2>/dev/null | sort -u | head -n 5 |
+reference_urls="$(grep -Eo 'https?://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(issues|pull)/[0-9]+' <<<"$request" 2>/dev/null || true)"
 while IFS= read -r url; do
   path="${url#https://github.com/}"
   owner="$(cut -d/ -f1 <<<"$path")"
@@ -86,7 +86,7 @@ while IFS= read -r url; do
       jq -r '"Title: \(.title // "")\nAuthor: @\(.user.login // "unknown")\nState: \(.state // "unknown")\n\n\(.body // "")\n\n---"' || true
     gh api --paginate --jq '.[] | "### Comment #\(.id) — @\(.user.login // "unknown") — \(.created_at // "")\n\n\(.body // "")\n\n---"' "/repos/$owner/$rrepo/issues/$number/comments?per_page=100" 2>/dev/null || true
   } >> "$refs"
-done
+done < <(printf '%s\n' "$reference_urls" | sort -u | head -n 5)
 
 full_size="$(wc -c < "$full")"
 {
