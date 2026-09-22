@@ -77,8 +77,10 @@ Rounds used so far: 1 of 5.
 ### Round 2 — the single peer edit
 
 - Copilot inspected this proof file after creation, made exactly **one small
-  edit** (a one-line precision correction in section 3 wording), and returned a
-  bounded finding. OpenCode re-read the diff and validated the result.
+  edit** (a one-line precision correction in the Round 1 collaboration bullet:
+  replaced "plugin-defined" with "agents defined by Markdown profiles" to match
+  the section 3 evidence), and returned a bounded finding. OpenCode re-read the
+  diff and validated the result.
 
 Rounds used so far: 2 of 5.
 
@@ -100,7 +102,7 @@ via `COMPOSIO_MULTI_EXECUTE_TOOL` against the `COMPOSIO_SEARCH` toolkit.
 
 | Claim | Command / source | Observed result | Status |
 | --- | --- | --- | --- |
-| Copilot CLI version installed for the peer | `cat /home/runner/work/_temp/copilot-cli/package.json` | `"@github/copilot": "1.0.86"` (plus `install.log`) | verified |
+| Copilot CLI version installed for the peer | `copilot --version` | `GitHub Copilot CLI 1.0.86.` (matches `@github/copilot` 1.0.86 in `package.json`) | verified |
 | `--agent general-purpose` fails with empty available list | `copilot --agent general-purpose -p "hi"` | `No such agent: general-purpose, available:` (exit 1) | verified |
 | Default agent (no `--agent`) works | `copilot --model auto --stream=on --max-ai-credits 30 --no-ask-user ... -p "Reply with exactly: PEER_OK"` | Output `PEER_OK` | verified |
 | Peer round 1 result recorded | `$RUNNER_TEMP/copilot-peer-<attempt>.result` | `COPILOT_PEER_RESULT=unavailable` | verified |
