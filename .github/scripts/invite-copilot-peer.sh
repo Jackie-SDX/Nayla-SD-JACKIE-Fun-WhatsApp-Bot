@@ -6,8 +6,11 @@ runner_temp="${RUNNER_TEMP:-/tmp}"
 peer_log="$runner_temp/copilot-peer-${attempt}.safe.log"
 state_file="$runner_temp/copilot-peer-collab.state"
 result_file="$runner_temp/copilot-peer-${attempt}.result"
+hook_log="$runner_temp/copilot-hooks-${attempt}.log"
 mkdir -p "$runner_temp"
 : > "$peer_log"
+: > "$hook_log"
+export OC_COPILOT_HOOK_LOG="$hook_log"
 peer_started_at="$(date +%s)"
 max_rounds="$(printenv COPILOT_PEER_MAX_ROUNDS 2>/dev/null || printf 5)"
 round="$(printenv COPILOT_PEER_ROUND 2>/dev/null || printf 1)"
@@ -122,6 +125,8 @@ sanitize() {
 
 echo "[OC][copilot-peer] inviting Copilot in the current worktree"
 set +e
+(tail -n 0 -F "$hook_log" 2>/dev/null | while IFS= read -r hook_line; do printf "%s\n" "$hook_line"; done) &
+hook_tail_pid=$!
 GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   --model "${COPILOT_PEER_MODEL:-auto}" \
   --agent "${COPILOT_PEER_AGENT:-general-purpose}" \
@@ -148,6 +153,8 @@ GITHUB_TOKEN="$peer_token" "$copilot_bin" \
     printf "[COPILOT] %s\n" "$safe" | tee -a "$peer_log"
   done
 rc=${PIPESTATUS[0]}
+kill "$hook_tail_pid" 2>/dev/null || true
+wait "$hook_tail_pid" 2>/dev/null || true
 set -e
 
 if [[ "$rc" -eq 0 ]]; then
