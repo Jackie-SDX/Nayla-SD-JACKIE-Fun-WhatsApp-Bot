@@ -86,7 +86,7 @@ for ((round=1; round<=max_rounds; round++)); do
 
   worktree="$runner_temp/opencode-ci-recovery-$round"
   rm -rf "$worktree" 2>/dev/null || true
-  git fetch origin "$branch_name" >/dev/null 2>&1 || {
+  oc_git_authed fetch origin "$branch_name" >/dev/null 2>&1 || {
     echo "[CI][round=$round] could not fetch task branch; preserving published state."
     exit 0
   }
@@ -117,7 +117,6 @@ for ((round=1; round<=max_rounds; round++)); do
       echo "[CI][round=$round] no material repair was produced; stopping rather than repeating unchanged work."
     else
       git -C "$worktree" commit -m "oc: repair CI for #$target (round $round)" >/dev/null 2>&1 || true
-      source ".github/scripts/oc-publish-lib.sh"
       if (cd "$worktree" && oc_git_push origin "HEAD:refs/heads/$branch_name"); then
         echo "[CI][round=$round] controller published recovery commit to the same PR branch."
       else
