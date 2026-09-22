@@ -197,10 +197,13 @@ done < "$fifo" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "
 wait "$agent_pid"
 exit_code=$?
 
+provider_warning="false"
 if [[ "$exit_code" -eq 0 ]] && grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$safe_log"; then
-  exit_code=75
-  provider_failure_kind="free-tier-context"
-  echo "::warning title=OpenCode Zen unavailable in this runtime::Zen free-tier context rejected the request; advancing to the next configured provider."
+  # Auxiliary/subagent provider failures must never override the primary
+  # OpenCode process result. The primary process exit code is authoritative.
+  provider_failure_kind="free-tier-context-warning"
+  provider_warning="true"
+  echo "::warning title=OpenCode auxiliary provider warning::A Zen free-tier context error was observed in auxiliary activity; the primary OpenCode run returned success, so preserving success and continuing to verification."
 fi
 
 peer_result_file="$runner_temp/copilot-peer-${attempt}.result"
@@ -240,6 +243,7 @@ printf "[OC][attempt=%s][elapsed=%ss] finished exit_code=%s termination_reason=%
   printf "exit_code=%s\n" "$exit_code"
   printf "termination_reason=%s\n" "$termination_reason"
   printf "provider_failure_kind=%s\n" "$provider_failure_kind"
+  printf "provider_warning=%s\n" "$provider_warning"
 } >> "$output_file"
 
 echo "[OC][attempt=${attempt}] live stream complete; exit_code=${exit_code}; termination_reason=${termination_reason}"

@@ -96,6 +96,12 @@ outputs:
   attempt_elapsed_seconds:
     description: Wall-clock duration of the attempt.
     value: ${{ steps.run.outputs.attempt_elapsed_seconds }}
+  provider_warning:
+    description: true when an auxiliary provider warning occurred without overturning a successful primary attempt.
+    value: ${{ steps.run.outputs.provider_warning }}
+  result_state:
+    description: Durable attempt result state used to prevent false fallback after publication.
+    value: ${{ steps.run.outputs.result_state }}
 runs:
   using: composite
   steps:

@@ -243,7 +243,8 @@ jobs:
           steps.attempt_1.outputs.agent_outcome == 'failure' &&
           steps.attempt_1.outputs.termination_reason != 'timeout' &&
           steps.attempt_1.outputs.termination_reason != 'signal' &&
-          steps.attempt_1.outputs.classify_outcome == 'success'
+          steps.attempt_1.outputs.classify_outcome == 'success' &&
+          steps.attempt_1.outputs.result_state != 'published-after-provider-warning'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
@@ -270,7 +271,8 @@ jobs:
           steps.attempt_2.outputs.agent_outcome == 'failure' &&
           steps.attempt_2.outputs.termination_reason != 'timeout' &&
           steps.attempt_2.outputs.termination_reason != 'signal' &&
-          steps.attempt_2.outputs.classify_outcome == 'success'
+          steps.attempt_2.outputs.classify_outcome == 'success' &&
+          steps.attempt_2.outputs.result_state != 'published-after-provider-warning'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
