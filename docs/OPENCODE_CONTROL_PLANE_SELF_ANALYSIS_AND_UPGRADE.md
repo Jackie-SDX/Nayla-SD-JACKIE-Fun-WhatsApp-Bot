@@ -200,6 +200,10 @@ The control plane now treats the observed Zen `FreeTierError`/403 context reject
 
 The hybrid architecture now supports deliberate in-task collaboration, not only failover. OpenCode can summon Copilot with `.github/scripts/invite-copilot-peer.sh`; Copilot works in the SAME isolated worktree, while publication and final verification remain controller responsibilities. Peer availability, installation, or model failure is fail-open, so collaboration never becomes a task blocker. A separate bounded peer credit budget is used.
 
+## 6.3 Implemented follow-up — OpenRouter recovery
+
+A Zen free-tier context rejection now emits an OpenRouter recovery hint. When `OPENROUTER_API_KEY` exists, the next attempt can switch the SAME OpenCode runtime to `openrouter/free`; otherwise the existing Copilot route remains available. This keeps the three-attempt budget while increasing the chance that OpenCode remains alive long enough to invite Copilot.
+
 ## 7. Verification checklist for the senior engineer
 
 After any control-plane change, before merge, run:
