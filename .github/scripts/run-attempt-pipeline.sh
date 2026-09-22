@@ -26,6 +26,7 @@ provider="${PROVIDER:-none}"
 model="${OC_SELECTED_MODEL:-}"
 variant="${OC_SELECTED_VARIANT:-}"
 mode="${OC_TARGET_MODE:-local}"
+task_mode="${TASK_MODE:-code}"
 target_number="${TARGET_NUMBER:-0}"
 base_ref="${BASE_REF:-}"
 initial_sha="${INITIAL_SHA:-}"
@@ -99,13 +100,52 @@ copilot_peer_rounds_used="$(read_back_output copilot_peer_rounds_used)"
 copilot_peer_log_path="$(read_back_output copilot_peer_log_path)"
 termination_reason="$(read_back_output termination_reason)"
 provider_failure_kind="$(read_back_output provider_failure_kind)"
+provider_warning="$(read_back_output provider_warning)"
+[ -n "$provider_warning" ] || provider_warning="false"
 
-if [[ "$agent_rc" -eq 0 ]]; then
+agent_outcome="failure"
+result_state="agent-failed"
+
+# A provider-unavailable result after an OpenCode PR was already published is
+# not permission to discard that durable work and launch the whole task again.
+# Preserve the published branch and let exact-head CI verification/recovery
+# decide whether more work is needed.
+if [ "$agent_rc" -ne 0 ] &&
+   [ "$termination_reason" = "provider-unavailable" ] &&
+   [ "$provider" = "opencode" ] &&
+   [ "$mode" = "local" ] &&
+   [[ "$target_number" =~ ^[0-9]+$ ]] &&
+   [ "$target_number" != "0" ]; then
+  run_since="$(printenv OC_RUN_START_ISO 2>/dev/null || printf '%s' '')"
+  repo="$(printenv GITHUB_REPOSITORY 2>/dev/null || printf '%s' '')"
+  pr_candidates="$(gh pr list --repo "$repo" --base "$base_ref" --state open --limit 100 --json number,url,headRefName,headRefOid,createdAt 2>/dev/null || printf '%s' '[]')"
+  prefix="opencode/issue$target_number-"
+  published_pr="$(jq -c --arg prefix "$prefix" --arg initial "$initial_sha" --arg since "$run_since" '
+    [ .[] |
+      select((.headRefName|startswith($prefix))) |
+      select((.headRefOid // "") != $initial) |
+      select(($since == "") or ((.createdAt // "") >= $since))
+    ] | sort_by(.createdAt) | last // {}
+  ' <<<"$pr_candidates" 2>/dev/null || printf '%s' '{}')"
+  published_number="$(jq -r '.number // 0' <<<"$published_pr" 2>/dev/null || printf '0')"
+  if [[ "$published_number" =~ ^[1-9][0-9]*$ ]]; then
+    agent_rc=0
+    agent_outcome="success"
+    result_state="published-after-provider-warning"
+    provider_warning="true"
+    pr_url="$(jq -r '.url // empty' <<<"$published_pr" 2>/dev/null || true)"
+    [ -n "$pr_url" ] && out pr_url "$pr_url"
+    echo "::warning title=Provider warning after publication::Attempt $attempt already published PR #$published_number; preserving that result and skipping fresh fallback."
+  fi
+fi
+
+if [ "$agent_rc" -eq 0 ] && [ "$agent_outcome" != "success" ]; then
   agent_outcome="success"
-else
-  agent_outcome="failure"
+  [ "$result_state" = "agent-failed" ] && result_state="completed"
 fi
 out agent_outcome "$agent_outcome"
+out provider_warning "$provider_warning"
+out result_state "$result_state"
 [[ -n "$safe_log_path" ]] && out safe_log_path "$safe_log_path"
 [[ -n "$copilot_peer_result" ]] && out copilot_peer_result "$copilot_peer_result"
 [[ -n "$copilot_peer_elapsed_seconds" ]] && out copilot_peer_elapsed_seconds "$copilot_peer_elapsed_seconds"
@@ -181,5 +221,7 @@ if [[ "$agent_rc" -ne 0 ]] && [[ "$provider" == "opencode" ]] && [[ -n "$model" 
   set -e
 fi
 
+out provider_warning "$provider_warning"
+out result_state "$result_state"
 out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
 exit 0
