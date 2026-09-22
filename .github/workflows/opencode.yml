@@ -171,6 +171,16 @@ jobs:
           [[ -n "${UNIVERSAL_TOKEN:-}" ]] && echo "Universal GitHub credential: configured" || echo "Universal GitHub credential: not configured; using the workflow GitHub token."
           echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
 
+      - name: Prepare peer credential file
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          peer_token_file="$RUNNER_TEMP/copilot-peer-token"
+          printf '%s' "$COPILOT_GITHUB_TOKEN" > "$peer_token_file"
+          chmod 600 "$peer_token_file"
+          echo "COPILOT_PEER_TOKEN_FILE=$peer_token_file" >> "$GITHUB_ENV"
+
       - name: Prepare remote target workspace
         if: steps.target.outputs.mode == 'remote'
         shell: bash

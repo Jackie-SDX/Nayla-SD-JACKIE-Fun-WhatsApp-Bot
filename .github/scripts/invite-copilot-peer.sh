@@ -19,7 +19,11 @@ write_peer_result() {
   } > "$result_file"
 }
 
-if [[ -z "${COPILOT_GITHUB_TOKEN:-}" ]]; then
+peer_token="${COPILOT_GITHUB_TOKEN:-}"
+if [[ -z "$peer_token" && -f "${COPILOT_PEER_TOKEN_FILE:-}" ]]; then
+  peer_token="$(cat "$COPILOT_PEER_TOKEN_FILE")"
+fi
+if [[ -z "$peer_token" ]]; then
   echo "::warning title=Copilot peer unavailable::No Copilot credential is configured; OpenCode continues solo."
   write_peer_result unavailable
   exit 0
@@ -94,7 +98,7 @@ sanitize() {
 
 echo "[OC][copilot-peer] inviting Copilot in the current worktree"
 set +e
-GITHUB_TOKEN="$COPILOT_GITHUB_TOKEN" "$copilot_bin" \
+GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   --model auto \
   --stream=on \
   --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \

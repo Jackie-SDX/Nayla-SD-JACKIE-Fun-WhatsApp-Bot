@@ -51,6 +51,9 @@ fi
 git diff --check
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+# Remove any provider-owned GitHub auth header before controller publication.
+git config --local --unset-all "http.${GITHUB_SERVER_URL:-https://github.com}/.extraheader" 2>/dev/null || true
+git config --local --unset-all "http.extraheader" 2>/dev/null || true
 title="$(jq -r '.issue.title // .pull_request.title // "OpenCode task"' "$GITHUB_EVENT_PATH" | tr '\n' ' ' | cut -c1-72)"
 git commit -m "oc: $title"
 # Explicit non-logging auth: single-invocation Authorization header holding an
