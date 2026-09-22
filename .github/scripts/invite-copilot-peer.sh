@@ -7,15 +7,30 @@ peer_log="$runner_temp/copilot-peer-${attempt}.safe.log"
 result_file="$runner_temp/copilot-peer-${attempt}.result"
 mkdir -p "$runner_temp"
 : > "$peer_log"
+peer_started_at="$(date +%s)"
+
+write_peer_result() {
+  local result="$1"
+  local elapsed="$(( $(date +%s) - peer_started_at ))"
+  {
+    echo "COPILOT_PEER_RESULT=$result"
+    echo "COPILOT_PEER_ELAPSED_SECONDS=$elapsed"
+    echo "COPILOT_PEER_LOG_PATH=$peer_log"
+  } > "$result_file"
+}
 
 if [[ -z "${COPILOT_GITHUB_TOKEN:-}" ]]; then
   echo "::warning title=Copilot peer unavailable::No Copilot credential is configured; OpenCode continues solo."
-  echo "COPILOT_PEER_RESULT=unavailable" > "$result_file"
+  write_peer_result unavailable
   exit 0
 fi
 
 copilot_root="$runner_temp/copilot-cli"
 copilot_bin="${COPILOT_CLI_BIN:-$copilot_root/node_modules/.bin/copilot}"
+mcp_args=()
+mcp_config=""
+cleanup_mcp() { [[ -n "$mcp_config" ]] && rm -f "$mcp_config" || true; }
+trap cleanup_mcp EXIT
 if [[ ! -x "$copilot_bin" ]]; then
   mkdir -p "$copilot_root"
   npm install --prefix "$copilot_root" --no-audit --no-fund --prefer-online --save-exact "@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}" >"$copilot_root/install.log" 2>&1 || {
@@ -24,6 +39,23 @@ if [[ ! -x "$copilot_bin" ]]; then
     echo "COPILOT_PEER_RESULT=unavailable" > "$result_file"
     exit 0
   }
+fi
+
+if [[ -n "${COMPOSIO_MCP_URL:-}" && -f "${COMPOSIO_MCP_HEADERS_FILE:-}" ]]; then
+  mcp_config="$(mktemp "$runner_temp/copilot-peer-mcp.XXXXXX.json")"
+  headers_json="$(python3 - "${COMPOSIO_MCP_HEADERS_FILE}" <<'PY'
+import json,sys
+headers={}
+for line in open(sys.argv[1],errors="replace"):
+    line=line.rstrip("\n")
+    if ":" not in line: continue
+    k,v=line.split(":",1)
+    headers[k.strip()]=v.lstrip()
+print(json.dumps(headers))
+PY
+  )"
+  jq -n --arg url "$COMPOSIO_MCP_URL" --argjson headers "$headers_json" '{mcpServers:{composio:{type:"http",url:$url,headers:$headers,tools:["*"]}}}' > "$mcp_config"
+  mcp_args+=(--additional-mcp-config "@$mcp_config" --allow-tool "composio")
 fi
 
 task="${COPILOT_PEER_TASK:-}"
@@ -76,6 +108,7 @@ GITHUB_TOKEN="$COPILOT_GITHUB_TOKEN" "$copilot_bin" \
   --deny-tool "shell(gh)" \
   --deny-tool "shell(curl)" \
   --deny-tool "shell(wget)" \
+  ${mcp_args[@]} \
   -p "$prompt" 2>&1 |
   while IFS= read -r line || [[ -n "$line" ]]; do
     safe="$(sanitize "$line")"
@@ -85,7 +118,7 @@ rc=${PIPESTATUS[0]}
 set -e
 
 if [[ "$rc" -eq 0 ]]; then
-  echo "COPILOT_PEER_RESULT=completed" > "$result_file"
+  write_peer_result completed
 else
   echo "COPILOT_PEER_RESULT=unavailable" > "$result_file"
   echo "::warning title=Copilot peer unavailable::Peer session exited non-zero; OpenCode continues with its own evidence and work."
