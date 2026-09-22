@@ -7,7 +7,37 @@ on:
     types: [created]
 
 jobs:
+  oc_claim:
+    concurrency:
+      group: oc-claim-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: false
+    if: |
+      github.event.comment.user.type == 'User' &&
+      github.event.comment.user.login == github.repository_owner &&
+      (
+        startsWith(github.event.comment.body, '/oc ') ||
+        github.event.comment.body == '/oc' ||
+        startsWith(github.event.comment.body, '/opencode ') ||
+        github.event.comment.body == '/opencode'
+      ) &&
+      !startsWith(github.event.comment.body, '/oc retry failed jobs') &&
+      !startsWith(github.event.comment.body, '/opencode retry failed jobs')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+    outputs:
+      accepted: ${{ steps.claim.outputs.accepted }}
+    steps:
+      - name: Claim unique /oc comment delivery
+        id: claim
+        shell: bash
+        run: bash .github/scripts/claim-oc-command.sh
+
   opencode:
+    needs: oc_claim
     # Per-issue serialization with cancel-in-progress: false, scoped to the
     # exact command. The group is command-aware so that workflow-originated
     # noise comments (run markers, checkpoints, failure notices) land in a
@@ -20,6 +50,7 @@ jobs:
       group: oc-agent-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}-${{ (startsWith(github.event.comment.body, '/oc ') || github.event.comment.body == '/oc') || (startsWith(github.event.comment.body, '/opencode ') || github.event.comment.body == '/opencode') }}
       cancel-in-progress: false
     if: |
+      needs.oc_claim.outputs.accepted == 'true' &&
       github.event.comment.user.type == 'User' &&
       github.event.comment.user.login == github.repository_owner &&
       (
@@ -98,6 +129,9 @@ jobs:
       - name: Mark triggering /oc comment as running
         if: always()
         continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash .github/scripts/oc-running-reaction.sh add
 
@@ -598,6 +632,9 @@ jobs:
       - name: Clear /oc running reaction
         if: always()
         continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash .github/scripts/oc-running-reaction.sh remove
 
