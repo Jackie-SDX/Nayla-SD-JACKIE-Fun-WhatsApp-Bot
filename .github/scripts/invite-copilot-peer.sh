@@ -101,7 +101,7 @@ copilot_rules="$(cat "$policy_root/.github/copilot-instructions.md" 2>/dev/null 
 if [[ "$peer_mode" == "writer" ]]; then
   prompt="## Copilot writer mode
 This is a content-only co-authoring task, not a software-engineering task.
-Do not inspect, edit, test, or mutate the repository. Do not use shell, read, write, URL, memory, or Github tools.
+Do not inspect, edit, test, or mutate the repository. Do not use shell, read, write, URL, memory, or GitHub tools.
 Use only the story/context included in this prompt.
 Output only the requested story part(s), with no analysis, status, telemetry, workflow commentary, or repository claims.
 
@@ -118,9 +118,9 @@ $task
 
 You are operating in the SAME isolated worktree that OpenCode is using.
 
-Give concise visible engineering notes before material actions: hypothesis, evidence, next action, result. Do not flood the shared stage with timestamps, hashes, or token-level narration. Read the shared task context in bounded batches before consequential changes.
+Give concise visible engineering notes before material actions: hypothesis, evidence, next action, result. Do not flood the shared stage with timestamps, hashes, or token-level narration. Read the shared task context in bounded batches before consequential action.
 Shared task context: $context_path
-Read that file in bounded batces before consequential action: it contains the complete issue body/comments/review comments captured by the controller.
+Read that file in bounded batches before consequential action; it contains the complete issue body/comments/review comments captured by the controller.
 
 Current state:
 $state
@@ -128,10 +128,10 @@ $state
 Diff summary:
 $diff_stat
 
-Unpect, test, and edit this worktree as useful. Do not commit, push, reset, clean, delete branches, or mutate GitHub through gh. Do not wait for user approval.
+Inspect, test, and edit this worktree as useful. Do not commit, push, reset, clean, delete branches, or mutate GitHub through gh. Do not wait for user approval.
 Return findings and make concrete corrective edits when justified.
 OpenCode will re-read your changes and independently validate the resulting tree."
-f
+fi
 is_noise_line() {
   printf '%s' "$1" | grep -Eq '^(Resume copilot|Tokens |AI Credits |Changes |.*copilot --resume=)'
 }
@@ -176,7 +176,7 @@ run_copilot() {
     --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \
     --no-ask-user \
     "${tool_args[@]}" \
-    --secret-env-vars "COPILOT_GITHUB_TOKEN,GITHUB_TOKEN,GH_TOKEN,UNIVERSAL_TOKEN, O	ADENROUTER_API_KEY,OPENCODE_API_KEY,COMPOSIO_API_KEY" \
+    --secret-env-vars "COPILOT_GITHUB_TOKEN,GITHUB_TOKEN,GH_TOKEN,UNIVERSAL_TOKEN,OPENROUTER_API_KEY,OPENCODE_API_KEY,COMPOSIO_API_KEY" \
     "${mcp_args[@]}" \
     -p "$prompt" 2>&1 |
     while IFS= read -r line || [[ -n "$line" ]]; do
