@@ -102,6 +102,7 @@ termination_reason="$(read_back_output termination_reason)"
 provider_failure_kind="$(read_back_output provider_failure_kind)"
 provider_warning="$(read_back_output provider_warning)"
 [ -n "$provider_warning" ] || provider_warning="false"
+agent_branch="$(read_back_output agent_branch)"
 
 agent_outcome="failure"
 result_state="agent-failed"

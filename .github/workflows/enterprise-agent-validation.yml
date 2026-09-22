@@ -529,6 +529,17 @@ jobs:
         shell: bash
         run: bash .github/scripts/test-opencode-live-output.sh
 
+      - name: Execute false-fallback provider regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          # CI-coverage contract: the PR #113 false-fallback invariants must
+          # remain pinned in the executed regression suite.
+          grep -Fq 'provider_failure_kind=free-tier-context-warning' .github/scripts/test-provider-fallback.sh
+          grep -Fq 'published-after-provider-warning' .github/scripts/test-provider-fallback.sh
+          grep -Fq 'must NOT create a fresh attempt' .github/scripts/test-provider-fallback.sh
+          bash .github/scripts/test-provider-fallback.sh
+
       - name: Smoke-test live OpenCode streaming and budget control
         shell: bash
         run: |

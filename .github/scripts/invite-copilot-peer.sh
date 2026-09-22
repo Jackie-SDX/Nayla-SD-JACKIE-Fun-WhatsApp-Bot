@@ -131,13 +131,21 @@ sanitize() {
   printf "%s" "$line" | sed -E -e "s/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g" -e "s/(AIza[[:alnum:]_-]{20,})/[REDACTED_GOOGLE_KEY]/g" -e "s/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g"
 }
 
+# Copilot CLI 1.0.x has no builtin agent registry; passing --agent for a
+# non-empty builtin (e.g. "general-purpose") aborts the peer session. Only pin
+# --agent when the operator explicitly configured a custom agent.
+agent_args=()
+if [[ -n "${COPILOT_PEER_AGENT:-}" ]]; then
+  agent_args+=(--agent "$COPILOT_PEER_AGENT")
+fi
+
 echo "[OC][copilot-peer] inviting Copilot in the current worktree"
 set +e
 (tail -n 0 -F "$hook_log" 2>/dev/null | while IFS= read -r hook_line; do printf "%s\n" "$hook_line"; done) &
 hook_tail_pid=$!
 GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   --model "${COPILOT_PEER_MODEL:-auto}" \
-  --agent "${COPILOT_PEER_AGENT:-general-purpose}" \
+  "${agent_args[@]}" \
   --stream=on \
   --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \
   --no-ask-user \

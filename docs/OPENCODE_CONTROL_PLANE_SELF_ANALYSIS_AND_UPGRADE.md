@@ -66,6 +66,7 @@ Evidence / observability:
 Config / tests:
 - `oc-control-plane-config.sh` — **single source of truth** for control-plane constants: agent timeout 350 min, job budget 21600s, safety margin 120s, progress interval 30s, CI verify settle 30s, Copilot max credits 60, OpenCode default version 1.18.31.
 - `test-oc-target.sh` (854 lines) — deterministic offline regression suite pinning verifier/selector/publication/remote-target behavior (e.g., non-prefix branch demo-loop regression, settle defaults, all-skipped-never-verified, late-arriving external-status failure).
+- `test-provider-fallback.sh` — regression suite **executed by `enterprise-agent-validation.yml`**, pinning the PR #113 false-fallback invariants: a non-fatal auxiliary provider warning (e.g. Zen free-tier context error) on a successful primary attempt stays success, and a provider-unavailable termination after a durable PR exists is preserved as `published-after-provider-warning` — neither state may create a fresh duplicate attempt, while a genuine failure with no durable work still advances the route ladder.
 - `test-ingest-evidence.sh` — deterministic self-test for the evidence pipeline.
 - `test-opencode-live-output.sh` — unit tests for the live filter.
 - `validate-application.sh` — app invariant helper (product scope).
