@@ -76,9 +76,10 @@
 ## §7 — Final Publication State
 
 - **PR:** #112
-- **Final SHA:** To be confirmed after CI green
+- **Final SHA:** `520afa9` (head of `opencode/issue108-20260922161814`)
 - **Files changed:** Only `docs/oc-runs/ULTIMATE_BENCHMARK_PROOF.md` (temp workflow removed)
-- **CI status:** `enterprise-agent-validation` = `success`; `benchmark-108-intentional-failure` removed
+- **CI status:** `enterprise-agent-validation` = `success` (run `35754163034`, `validate` pass in 30s)
+- **`mergeable`:** `MERGEABLE`
 - **No WhatsApp application code changes:** Confirmed
 
 ## §8 — Residuals (Not Blockers)
@@ -97,5 +98,5 @@
 | Temporary CI failure introduced | `benchmark-108-intentional-failure.yml`, run `35753709355` | Verified |
 | Real remote failure observed | Run `35753709355`, conclusion `failure`, `##[error]Process completed with exit code 1.` | Verified |
 | Repair on same branch | `git rm` + push to same branch, commit `b10859d` | Verified |
-| CI green at final head | Pending — `enterprise-agent-validation` success confirmed on prior runs | Pending |
+| CI green at final head | Run `35754163034`, `validate pass` in 30s, `mergeable=MERGEABLE` | Verified |
 | No WhatsApp app changes | File diff confirms only proof file | Verified |
