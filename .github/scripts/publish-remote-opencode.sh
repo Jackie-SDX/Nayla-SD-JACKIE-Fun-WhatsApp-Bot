@@ -95,7 +95,7 @@ oc_git_push -C "$ws" --set-upstream origin "HEAD:$branch" || {
 }
 echo "Pushed remote target branch: $repo@$branch ($head_sha)"
 
-pr_url="$(gh pr create --repo "$repo" --base "$base" --head "$branch" --title "oc: $title" --body "$(printf 'Automated /oc remote-target task from the controller repository.\n\n- Target repository: %s\n- Target base: %s\n- Branch: %s\n- The change was produced and published by optional workflow OpenCode logic.\n\nReview the resulting diff and the target repository'\''s own CI checks before merging.' "$repo" "$base" "$branch")" 2>/dev/null || true)"
+pr_url="$(gh pr create --repo "$repo" --base "$base" --head "$branch" --title "oc: $title" --body "$(printf 'Automated /oc remote-target task from the workflow repository.\n\n- Target repository: %s\n- Target base: %s\n- Branch: %s\n- The change was produced and published by optional workflow automation.\n\nReview the resulting diff and the target repository'\''s own CI checks before merging.' "$repo" "$base" "$branch")" 2>/dev/null || true)"
 if [[ -z "$pr_url" ]]; then
   existing_json="$(gh pr list --repo "$repo" --head "$branch" --base "$base" --state open --limit 10 --json number,url,headRefOid 2>/dev/null || printf '%s' '[]')"
   existing="$(jq -r '.[0].url // ""' <<<"$existing_json" 2>/dev/null || true)"
