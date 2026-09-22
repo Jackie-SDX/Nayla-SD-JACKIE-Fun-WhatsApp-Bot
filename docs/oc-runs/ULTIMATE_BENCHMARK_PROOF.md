@@ -64,8 +64,9 @@
 
 ### CI Observation
 - **Before repair:** `benchmark-108-intentional-failure` check = `failure` (run `35753709355`)
-- **After repair:** Waiting for `enterprise-agent-validation` to complete on head `b10859d`
-- **PR:** #112
+- **After repair:** `enterprise-agent-validation` = `success` (run `35754352866`, 31s)
+- **PR:** #112, head `5d38f66`
+- **`validate`:** `pass`, `mergeable`:** `MERGEABLE`
 
 ## §6 — Tests
 
@@ -76,16 +77,17 @@
 ## §7 — Final Publication State
 
 - **PR:** #112
-- **Final SHA:** `520afa9` (head of `opencode/issue108-20260922161814`)
+- **Final SHA:** `5d38f66` (head of `opencode/issue108-20260922161814`)
 - **Files changed:** Only `docs/oc-runs/ULTIMATE_BENCHMARK_PROOF.md` (temp workflow removed)
-- **CI status:** `enterprise-agent-validation` = `success` (run `35754163034`, `validate` pass in 30s)
+- **CI status:** `enterprise-agent-validation` = `success` (run `35754352866`, `validate` pass in 31s)
 - **`mergeable`:** `MERGEABLE`
-- **No WhatsApp application code changes:** Confirmed
+- **Final validation:** `validate pass`, `mergeable=MERGEABLE`
 
 ## §8 — Residuals (Not Blockers)
 
-- `npm run lint` unavailable in this runner (eslint not installed)
-- GitHub Apps `render`/`freebuff-web` leave `queued` check-suites on every PR head in this repo; never complete, not caused by this PR, don't block `validate`
+- `npm run lint` unavailable in this runner (eslint not installed); `npm test` + `npm run test:invariants` (16/16) pass
+- GitHub Apps `render`/`freebuff-web` leave `queued` check-suites on every PR head; never complete, not caused by this PR, don't block `validate`
+- **All acceptance criteria satisfied.** Benchmark complete.
 
 ## §9 — Evidence Ledger
 
@@ -98,5 +100,5 @@
 | Temporary CI failure introduced | `benchmark-108-intentional-failure.yml`, run `35753709355` | Verified |
 | Real remote failure observed | Run `35753709355`, conclusion `failure`, `##[error]Process completed with exit code 1.` | Verified |
 | Repair on same branch | `git rm` + push to same branch, commit `b10859d` | Verified |
-| CI green at final head | Run `35754163034`, `validate pass` in 30s, `mergeable=MERGEABLE` | Verified |
+| CI green at final head | Run `35754352866`, `validate pass` in 31s, `mergeable=MERGEABLE` | Verified |
 | No WhatsApp app changes | File diff confirms only proof file | Verified |
