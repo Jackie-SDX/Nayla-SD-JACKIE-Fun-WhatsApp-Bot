@@ -410,7 +410,7 @@ jobs:
           MERGE_EXIT: ${{ env.OC_MERGE_EXIT }}
         run: bash .github/scripts/post-oc-result.sh
 
-      - name: Routing summary      - name: Routing summary
+      - name: Routing summary
         if: always()
         env:
           R1: ${{ steps.route_1.outputs.route }}
