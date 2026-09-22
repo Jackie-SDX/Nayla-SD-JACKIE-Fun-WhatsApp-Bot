@@ -4,11 +4,13 @@ set -u
 attempt="${OC_ATTEMPT:-peer}"
 runner_temp="${RUNNER_TEMP:-/tmp}"
 peer_log="$runner_temp/copilot-peer-${attempt}.safe.log"
+writer_output_file="$runner_temp/copilot-peer-${attempt}.writer.txt"
 state_file="$runner_temp/copilot-peer-collab.state"
 result_file="$runner_temp/copilot-peer-${attempt}.result"
 hook_log="$runner_temp/copilot-hooks-${attempt}.log"
 mkdir -p "$runner_temp"
 : > "$peer_log"
+: > "$writer_output_file"
 : > "$hook_log"
 export OC_COPILOT_HOOK_LOG="$hook_log"
 peer_started_at="$(date +%s)"
@@ -73,7 +75,7 @@ if [[ ! -x "$copilot_bin" ]]; then
   }
 fi
 
-if [[ -n "${COMPOSIO_MCP_URL:-}" && -f "${COMPOSIO_MCP_HEADERS_FILE:-}" ]]; then
+if [[ "$peer_mode" != "writer" && -n "${COMPOSIO_MCP_URL:-}" && -f "${COMPOSIO_MCP_HEADERS_FILE:-}" ]]; then
   mcp_config="$(mktemp "$runner_temp/copilot-peer-mcp.XXXXXX.json")"
   headers_json="$(python3 - "${COMPOSIO_MCP_HEADERS_FILE}" <<'PY'
 import json,sys
@@ -96,7 +98,17 @@ context_path="${OC_ISSUE_CONTEXT_FILE:-$runner_temp/oc-issue-context.md}"
 policy_root="${OC_CONTROLLER_ROOT:-$PWD}"
 copilot_rules="$(cat "$policy_root/.github/copilot-instructions.md" 2>/dev/null || true)"
 
-prompt="$copilot_rules
+if [[ "$peer_mode" == "writer" ]]; then
+  prompt="## Copilot writer mode
+This is a content-only co-authoring task, not a software-engineering task.
+Do not inspect, edit, test, or mutate the repository. Do not use shell, read, write, URL, memory, or GitHub tools.
+Use only the story/context included in this prompt.
+Output only the requested story part(s), with no analysis, status, telemetry, workflow commentary, or repository claims.
+
+Task:
+$task"
+else
+  prompt="$copilot_rules
 
 ## OpenCode peer invitation
 You are the second engineering brain in an active OpenCode task.
@@ -106,7 +118,7 @@ $task
 
 You are operating in the SAME isolated worktree that OpenCode is using.
 
-Give concise visible engineering notes before material actions: hypothesis, evidence, next action, result. Do not flood the shared stage with timestamps, hashes, or token-level narration. Read the shared task context in bounded batches before consequential changes.
+Give concise visible engineering notes before material actions: hypothesis, evidence, next action, result. Do not flood the shared stage with timestamps, hashes, or token-level narration. Read the shared task context in bounded batches before consequential action.
 Shared task context: $context_path
 Read that file in bounded batches before consequential action; it contains the complete issue body/comments/review comments captured by the controller.
 
@@ -119,7 +131,7 @@ $diff_stat
 Inspect, test, and edit this worktree as useful. Do not commit, push, reset, clean, delete branches, or mutate GitHub through gh. Do not wait for user approval.
 Return findings and make concrete corrective edits when justified.
 OpenCode will re-read your changes and independently validate the resulting tree."
-
+fi
 is_noise_line() {
   printf '%s' "$1" | grep -Eq '^(Resume copilot|Tokens |AI Credits |Changes |.*copilot --resume=)'
 }
@@ -142,45 +154,46 @@ if [[ "$peer_mode" != "critic" ]]; then
   copilot_tool_args+=(--allow-tool "write")
 fi
 # Keep critic instructions inline; custom-agent callbacks are not guaranteed in Actions.
-if [[ -n "${COPILOT_PEER_AGENT:-}" ]]; then
+if [[ "$peer_mode" != "writer" && -n "${COPILOT_PEER_AGENT:-}" ]]; then
   copilot_agent_args+=(--agent "$COPILOT_PEER_AGENT")
 fi
 run_copilot() {
   local use_custom_agent="${1:-1}"
   local agent_args=()
-  if [[ "$use_custom_agent" == "1" ]]; then agent_args=("${copilot_agent_args[@]}"); fi
+  local tool_args=()
+  if [[ "$peer_mode" != "writer" && "$use_custom_agent" == "1" ]]; then
+    agent_args=("${copilot_agent_args[@]}")
+  fi
+  if [[ "$peer_mode" != "writer" ]]; then
+    tool_args+=(--allow-tool "shell" --allow-tool "read" --allow-tool "url" --allow-tool "memory")
+    tool_args+=("${copilot_tool_args[@]}")
+    tool_args+=(--deny-tool "shell(git commit)" --deny-tool "shell(git push)" --deny-tool "shell(git reset)" --deny-tool "shell(git clean)" --deny-tool "shell(gh)" --deny-tool "shell(curl)" --deny-tool "shell(wget)")
+  fi
   GITHUB_TOKEN="$peer_token" "$copilot_bin" \
     --model "${COPILOT_PEER_MODEL:-auto}" \
     "${agent_args[@]}" \
     --stream=on \
     --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \
     --no-ask-user \
-    --allow-tool "shell" \
-    --allow-tool "read" \
-    --allow-tool "url" \
-    --allow-tool "memory" \
-    "${copilot_tool_args[@]}" \
-    --deny-tool "shell(git commit)" \
-    --deny-tool "shell(git push)" \
-    --deny-tool "shell(git reset)" \
-    --deny-tool "shell(git clean)" \
-    --deny-tool "shell(gh)" \
-    --deny-tool "shell(curl)" \
-    --deny-tool "shell(wget)" \
+    "${tool_args[@]}" \
     --secret-env-vars "COPILOT_GITHUB_TOKEN,GITHUB_TOKEN,GH_TOKEN,UNIVERSAL_TOKEN,OPENROUTER_API_KEY,OPENCODE_API_KEY,COMPOSIO_API_KEY" \
-    ${mcp_args[@]} \
+    "${mcp_args[@]}" \
     -p "$prompt" 2>&1 |
     while IFS= read -r line || [[ -n "$line" ]]; do
       if is_noise_line "$line"; then continue; fi
       safe="$(sanitize "$line")"
-      printf "[COPILOT] %s\n" "$safe" | tee -a "$peer_log"
+      if [[ "$peer_mode" == "writer" ]]; then
+        printf "%s\n" "$safe" | tee -a "$peer_log" "$writer_output_file"
+      else
+        printf "[COPILOT] %s\n" "$safe" | tee -a "$peer_log"
+      fi
     done
   return "${PIPESTATUS[0]}"
 }
 
 run_copilot 1
 rc=$?
-if [[ "$rc" -ne 0 && -n "${copilot_agent_args[*]:-}" ]]; then
+if [[ "$peer_mode" != "writer" && "$rc" -ne 0 && -n "${copilot_agent_args[*]:-}" ]]; then
   echo "::warning title=Copilot custom agent unavailable::Custom Copilot agent invocation failed; retrying the same peer prompt without a custom-agent callback."
   printf "\n" >> "$peer_log"
   run_copilot 0

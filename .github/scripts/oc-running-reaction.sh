@@ -22,14 +22,14 @@ case "$action" in
   add)
     if [[ -f "$state_file" ]]; then exit 0; fi
     actor="$(gh api user --jq ".login" 2>/dev/null || true)"
-    existing_id=""
+    # Only clear stale eyes reactions made by the workflow actor. Never reuse
+    # or delete a human reaction.
     if [[ -n "$actor" ]]; then
-      existing_id="$(gh api "$reaction_path?per_page=100" 2>/dev/null | jq -r --arg actor "$actor" "[.[] | select(.content==\"eyes\" and .user.login==$actor)] | last | (.id // \"\")" 2>/dev/null || true)"
-    fi
-    if [[ "$existing_id" =~ ^[0-9]+$ ]]; then
-      printf "%s\n" "$existing_id" > "$state_file"
-      echo "Reusing existing /oc running reaction $existing_id."
-      exit 0
+      stale_ids="$(gh api "$reaction_path?per_page=100" 2>/dev/null | jq -r --arg actor "$actor" "[.[] | select(.content==\"eyes\" and .user.login==$actor)] | .[]?.id" 2>/dev/null || true)"
+      while IFS= read -r stale_id; do
+        [[ "$stale_id" =~ ^[0-9]+$ ]] || continue
+        gh api --method DELETE "$reaction_path/$stale_id" >/dev/null 2>&1 || true
+      done <<<"$stale_ids"
     fi
     reaction_id="$(gh api --method POST "$reaction_path" -f content=eyes --jq ".id" 2>/dev/null || true)"
     if [[ "$reaction_id" =~ ^[0-9]+$ ]]; then
