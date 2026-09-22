@@ -1,0 +1,78 @@
+name: openrouter-runtime-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENCODE_VERSION: ${{ vars.OPENCODE_VERSION || '1.18.31' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve verified OpenCode release
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          json="$(mktemp)"
+          trap 'rm -f "$json"' EXIT
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+            "https://api.github.com/repos/anomalyco/opencode/releases/tags/v$OPENCODE_VERSION" -o "$json"
+          tag="$(jq -r '.tag_name' "$json")"
+          version="${tag#v}"
+          url="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .browser_download_url' "$json")"
+          digest="$(jq -r '.assets[] | select(.name == "opencode-linux-x64.tar.gz") | .digest' "$json")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ -n "$url" && "$url" != "null" ]]
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Install verified OpenCode
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 5 --max-time 120 ${{ steps.release.outputs.url }} -o "$tmp/opencode.tar.gz"
+          digest=${{ steps.release.outputs.digest }}
+          digest="${digest#sha256:}"
+          echo "$digest  $tmp/opencode.tar.gz" | sha256sum --check -
+          mkdir -p "$tmp/extract"
+          tar -xzf "$tmp/opencode.tar.gz" -C "$tmp/extract"
+          binary="$(find "$tmp/extract" -type f -name opencode -perm -u+x | head -n 1)"
+          [[ -n "$binary" ]]
+          install -Dm755 "$binary" "$HOME/.opencode/bin/opencode"
+          "$HOME/.opencode/bin/opencode" --version
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Live OpenRouter request
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${OPENROUTER_API_KEY:-}" ]] || { echo "::error title=OpenRouter smoke unavailable::OPENROUTER_API_KEY is not configured."; exit 1; }
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          mkdir -p "$tmp/repo"
+          cd "$tmp/repo"
+          git init -q
+          git config user.name smoke
+          git config user.email smoke@example.invalid
+          git commit -q --allow-empty -m init
+          export OPENCODE_CONFIG_CONTENT='{"model":"openrouter/free"}'
+          timeout 120s opencode run --model openrouter/free --title "OpenRouter runtime smoke" "Return exactly OPENROUTER-LIVE-SMOKE and do not edit files." >"$tmp/output.log" 2>&1
+          grep -Fq "OPENROUTER-LIVE-SMOKE" "$tmp/output.log"
+          ! grep -Eiq '(401|403|FreeTierError|unauthorized)' "$tmp/output.log" || { echo "::error title=OpenRouter runtime rejected::The live OpenRouter request produced an authentication/provider error."; exit 1; }
+          echo "OPENROUTER LIVE RUNTIME: PASS"
