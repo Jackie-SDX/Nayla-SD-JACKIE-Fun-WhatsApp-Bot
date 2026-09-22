@@ -58,6 +58,9 @@ jobs:
       OC_JOB_BUDGET_SECONDS: "21600"
       OC_JOB_SAFETY_MARGIN_SECONDS: "120"
       OC_PROGRESS_INTERVAL_SECONDS: "30"
+      COPILOT_PEER_MAX_ROUNDS: "5"
+      OC_CI_WATCH_MINUTES: "45"
+      OC_CI_WATCH_POLL_SECONDS: "20"
       OPENCODE_BAD_MODELS: ${{ vars.OPENCODE_BAD_MODELS }}
       OPENCODE_BAD_MODELS_MAX_AGE_HOURS: ${{ vars.OPENCODE_BAD_MODELS_MAX_AGE_HOURS || '24' }}
 
@@ -96,6 +99,19 @@ jobs:
         env:
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
         run: bash .github/scripts/resolve-oc-target.sh
+
+      - name: Capture complete task context
+        id: context
+        shell: bash
+        env:
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          OC_CONTEXT_MAX_BYTES: "2000000"
+        run: bash .github/scripts/collect-oc-context.sh
+
+      - name: Select task mode
+        id: task_mode
+        shell: bash
+        run: bash .github/scripts/select-oc-task-mode.sh
 
       - name: Resolve and verify OpenCode release
         id: opencode_release
@@ -177,9 +193,14 @@ jobs:
           set -euo pipefail
           umask 077
           peer_token_file="$RUNNER_TEMP/copilot-peer-token"
-          printf '%s' "$COPILOT_GITHUB_TOKEN" > "$peer_token_file"
-          chmod 600 "$peer_token_file"
-          echo "COPILOT_PEER_TOKEN_FILE=$peer_token_file" >> "$GITHUB_ENV"
+          if [[ -n "${COPILOT_GITHUB_TOKEN:-}" ]]; then
+            printf '%s' "$COPILOT_GITHUB_TOKEN" > "$peer_token_file"
+            chmod 600 "$peer_token_file"
+            echo "COPILOT_PEER_TOKEN_FILE=$peer_token_file" >> "$GITHUB_ENV"
+          else
+            rm -f "$peer_token_file"
+            echo "COPILOT_PEER_TOKEN_FILE=" >> "$GITHUB_ENV"
+          fi
 
       - name: Prepare remote target workspace
         if: steps.target.outputs.mode == 'remote'
@@ -212,6 +233,7 @@ jobs:
           base_ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           initial_sha: ${{ steps.initial_state.outputs.sha }}
           mode: ${{ steps.target.outputs.mode }}
+          task_mode: ${{ steps.task_mode.outputs.mode }}
           verify_wait_minutes: "20"
           verify_poll_seconds: "20"
 
@@ -238,6 +260,7 @@ jobs:
           base_ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           initial_sha: ${{ steps.initial_state.outputs.sha }}
           mode: ${{ steps.target.outputs.mode }}
+          task_mode: ${{ steps.task_mode.outputs.mode }}
           verify_wait_minutes: "20"
           verify_poll_seconds: "20"
 
@@ -264,6 +287,7 @@ jobs:
           base_ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           initial_sha: ${{ steps.initial_state.outputs.sha }}
           mode: ${{ steps.target.outputs.mode }}
+          task_mode: ${{ steps.task_mode.outputs.mode }}
           verify_wait_minutes: "20"
           verify_poll_seconds: "20"
 
@@ -278,7 +302,7 @@ jobs:
           git log -1 --oneline
 
       - name: Reconcile OpenCode publication
-        if: always() && steps.target.outputs.mode != 'remote' && ((steps.attempt_1.outputs.agent_outcome == 'success' && steps.attempt_1.outputs.publish_outcome != 'failed' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.agent_outcome == 'success' && steps.attempt_2.outputs.publish_outcome != 'failed' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.agent_outcome == 'success' && steps.attempt_3.outputs.publish_outcome != 'failed' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && env.OC_TASK_MODE != 'report' && steps.target.outputs.mode != 'remote' && ((steps.attempt_1.outputs.agent_outcome == 'success' && steps.attempt_1.outputs.publish_outcome != 'failed' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.agent_outcome == 'success' && steps.attempt_2.outputs.publish_outcome != 'failed' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.agent_outcome == 'success' && steps.attempt_3.outputs.publish_outcome != 'failed' && steps.route_3.outputs.provider == 'opencode'))
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
@@ -307,6 +331,46 @@ jobs:
           findings="$(tail -n 100 "$SAFE_LOG" 2>/dev/null || printf '%s' 'No sanitized agent log was available.')"
           body="$(printf 'Agent recovery stopped without a fully verified success. No success is claimed.\n\nSanitized findings:\n\n%s' "$findings")"
           gh issue comment "$TARGET_NUMBER" --body "$body"
+
+      - name: Autonomous CI recovery loop
+        if: always() && env.OC_TASK_MODE != 'report' && (steps.attempt_1.outputs.agent_outcome == 'success' || steps.attempt_2.outputs.agent_outcome == 'success' || steps.attempt_3.outputs.agent_outcome == 'success')
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          OC_RUN_START_ISO: ${{ env.OC_RUN_START_ISO }}
+          OC_JOB_START_EPOCH: ${{ env.OC_JOB_START_EPOCH }}
+          OC_JOB_BUDGET_SECONDS: "21600"
+          OC_JOB_SAFETY_MARGIN_SECONDS: "120"
+          OC_ISSUE_CONTEXT_FILE: ${{ env.OC_ISSUE_CONTEXT_FILE }}
+          OC_MAX_RECOVERY_ROUNDS: "5"
+          OC_CI_WATCH_MINUTES: "45"
+          OC_CI_WATCH_POLL_SECONDS: "20"
+        shell: bash
+        run: bash .github/scripts/recover-opencode-ci.sh
+
+      - name: Independent agent audit (advisory)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          OC_RUN_START_ISO: ${{ env.OC_RUN_START_ISO }}
+        shell: bash
+        run: bash .github/scripts/independent-audit-advisory.sh
+
+      - name: Post report-only response
+        if: always() && env.OC_TASK_MODE == 'report' && (steps.attempt_1.outputs.agent_outcome == 'success' || steps.attempt_2.outputs.agent_outcome == 'success' || steps.attempt_3.outputs.agent_outcome == 'success')
+        env:
+          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          REPORT_LOG: ${{ steps.attempt_3.outputs.safe_log_path || steps.attempt_2.outputs.safe_log_path || steps.attempt_1.outputs.safe_log_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_NUMBER" =~ ^[0-9]+$ && "$TARGET_NUMBER" != "0" ]] || exit 0
+          report="$(tail -n 160 "$REPORT_LOG" 2>/dev/null || true)"
+          gh issue comment "$TARGET_NUMBER" --body "$(printf '### /oc report\n\n%s' "$report")"
 
       - name: Routing summary
         if: always()
@@ -372,6 +436,10 @@ jobs:
           OC_OBS_RUN_ID: ${{ github.run_id }}
           OC_OBS_ISSUE: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
           OC_OBS_MODE: ${{ steps.target.outputs.mode }}
+          OC_OBS_TASK_MODE: ${{ steps.task_mode.outputs.mode }}
+          OC_OBS_PEER1: ${{ steps.attempt_1.outputs.copilot_peer_result }}
+          OC_OBS_PEER1_ELAPSED: ${{ steps.attempt_1.outputs.copilot_peer_elapsed_seconds }}
+          OC_OBS_PEER1_ROUNDS: ${{ steps.attempt_1.outputs.copilot_peer_rounds_used }}
           OC_OBS_VERSION: ${{ steps.opencode_release.outputs.version }}
           OC_OBS_INITIAL_SHA: ${{ steps.initial_state.outputs.sha }}
           OC_OBS_TARGET_REPO: ${{ steps.target.outputs.target_repo }}

@@ -6,7 +6,7 @@
     ".opencode/instructions.md"
   ],
   "share": "disabled",
-  "subagent_depth": 3,
+  "subagent_depth": 4,
   "mcp": {
     "composio": {
       "type": "local",

@@ -45,8 +45,13 @@ json="$(
     --arg ci_run_id "${OC_OBS_CI_RUN_ID:-}" \
     --arg ci_surfaces "${OC_OBS_CI_SURFACES:-}" \
     --arg event "oc/issue-comment" \
+    --arg task_mode "${OC_OBS_TASK_MODE:-code}" \
+    --arg peer_result "${OC_OBS_PEER1:-}" \
+    --arg peer_elapsed "${OC_OBS_PEER1_ELAPSED:-}" \
+    --arg peer_rounds "${OC_OBS_PEER1_ROUNDS:-}" \
+    --arg independent_audit "${OC_OBS_INDEPENDENT_AUDIT:-}" \
     '{
-      schema_version: 1,
+      schema_version: 2,
       event: $event,
       run_id: ($run_id | tonumber),
       repository: $repo,
@@ -62,12 +67,15 @@ json="$(
       job_budget_seconds: ($job_budget_seconds | tonumber? // null),
       elapsed_seconds: ($elapsed_seconds | tonumber? // null),
       opencode_version: $opencode_version,
+      task_mode: $task_mode,
       initial_sha: $initial_sha,
       attempts: [
         {attempt: 1, route: $r1, provider: $r1_provider, agent_outcome: $a1, publish_outcome: $pu1, classify_outcome: $c1, verified: $v1},
         {attempt: 2, route: $r2, provider: $r2_provider, agent_outcome: $a2, publish_outcome: $pu2, classify_outcome: $c2, verified: $v2},
         {attempt: 3, route: $r3, provider: $r3_provider, agent_outcome: $a3, publish_outcome: $pu3, classify_outcome: $c3, verified: $v3}
       ],
+      collaboration: {peer_result: $peer_result, peer_elapsed_seconds: ($peer_elapsed | tonumber? // null), peer_rounds_used: ($peer_rounds | tonumber? // null)},
+      independent_audit: $independent_audit,
       result: {
         verified: ($v1 == "true" or $v2 == "true" or $v3 == "true"),
         verified_sha: $verified_sha,
