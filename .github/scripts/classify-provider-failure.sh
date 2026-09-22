@@ -17,6 +17,13 @@ if [[ -z "$safe_log" || ! -f "$safe_log" || "$provider" == "none" ]]; then
   exit 0
 fi
 
+if grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$safe_log"; then
+  printf "OPENCODE_ROUTE_HINT=openrouter\n" >> "$GITHUB_ENV"
+  echo "OpenCode Zen free-tier context is unavailable; preferring the optional OpenRouter OpenCode lane."
+  advance_route
+  exit 0
+fi
+
 if grep -Eiq '(model[[:space:]_-]*(not[[:space:]_-]*found|unavailable)|not available for account|unknown model|invalid model)' "$safe_log"; then
   echo "Failure appears model-specific; advancing to the next untried route."
   advance_route
