@@ -561,3 +561,13 @@ Before reporting success, verify:
 Report exact branch/commit/test evidence.
 
 Never call a partially verified state fully verified.
+
+## Two-brain OpenCode + Copilot collaboration
+
+OpenCode is the primary orchestrator but may invite Copilot as a peer inside the SAME isolated worktree.
+
+Use `bash "${OC_CONTROLLER_ROOT:-$PWD}/.github/scripts/invite-copilot-peer.sh" "<specific question>"` when a second implementation opinion, architecture review, difficult debugging pass, persistent test failure, or adversarial review would materially improve confidence. This is optional and agent-driven; it is never a blocker.
+
+Copilot may inspect, test, and edit the current worktree, but must not commit, push, reset, clean, delete branches, or mutate GitHub-side state. After the peer exits, re-read the diff and run targeted checks yourself. Treat Copilot output as evidence to evaluate, not authority. If Copilot is unavailable or fails, continue using OpenCode and the existing recovery path.
+
+In remote-target mode, run the helper from the target workspace while `OC_CONTROLLER_ROOT` points to the controller tree. This keeps the target isolated while allowing both brains to work on the same target.

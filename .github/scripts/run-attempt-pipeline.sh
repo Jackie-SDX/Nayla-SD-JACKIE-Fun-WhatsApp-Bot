@@ -94,6 +94,7 @@ fi
 
 safe_log_path="$(read_back_output safe_log_path)"
 termination_reason="$(read_back_output termination_reason)"
+provider_failure_kind="$(read_back_output provider_failure_kind)"
 
 if [[ "$agent_rc" -eq 0 ]]; then
   agent_outcome="success"
@@ -163,7 +164,7 @@ out classify_outcome "$classify_outcome"
 # model-specific reasons so later runs skip it; timeout/signal terminations are
 # budget events, not model defects, and must never poison the ladder.
 if [[ "$agent_rc" -ne 0 ]] && [[ "$provider" == "opencode" ]] && [[ -n "$model" ]] &&
-   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" ]]; then
+   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" && "$termination_reason" != "provider-unavailable" ]]; then
   set +e
   CURRENT_PROVIDER="$provider" MODEL="$model" AGENT_OUTCOME="failure" TERMINATION_REASON="$termination_reason" \
     bash .github/scripts/record-model-memory.sh

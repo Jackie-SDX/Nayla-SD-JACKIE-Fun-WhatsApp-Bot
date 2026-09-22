@@ -5,7 +5,7 @@ Date: 2026-09-20
 
 ## Current architecture
 
-OpenCode is the primary /oc runtime. GitHub Copilot CLI is retained as an optional fallback worker.
+OpenCode is the primary /oc runtime. GitHub Copilot CLI is both an optional fallback worker and an optional peer worker. OpenCode remains the primary orchestrator.
 
 Primary path:
 /oc or /opencode -> GitHub Actions -> OpenCode CLI -> OpenCode Zen free model -> OpenCode GitHub App/OIDC -> OpenCode branch/commit/push/PR
@@ -44,3 +44,6 @@ OpenCode's current Zen documentation lists Big Pickle and MiMo-V2.5 Free as free
 - https://dev.opencode.ai/docs/cli/
 - https://opencode.ai/docs/zen/
 - https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli/use-copilot-cli-in-github-actions
+## Two-brain peer path
+
+OpenCode can invite Copilot during the same task: `invite-copilot-peer.sh` runs Copilot against the SAME isolated worktree, allowing inspection, testing, and corrective edits. OpenCode then re-reads the tree and remains responsible for the final decision. This is not failover: a missing or failed peer is non-fatal and the primary task continues.

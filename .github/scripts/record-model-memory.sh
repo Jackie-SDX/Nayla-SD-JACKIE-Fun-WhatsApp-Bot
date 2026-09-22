@@ -17,7 +17,7 @@ repo="${GITHUB_REPOSITORY:-}"
 
 [[ "$provider" == "opencode" ]] || exit 0
 [[ "$agent_outcome" == "failure" ]] || exit 0
-[[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" ]] || exit 0
+[[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" && "$termination_reason" != "provider-unavailable" ]] || exit 0
 
 base="${model##*/}"
 [[ -n "$base" && "$base" != "opencode" ]] || exit 0
