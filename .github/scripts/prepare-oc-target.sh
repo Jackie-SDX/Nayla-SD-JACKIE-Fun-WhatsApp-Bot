@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepares an isolated remote-target workspace for a controller-owned /oc run.
+# Prepares an isolated remote-target workspace for a task-isolated /oc run.
 #
 # - Clones the target repository into RUNNER_TEMP (never into the controller
 #   worktree, so its .git can never be staged by a later publication step).
@@ -28,14 +28,9 @@ repo="${OC_TARGET_REPO:?OC_TARGET_REPO is required}"
 base="${OC_TARGET_BASE:-main}"
 resume="${OC_TARGET_RESUME:-0}"
 task="${OC_TARGET_TASK:-}"
-controller_root="${OC_CONTROLLER_ROOT:?OC_CONTROLLER_ROOT is required}"
-runner_temp="${RUNNER_TEMP:-/tmp}"
+controller_root="${runner_temp="${RUNNER_TEMP:-/tmp}"
 clone_url="${OC_TARGET_CLONE_URL:-https://github.com/$repo.git}"
 
-if [[ ! -f "$controller_root/opencode.json" || ! -f "$controller_root/.opencode/instructions.md" ]]; then
-  echo "::error title=Controller policy missing::Controller opencode.json or .opencode/instructions.md is required for remote-target runs." >&2
-  exit 2
-fi
 if [[ ! "$repo" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]/[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]$ ]]; then
   echo "::error title=Invalid remote target::Target must be OWNER/REPO: $repo" >&2
   exit 2
@@ -56,8 +51,6 @@ if [[ ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
 fi
 
 workdir="$(mktemp -d "$runner_temp/oc-target-XXXXXX")"
-quarantine="$workdir/.oc-quarantine"
-mkdir -p "$quarantine"
 
 echo "Preparing remote target workspace for $repo (base=$base, branch=$branch)"
 
@@ -85,46 +78,17 @@ else
   git -C "$ws" checkout -q -b "$branch"
 fi
 
-# Quarantine target-owned OpenCode and agent policy: it must never steer a
-# controller-governed run.
-: > "$workdir/quarantine-list"
-while IFS= read -r -d '' rel_full; do
-  rel="${rel_full#$ws/}"
-  mkdir -p "$quarantine/$(dirname "$rel")"
-  mv "$rel_full" "$quarantine/$rel"
-  printf '%s\n' "$rel" >> "$workdir/quarantine-list"
-done < <(find "$ws" \( -name AGENTS.md -o -name opencode.json -o -name opencode.jsonc \) -not -path '*/.git/*' -type f -print0)
-for rel in ".opencode" "plugins"; do
-  if [[ -e "$ws/$rel" ]]; then
-    mkdir -p "$quarantine/$(dirname "$rel")"
-    mv "$ws/$rel" "$quarantine/$rel"
-    printf '%s\n' "$rel" >> "$workdir/quarantine-list"
-  fi
-done
-
-# Install controller-owned policy into the workspace (controller config and
-# enterprise instructions are authoritative for the target run).
-installed_placeholder="$workdir/installed-list"
-: > "$installed_placeholder"
-mkdir -p "$ws/.opencode/agents"
-cp "$controller_root/opencode.json" "$ws/opencode.json"
-cp "$controller_root/.opencode/instructions.md" "$ws/.opencode/instructions.md"
-if [[ -d "$controller_root/.opencode/agents" ]]; then
-  cp -r "$controller_root/.opencode/agents/." "$ws/.opencode/agents/"
-fi
-printf 'opencode.json\n.opencode\n' > "$installed_placeholder"
-
-qcount="$(wc -l < "$workdir/quarantine-list" 2>/dev/null || echo 0)"
-echo "Target agent policy: controller-owned. Quarantined target policy paths: $qcount."
-
+# Keep the target repository's own OpenCode configuration, AGENTS.md, plugins,
+# and project instructions intact. Enterprise runtime safety is supplied by the
+# task prompt rather than by replacing target-local policy.
 state_file="$workdir/.oc-target-state.json"
 cat > "$state_file" <<EOF
-{"mode":"remote","repo":"$repo","base":"$base","branch":"$branch","workspace":"$ws","quarantine":"$quarantine","quarantine_list":"$workdir/quarantine-list","installed_list":"$installed_placeholder","resume":"$resume","task_file":"$workdir/task.txt"}
+{"mode":"remote","repo":"$repo","base":"$base","branch":"$branch","workspace":"$ws","resume":"$resume","task_file":"$workdir/task.txt"}
 EOF
 printf '%s' "$task" > "$workdir/task.txt"
 
+
 emit_env OC_TARGET_WORKSPACE "$ws"
-emit_env OC_TARGET_QUARANTINE "$quarantine"
 emit_env OC_TARGET_STATE "$state_file"
 emit_env OC_TARGET_TASK_FILE "$workdir/task.txt"
 emit_env OC_TARGET_BRANCH "$branch"
@@ -133,7 +97,6 @@ emit_env OC_TARGET_REPO "$repo"
 emit_env OC_TARGET_RESUME "$resume"
 
 emit_out workspace "$ws"
-emit_out quarantine "$quarantine"
 emit_out state_file "$state_file"
 emit_out branch "$branch"
 emit_out base "$base"
