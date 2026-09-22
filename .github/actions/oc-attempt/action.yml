@@ -32,6 +32,10 @@ inputs:
     description: Execution mode (local or remote).
     required: false
     default: local
+  task_mode:
+    description: Task mode (code or report).
+    required: false
+    default: code
   verify_wait_minutes:
     description: Verification wait window in minutes.
     required: false
@@ -77,6 +81,18 @@ outputs:
   safe_log_path:
     description: Sanitized agent output log path.
     value: ${{ steps.run.outputs.safe_log_path }}
+  copilot_peer_result:
+    description: Copilot peer state for this attempt.
+    value: ${{ steps.run.outputs.copilot_peer_result }}
+  copilot_peer_elapsed_seconds:
+    description: Peer duration in seconds.
+    value: ${{ steps.run.outputs.copilot_peer_elapsed_seconds }}
+  copilot_peer_rounds_used:
+    description: Unique peer objectives attempted.
+    value: ${{ steps.run.outputs.copilot_peer_rounds_used }}
+  copilot_peer_log_path:
+    description: Sanitized peer log path.
+    value: ${{ steps.run.outputs.copilot_peer_log_path }}
   attempt_elapsed_seconds:
     description: Wall-clock duration of the attempt.
     value: ${{ steps.run.outputs.attempt_elapsed_seconds }}
@@ -91,6 +107,7 @@ runs:
         PROVIDER: ${{ inputs.provider }}
         OC_SELECTED_MODEL: ${{ inputs.model }}
         OC_TARGET_MODE: ${{ inputs.mode }}
+        TASK_MODE: ${{ inputs.task_mode }}
         TARGET_NUMBER: ${{ inputs.target_number }}
         BASE_REF: ${{ inputs.base_ref }}
         INITIAL_SHA: ${{ inputs.initial_sha }}
