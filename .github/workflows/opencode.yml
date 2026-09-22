@@ -95,6 +95,12 @@ jobs:
           [[ "$TARGET_NUMBER" =~ ^[0-9]+$ && "$TARGET_NUMBER" != "0" ]] || exit 0
           gh issue comment "$TARGET_NUMBER" --body "<!-- oc-run-id:${GITHUB_RUN_ID} issue:${TARGET_NUMBER} sha:${GITHUB_SHA} -->"
 
+      - name: Mark triggering /oc comment as running
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: bash .github/scripts/oc-running-reaction.sh add
+
       - name: Resolve /oc target
         id: target
         shell: bash
@@ -376,20 +382,35 @@ jobs:
         shell: bash
         run: bash .github/scripts/independent-audit-advisory.sh
 
-      - name: Post report-only response
-        if: always() && env.OC_TASK_MODE == 'report' && (steps.attempt_1.outputs.agent_outcome == 'success' || steps.attempt_2.outputs.agent_outcome == 'success' || steps.attempt_3.outputs.agent_outcome == 'success')
-        env:
-          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
-          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
-          REPORT_LOG: ${{ steps.attempt_3.outputs.safe_log_path || steps.attempt_2.outputs.safe_log_path || steps.attempt_1.outputs.safe_log_path }}
+      - name: Post concise /oc result
+        if: always()
+        continue-on-error: true
         shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$TARGET_NUMBER" =~ ^[0-9]+$ && "$TARGET_NUMBER" != "0" ]] || exit 0
-          report="$(tail -n 160 "$REPORT_LOG" 2>/dev/null || true)"
-          gh issue comment "$TARGET_NUMBER" --body "$(printf '### /oc report\n\n%s' "$report")"
+        env:
+          TASK_MODE: ${{ env.OC_TASK_MODE }}
+          OC_TARGET_MODE: ${{ steps.target.outputs.mode }}
+          OC_TARGET_REPO: ${{ steps.target.outputs.target_repo }}
+          OC_TARGET_BRANCH: ${{ steps.target.outputs.target_branch }}
+          A1: ${{ steps.attempt_1.outputs.agent_outcome }}
+          P1: ${{ steps.attempt_1.outputs.publish_outcome }}
+          V1: ${{ steps.attempt_1.outputs.verified }}
+          PR1: ${{ steps.attempt_1.outputs.pr_url }}
+          SHA1: ${{ steps.attempt_1.outputs.verified_sha }}
+          A2: ${{ steps.attempt_2.outputs.agent_outcome }}
+          P2: ${{ steps.attempt_2.outputs.publish_outcome }}
+          V2: ${{ steps.attempt_2.outputs.verified }}
+          PR2: ${{ steps.attempt_2.outputs.pr_url }}
+          SHA2: ${{ steps.attempt_2.outputs.verified_sha }}
+          A3: ${{ steps.attempt_3.outputs.agent_outcome }}
+          P3: ${{ steps.attempt_3.outputs.publish_outcome }}
+          V3: ${{ steps.attempt_3.outputs.verified }}
+          PR3: ${{ steps.attempt_3.outputs.pr_url }}
+          SHA3: ${{ steps.attempt_3.outputs.verified_sha }}
+          MERGE_REQUESTED: ${{ env.OC_MERGE_REQUESTED }}
+          MERGE_EXIT: ${{ env.OC_MERGE_EXIT }}
+        run: bash .github/scripts/post-oc-result.sh
 
-      - name: Routing summary
+      - name: Routing summary      - name: Routing summary
         if: always()
         env:
           R1: ${{ steps.route_1.outputs.route }}
@@ -573,6 +594,12 @@ jobs:
           SESSION_ID: ${{ steps.composio_session.outputs.session_id }}
           HEADERS_FILE: ${{ steps.composio_session.outputs.headers_file }}
         run: bash .github/scripts/cleanup-composio-mcp.sh
+
+      - name: Clear /oc running reaction
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: bash .github/scripts/oc-running-reaction.sh remove
 
   retry-failed-jobs:
     # Control lane merged from the former oc-control.yml so that a single
