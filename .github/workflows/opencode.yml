@@ -47,6 +47,7 @@ jobs:
       GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
       OPENCODE_AGENT_TIMEOUT_MINUTES: "350"
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free' }}
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
@@ -161,7 +162,8 @@ jobs:
           set -euo pipefail
           [[ -n "$OPENCODE_API_KEY" ]] && echo "OpenCode Zen credential: configured" || echo "::warning title=OpenCode Zen unavailable::OPENCODE_API_KEY is not configured."
           [[ -n "$COPILOT_GITHUB_TOKEN" ]] && echo "Copilot fallback credential: configured" || echo "Copilot fallback credential: optional/unconfigured"
-          [[ -n "$OPENCODE_API_KEY" || -n "$COPILOT_GITHUB_TOKEN" ]] || {
+          [[ -n "$OPENROUTER_API_KEY" ]] && echo "OpenRouter recovery credential: configured" || echo "OpenRouter recovery credential: optional/unconfigured"
+          [[ -n "$OPENCODE_API_KEY" || -n "$OPENROUTER_API_KEY" || -n "$COPILOT_GITHUB_TOKEN" ]] || {
             echo "::error title=No agent credential::Configure OPENCODE_API_KEY or COPILOT_GITHUB_TOKEN."
             exit 1
           }

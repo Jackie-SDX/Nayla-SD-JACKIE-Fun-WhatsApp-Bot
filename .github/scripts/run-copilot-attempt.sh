@@ -15,7 +15,7 @@ trap cleanup EXIT
 sanitize_stream_line() {
   python3 -c '
 import os,re,sys
-keys=("COMPOSIO_API_KEY","OPENCODE_API_KEY","GITHUB_TOKEN","GH_TOKEN","UNIVERSAL_TOKEN","COPILOT_GITHUB_TOKEN","GEMINI_API_KEY","GEMINI_API_KEY_2","GEMINI_API_KEY_3","GEMINI_API_KEY_4","GEMINI_API_KEY_5")
+keys=("COMPOSIO_API_KEY","OPENCODE_API_KEY","OPENROUTER_API_KEY","GITHUB_TOKEN","GH_TOKEN","UNIVERSAL_TOKEN","COPILOT_GITHUB_TOKEN","GEMINI_API_KEY","GEMINI_API_KEY_2","GEMINI_API_KEY_3","GEMINI_API_KEY_4","GEMINI_API_KEY_5")
 secrets=[os.environ.get(k,"") for k in keys]
 for raw in sys.stdin:
     line=raw.rstrip("\n")

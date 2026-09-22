@@ -53,13 +53,14 @@ cleanup() {
 
 trap cleanup EXIT
 
-# When Composio MCP is not active (or was explicitly disabled), do not hand the
-# agent a broken `npx mcp-remote` stdio bridge. OpenCode loads inline runtime
-# config from OPENCODE_CONFIG_CONTENT AFTER the project config, so this value
-# deep-merges and disables the composio server entirely (hygiene audit item 8c).
+runtime_model="${MODEL:-opencode/big-pickle}"
+# Inline runtime config has highest precedence, so the selected route model is
+# honored by the same OpenCode runner without changing the project policy.
 if [[ -z "${COMPOSIO_MCP_URL:-}" || "${COMPOSIO_MCP_ENABLED:-true}" != "true" ]]; then
-  export OPENCODE_CONFIG_CONTENT='{"mcp":{"composio":{"enabled":false}}}'
-  echo "[OC][attempt=${attempt}] Composio MCP is inactive; disabled the composio server via runtime OpenCode config."
+  export OPENCODE_CONFIG_CONTENT="{\"model\":\"$runtime_model\",\"mcp\":{\"composio\":{\"enabled\":false}}}"
+  echo "[OC][attempt=${attempt}] Composio MCP inactive; selected model: $runtime_model"
+else
+  export OPENCODE_CONFIG_CONTENT="{\"model\":\"$runtime_model\"}"
 fi
 
 agent_cmd=()
@@ -100,6 +101,7 @@ sanitize_line() {
   for secret in \
     "${COMPOSIO_API_KEY:-}" \
     "${OPENCODE_API_KEY:-}" \
+    "${OPENROUTER_API_KEY:-}" \
     "${GITHUB_TOKEN:-}" \
     "${GH_TOKEN:-}" \
     "${UNIVERSAL_TOKEN:-}" \

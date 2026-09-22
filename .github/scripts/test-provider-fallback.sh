@@ -45,7 +45,22 @@ GITHUB_ENV="$env3" GITHUB_OUTPUT="$out3" COPILOT_GITHUB_TOKEN=test-token OPENCOD
 grep -Fq "route=github-copilot/auto" "$out3"
 
 
-echo "[5/5] full attempt pipeline advances after Zen 403"
+echo "[3/6] Zen context failure requests OpenRouter"
+safe_hint="$tmp/safe-hint.log"
+printf "%s\n" "FreeTierError: OpenCode free tier context unavailable" > "$safe_hint"
+hint_env="$tmp/hint-env"
+GITHUB_ENV="$hint_env" CURRENT_PROVIDER=opencode SAFE_LOG="$safe_hint" OPENCODE_ROUTE_INDEX=0 OPENCODE_EXCLUDED_PROVIDERS="" bash "$script_dir/classify-provider-failure.sh"
+grep -Fq "OPENCODE_ROUTE_HINT=openrouter" "$hint_env"
+grep -Fq "OPENCODE_ROUTE_INDEX=1" "$hint_env"
+
+echo "[4/6] OpenRouter selects the same OpenCode runtime"
+router_out="$tmp/router-out"
+router_env="$tmp/router-env"
+GITHUB_ENV="$router_env" GITHUB_OUTPUT="$router_out" OPENCODE_API_KEY=x OPENROUTER_API_KEY=test-router OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free" OPENCODE_ROUTE_INDEX=1 OPENCODE_ROUTE_HINT=openrouter OPENCODE_EXCLUDED_PROVIDERS=opencode bash "$script_dir/select-opencode-route.sh"
+grep -Fq "route=openrouter/free" "$router_out"
+grep -Fq "provider=openrouter" "$router_out"
+
+echo "[5/6] full attempt pipeline advances after Zen 403"
 pipe_out="$tmp/pipe-out"
 pipe_env="$tmp/pipe-env"
 set +e
@@ -60,4 +75,4 @@ grep -Fq "OPENCODE_ROUTE_INDEX=1" "$pipe_env"
 grep -Fq "OPENCODE_EXCLUDED_PROVIDERS=opencode" "$pipe_env"
 ! grep -Fq "big-pickle=" "$pipe_env"
 
-echo "provider fallback regression: OK"
+echo "[6/6] Provider fallback regression: OK"

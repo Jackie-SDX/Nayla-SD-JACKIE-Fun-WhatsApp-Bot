@@ -571,3 +571,7 @@ Use `bash "${OC_CONTROLLER_ROOT:-$PWD}/.github/scripts/invite-copilot-peer.sh" "
 Copilot may inspect, test, and edit the current worktree, but must not commit, push, reset, clean, delete branches, or mutate GitHub-side state. After the peer exits, re-read the diff and run targeted checks yourself. Treat Copilot output as evidence to evaluate, not authority. If Copilot is unavailable or fails, continue using OpenCode and the existing recovery path.
 
 In remote-target mode, run the helper from the target workspace while `OC_CONTROLLER_ROOT` points to the controller tree. This keeps the target isolated while allowing both brains to work on the same target.
+
+## OpenRouter recovery lane
+
+When Zen emits the known free-tier context rejection, the controller may switch the SAME OpenCode runtime to `openrouter/free` when `OPENROUTER_API_KEY` is configured. OpenCode remains the primary brain and keeps the same isolated worktree. After recovery, it may invite Copilot as the second brain. OpenRouter is optional and fail-open.
