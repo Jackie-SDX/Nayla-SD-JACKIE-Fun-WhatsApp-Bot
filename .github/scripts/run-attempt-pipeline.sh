@@ -27,6 +27,9 @@ model="${OC_SELECTED_MODEL:-}"
 variant="${OC_SELECTED_VARIANT:-}"
 mode="${OC_TARGET_MODE:-local}"
 task_mode="${TASK_MODE:-code}"
+publish_requested="$(printenv PUBLISH_REQUESTED 2>/dev/null || printf false)"
+agent_branch=""
+durable_work="false"
 target_number="${TARGET_NUMBER:-0}"
 base_ref="${BASE_REF:-}"
 initial_sha="${INITIAL_SHA:-}"
@@ -70,13 +73,19 @@ if [[ "$provider" == "github-copilot" && "$mode" == "remote" ]]; then
 fi
 
 if [[ "$provider" == "github-copilot" && "$mode" == "local" ]]; then
-  branch="oc/copilot-$target_number-$GITHUB_RUN_ID-$attempt"
-  git switch -c "$branch" || {
-    echo "::error title=Copilot branch prep failed::Could not create branch $branch." >&2
-    out agent_outcome failure
-    out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
-    exit 1
-  }
+  branch="$(printenv OC_SESSION_BRANCH 2>/dev/null || true)"
+  [[ -n "$branch" ]] || branch="oc/copilot-$target_number-$GITHUB_RUN_ID-$attempt"
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git switch "$branch" || exit 1
+  else
+    git switch -c "$branch" || {
+      echo "::error title=Copilot session branch prep failed::Could not create branch $branch." >&2
+      out agent_outcome failure
+      out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
+      exit 1
+    }
+  fi
+  agent_branch="$branch"
 fi
 
 agent_rc=99
@@ -89,10 +98,23 @@ else
   out agent_outcome none
   out publish_outcome "not-applicable"
   out classify_outcome "not-applicable"
+  out durable_work "false"
   out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
   exit 0
 fi
 
+if [[ -z "$agent_branch" ]]; then
+  agent_branch="$(read_back_output agent_branch)"
+fi
+if [[ -n "$agent_branch" ]]; then
+  session_head_sha="$(git rev-parse "$agent_branch" 2>/dev/null || true)"
+  if [[ -n "$initial_sha" && "$session_head_sha" != "$initial_sha" && "$session_head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+    durable_work="true"
+  fi
+fi
+if [[ "$durable_work" == "true" && -n "$agent_branch" && "$mode" == "local" ]]; then
+  OC_SESSION_BRANCH="$agent_branch" OC_ATTEMPT="$attempt" bash .github/scripts/checkpoint-oc-working-tree.sh . || true
+fi
 safe_log_path="$(read_back_output safe_log_path)"
 copilot_peer_result="$(read_back_output copilot_peer_result)"
 copilot_peer_elapsed_seconds="$(read_back_output copilot_peer_elapsed_seconds)"
@@ -165,38 +187,41 @@ agent_branch="$(read_back_output agent_branch)"
 [[ -n "$agent_branch" ]] && out agent_branch "$agent_branch"
 [[ -n "$termination_reason" ]] && out termination_reason "$termination_reason"
 
-# Publication runs only after a successful agent. Local OpenCode publications
-# are self-owned by the `opencode github run` flow, so only copilot (local) and
-# remote-target opencode reach these scripts.
-publish_outcome="not-applicable"
-if [[ "$agent_rc" -eq 0 ]]; then
+# Publication is explicit. Branch-only progress is valid and resumable.
+publish_outcome="not-requested"
+if [[ "$agent_rc" -eq 0 || "$durable_work" == "true" ]]; then
   publish_rc=0
-  if [[ "$task_mode" == "report" ]] && [[ "$provider" == "opencode" ]]; then
+  if [[ "$task_mode" == "report" ]]; then
     publish_outcome="report-only"
-  elif [[ "$provider" == "github-copilot" ]] && [[ "$mode" == "local" ]]; then
-    set +e
-    bash .github/scripts/publish-copilot-change.sh
-    publish_rc=$?
-    set -e
-  elif [[ "$provider" == "opencode" ]] && [[ "$mode" == "remote" ]]; then
-    set +e
-    bash .github/scripts/publish-remote-opencode.sh
-    publish_rc=$?
-    set -e
-  fi
-  if [[ "$publish_rc" -eq 0 ]]; then
+  elif [[ "$publish_requested" == "true" ]]; then
+    if [[ "$provider" == "github-copilot" && "$mode" == "local" ]]; then
+      set +e
+      bash .github/scripts/publish-copilot-change.sh
+      publish_rc=$?
+      set -e
+    elif [[ "$provider" == "opencode" && "$mode" == "local" ]]; then
+      set +e
+      OC_SESSION_BRANCH="$agent_branch" PUBLISH_REQUESTED="true" bash .github/scripts/publish-oc-session.sh
+      publish_rc=$?
+      set -e
+    elif [[ "$provider" == "opencode" && "$mode" == "remote" ]]; then
+      set +e
+      PUBLISH_REQUESTED="true" bash .github/scripts/publish-remote-opencode.sh
+      publish_rc=$?
+      set -e
+    fi
     publish_outcome="published"
-  else
-    publish_outcome="failed"
+    [[ "$publish_rc" -eq 0 ]] || publish_outcome="failed"
+  elif [[ "$durable_work" == "true" ]]; then
+    publish_outcome="checkpointed"
   fi
   out publish_outcome "$publish_outcome"
   if [[ "$publish_rc" -ne 0 ]]; then
-    echo "::error title=Publication failed for attempt ${attempt}::The $provider publication did not complete; the run cannot be verified and stops here." >&2
+    echo "::error title=Explicit publication failed::The requested PR publication did not complete." >&2
     out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
     exit 1
   fi
 fi
-
 out verified "false"
 out verification_outcome "not-run-advisory"
 out ci_surfaces "unobserved"
@@ -233,5 +258,7 @@ fi
 
 out provider_warning "$provider_warning"
 out result_state "$result_state"
+out durable_work "$durable_work"
+out session_head_sha "$(git rev-parse "$agent_branch" 2>/dev/null || true)"
 out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
 exit 0
