@@ -406,14 +406,11 @@ emit_ci_failure_comment() {
     echo "CI-failure comment for run $ci_display already exists; skipping duplicate."
     return 0
   fi
-  local safe_tail=""
-  if [[ "$ci_run_id" =~ ^[0-9]+$ ]]; then
-    safe_tail="$(gh run view "$ci_run_id" --log-failed 2>/dev/null | tail -n 120 || true)"
-    safe_tail="$(printf '%s' "$safe_tail" | sed -E         -e 's/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g'         -e 's/(sk-or-v1-[[:alnum:]_-]{20,})/[REDACTED_EXTERNAL_API_KEY]/g'         -e 's/Bearer[[:space:]]+[^[:space:]]+/Bearer [REDACTED]/g')"
-  fi
   [[ -n "$pr_display" ]] || pr_display="not identified"
-  local evidence="$safe_tail"; [[ -n "$evidence" ]] || evidence="No sanitized CI log was available."
-  gh issue comment "$target" --body "$(cat <<EOF
+  local ci_url="not available"
+  if [[ "$ci_run_id" =~ ^[0-9]+$ ]]; then
+    ci_url="https://github.com/$repo/actions/runs/$ci_run_id"
+  fi  gh issue comment "$target" --body "$(cat <<EOF
 <!-- oc-ci-failure-run-id:$ci_display attempt:$attempt -->
 ## /oc CI verification found a failure
 
@@ -425,8 +422,8 @@ Reason: $failure_reason
 
 Inspect this exact CI evidence and continue from the current repository/PR state rather than creating duplicate work.
 
-Sanitized failure evidence:
-$evidence
+CI run: $ci_url
+Detailed runner logs remain in the Actions run; they are not copied into the issue comment.
 EOF
 )"
 }
