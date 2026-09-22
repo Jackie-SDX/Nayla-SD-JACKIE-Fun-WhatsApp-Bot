@@ -9,9 +9,9 @@ run_case(){
   : > "$GITHUB_OUTPUT"; : > "$GITHUB_ENV"
   jq -n --arg body "$body" '{comment:{body:$body}}' > "$tmp/event.json"
   GITHUB_EVENT_PATH="$tmp/event.json" bash .github/scripts/select-oc-task-mode.sh >/dev/null
-  grep -Fq "mode=$mode" "$GITHUB_OUTPUT"
-  grep -Fq "publish_requested=$pub" "$GITHUB_OUTPUT"
-  grep -Fq "resume_requested=$resume" "$GITHUB_OUTPUT"
+  grep -Fq "OC_TASK_MODE=$mode" "$GITHUB_OUTPUT"
+  grep -Fq "OC_PUBLISH_REQUESTED=$pub" "$GITHUB_OUTPUT"
+  grep -Fq "OC_RESUME_REQUESTED=$resume" "$GITHUB_OUTPUT"
 }
 run_case '/oc hello' report false false
 run_case '/oc explain the architecture' report false false
