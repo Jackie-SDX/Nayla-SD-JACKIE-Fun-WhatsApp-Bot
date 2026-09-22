@@ -21,10 +21,10 @@ if [[ "$lower" =~ ^continue([[:space:]]|$) ]]; then
 elif [[ "$lower" =~ ^merge([[:space:]]|$) ]]; then
   merge_requested=true; session_required=true; mode=merge; intent=merge
 else
-  if printf '%s' "$lower" | grep -Eiq '\\b(create|open|publish|submit)[[:space:]]+(a[[:space:]]+)?(pull[[:space:]-]*request|pr)\\b'; then
+  if printf '%s' "$lower" | grep -Eiq '\b(create|open|publish|submit)[[:space:]]+(a[[:space:]]+)?(pull[[:space:]-]*request|pr)\b'; then
     publish_requested=true
   fi
-  if printf '%s' "$lower" | grep -Eiq '\\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\\b'; then
+  if printf '%s' "$lower" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
     mode=code; intent=code; session_required=true
   elif [[ "$publish_requested" == true ]]; then
     mode=code; intent=publish; session_required=true
