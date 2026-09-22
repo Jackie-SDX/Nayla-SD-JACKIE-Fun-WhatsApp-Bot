@@ -275,7 +275,9 @@ jobs:
           assert "reconcile-opencode-result.sh" in wf
           assert "termination_reason != 'timeout'" in wf
           assert "timeout --signal=TERM" in runner
-          assert "opencode github run" in runner
+          assert "opencode run --dir" in runner
+          assert "OC_SESSION_BRANCH" in runner
+          assert "PUBLISH_REQUESTED" in pipeline
           assert "github-copilot/auto" in selector
           assert "openrouter/openrouter/free" in selector
           assert "OPENCODE_ROUTE_HINT" in selector
@@ -416,7 +418,8 @@ jobs:
           assert "oc_guard_repo_publication" in lib
           assert "160000" in lib
           assert "refusing to publish" in lib.lower()
-          assert "opencode github run" in runner
+          assert "opencode run --dir" in runner
+          assert "PUBLISH_REQUESTED" in pipeline
           print("remote-target contract files: OK")
           PY
           bash .github/scripts/test-oc-target.sh
