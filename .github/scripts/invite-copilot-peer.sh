@@ -40,7 +40,7 @@ if [[ ! -x "$copilot_bin" ]]; then
   npm install --prefix "$copilot_root" --no-audit --no-fund --prefer-online --save-exact "@github/copilot@${COPILOT_CLI_VERSION:-1.0.86}" >"$copilot_root/install.log" 2>&1 || {
     echo "::warning title=Copilot peer installation unavailable::Peer consultation could not start; OpenCode continues solo."
     tail -80 "$copilot_root/install.log" 2>/dev/null || true
-    echo "COPILOT_PEER_RESULT=unavailable" > "$result_file"
+    write_peer_result unavailable
     exit 0
   }
 fi
@@ -90,7 +90,7 @@ OpenCode will re-read your changes and independently validate the resulting tree
 
 sanitize() {
   local line="$1" secret
-  for secret in "${COPILOT_GITHUB_TOKEN:-}" "${OPENROUTER_API_KEY:-}" "${GITHUB_TOKEN:-}" "${GH_TOKEN:-}" "${UNIVERSAL_TOKEN:-}" "${OPENCODE_API_KEY:-}" "${COMPOSIO_API_KEY:-}"; do
+  for secret in "${peer_token:-}" "${COPILOT_GITHUB_TOKEN:-}" "${OPENROUTER_API_KEY:-}" "${GITHUB_TOKEN:-}" "${GH_TOKEN:-}" "${UNIVERSAL_TOKEN:-}" "${OPENCODE_API_KEY:-}" "${COMPOSIO_API_KEY:-}"; do
     [[ -n "$secret" ]] && line="${line//$secret/[REDACTED]}"
   done
   printf "%s" "$line" | sed -E -e "s/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g" -e "s/(AIza[[:alnum:]_-]{20,})/[REDACTED_GOOGLE_KEY]/g" -e "s/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g"
