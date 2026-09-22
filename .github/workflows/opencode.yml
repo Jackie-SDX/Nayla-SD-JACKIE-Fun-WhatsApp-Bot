@@ -58,6 +58,8 @@ jobs:
       OC_JOB_BUDGET_SECONDS: "21600"
       OC_JOB_SAFETY_MARGIN_SECONDS: "120"
       OC_PROGRESS_INTERVAL_SECONDS: "30"
+      OC_CONTEXT_SEED_BYTES: "300000"
+      OC_SESSION_CHECKPOINT_INTERVAL_SECONDS: "300"
       COPILOT_PEER_MAX_ROUNDS: "5"
       OC_CI_WATCH_MINUTES: "45"
       OC_CI_WATCH_POLL_SECONDS: "20"
@@ -111,9 +113,10 @@ jobs:
       - name: Select task mode
         id: task_mode
         shell: bash
-        run: bash .github/scripts/select-oc-task-mode.sh
+        run: bash .github/scripts/oc-command-control.sh
 
       - name: Resolve and verify OpenCode release
+        if: env.OC_TASK_MODE != 'merge'
         id: opencode_release
         shell: bash
         env:
@@ -142,6 +145,7 @@ jobs:
           echo "Verified OpenCode release: $version"
 
       - name: Restore verified OpenCode cache
+        if: env.OC_TASK_MODE != 'merge'
         id: cache_restore
         continue-on-error: true
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -150,7 +154,7 @@ jobs:
           key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.opencode_release.outputs.version }}
 
       - name: Install OpenCode on cache miss
-        if: steps.cache_restore.outputs.cache-hit != 'true'
+        if: env.OC_TASK_MODE != 'merge' && steps.cache_restore.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -173,6 +177,7 @@ jobs:
         run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
       - name: Preflight credentials
+        if: env.OC_TASK_MODE != 'merge'
         shell: bash
         run: |
           set -euo pipefail
@@ -188,6 +193,7 @@ jobs:
           echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
 
       - name: Prepare peer credential file
+        if: env.OC_TASK_MODE != 'merge'
         shell: bash
         run: |
           set -euo pipefail
@@ -211,18 +217,21 @@ jobs:
         run: bash .github/scripts/prepare-oc-target.sh
 
       - name: Bootstrap Composio session MCP
+        if: env.OC_TASK_MODE != 'merge'
+        continue-on-error: true
         id: composio_session
         shell: bash
         run: bash .github/scripts/prepare-composio-mcp.sh
 
       - name: Select route 1
         id: route_1
+        if: env.OC_TASK_MODE != 'merge'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
       - name: Attempt 1
         id: attempt_1
-        if: steps.route_1.outputs.selected == 'true'
+        if: env.OC_TASK_MODE != 'merge' && steps.route_1.outputs.selected == 'true'
         continue-on-error: true
         uses: ./.github/actions/oc-attempt
         with:
@@ -240,7 +249,9 @@ jobs:
       - name: Select route 2
         id: route_2
         if: |
+          env.OC_TASK_MODE == 'code' &&
           steps.attempt_1.outputs.agent_outcome == 'failure' &&
+          steps.attempt_1.outputs.durable_work != 'true' &&
           steps.attempt_1.outputs.termination_reason != 'timeout' &&
           steps.attempt_1.outputs.termination_reason != 'signal' &&
           steps.attempt_1.outputs.classify_outcome == 'success' &&
@@ -250,7 +261,7 @@ jobs:
 
       - name: Attempt 2
         id: attempt_2
-        if: steps.route_2.outputs.selected == 'true'
+        if: env.OC_TASK_MODE != 'merge' && steps.route_2.outputs.selected == 'true'
         continue-on-error: true
         uses: ./.github/actions/oc-attempt
         with:
@@ -268,7 +279,9 @@ jobs:
       - name: Select route 3
         id: route_3
         if: |
+          env.OC_TASK_MODE == 'code' &&
           steps.attempt_2.outputs.agent_outcome == 'failure' &&
+          steps.attempt_2.outputs.durable_work != 'true' &&
           steps.attempt_2.outputs.termination_reason != 'timeout' &&
           steps.attempt_2.outputs.termination_reason != 'signal' &&
           steps.attempt_2.outputs.classify_outcome == 'success' &&
@@ -278,7 +291,7 @@ jobs:
 
       - name: Attempt 3
         id: attempt_3
-        if: steps.route_3.outputs.selected == 'true'
+        if: env.OC_TASK_MODE != 'merge' && steps.route_3.outputs.selected == 'true'
         continue-on-error: true
         uses: ./.github/actions/oc-attempt
         with:
@@ -304,7 +317,7 @@ jobs:
           git log -1 --oneline
 
       - name: Reconcile OpenCode publication
-        if: always() && env.OC_TASK_MODE != 'report' && steps.target.outputs.mode != 'remote' && ((steps.attempt_1.outputs.agent_outcome == 'success' && steps.attempt_1.outputs.publish_outcome != 'failed' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.agent_outcome == 'success' && steps.attempt_2.outputs.publish_outcome != 'failed' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.agent_outcome == 'success' && steps.attempt_3.outputs.publish_outcome != 'failed' && steps.route_3.outputs.provider == 'opencode'))
+        if: always() && env.OC_PUBLISH_REQUESTED == 'true' && env.OC_TASK_MODE != 'report' && steps.target.outputs.mode != 'remote' && ((steps.attempt_1.outputs.agent_outcome == 'success' && steps.attempt_1.outputs.publish_outcome != 'failed' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.agent_outcome == 'success' && steps.attempt_2.outputs.publish_outcome != 'failed' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.agent_outcome == 'success' && steps.attempt_3.outputs.publish_outcome != 'failed' && steps.route_3.outputs.provider == 'opencode'))
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
@@ -312,6 +325,7 @@ jobs:
         run: bash .github/scripts/reconcile-opencode-result.sh
 
       - name: Post controlled timeout continuation
+        continue-on-error: true
         if: always() && (steps.attempt_1.outputs.termination_reason == 'timeout' || steps.attempt_2.outputs.termination_reason == 'timeout' || steps.attempt_3.outputs.termination_reason == 'timeout' || steps.attempt_1.outputs.timed_out == 'true' || steps.attempt_2.outputs.timed_out == 'true' || steps.attempt_3.outputs.timed_out == 'true')
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
@@ -322,7 +336,7 @@ jobs:
         run: bash .github/scripts/post-oc-continuation.sh
 
       - name: Human handoff after exhausted or blocked recovery
-        if: always() && steps.attempt_1.outputs.agent_outcome == 'failure' && (steps.attempt_3.outputs.agent_outcome != 'success') && steps.attempt_1.outputs.termination_reason != 'timeout' && steps.attempt_2.outputs.termination_reason != 'timeout' && steps.attempt_3.outputs.termination_reason != 'timeout'
+        if: always() && steps.attempt_1.outputs.agent_outcome == 'failure' && steps.attempt_1.outputs.durable_work != 'true' && (steps.attempt_3.outputs.agent_outcome != 'success') && steps.attempt_1.outputs.termination_reason != 'timeout' && steps.attempt_2.outputs.termination_reason != 'timeout' && steps.attempt_3.outputs.termination_reason != 'timeout'
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -335,7 +349,7 @@ jobs:
           gh issue comment "$TARGET_NUMBER" --body "$body"
 
       - name: Autonomous CI recovery loop
-        if: always() && env.OC_TASK_MODE != 'report' && (steps.attempt_1.outputs.agent_outcome == 'success' || steps.attempt_2.outputs.agent_outcome == 'success' || steps.attempt_3.outputs.agent_outcome == 'success')
+        if: always() && env.OC_PUBLISH_REQUESTED == 'true' && env.OC_TASK_MODE != 'report' && (steps.attempt_1.outputs.agent_outcome == 'success' || steps.attempt_2.outputs.agent_outcome == 'success' || steps.attempt_3.outputs.agent_outcome == 'success')
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -353,6 +367,7 @@ jobs:
 
       - name: Independent agent audit (advisory)
         if: always()
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
           TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
@@ -415,24 +430,59 @@ jobs:
           V1: ${{ steps.attempt_1.outputs.verified }}
           V2: ${{ steps.attempt_2.outputs.verified }}
           V3: ${{ steps.attempt_3.outputs.verified }}
+          DW1: ${{ steps.attempt_1.outputs.durable_work }}
+          DW2: ${{ steps.attempt_2.outputs.durable_work }}
+          DW3: ${{ steps.attempt_3.outputs.durable_work }}
+          TASK_MODE: ${{ env.OC_TASK_MODE }}
+          MERGE_REQUESTED: ${{ env.OC_MERGE_REQUESTED }}
+          MERGE_EXIT: ${{ env.OC_MERGE_EXIT }}
 
         run: |
           set -euo pipefail
           success=false
-          if [[ "$A1" == "success" && "$P1" != "failed" ]] ||
-             [[ "$A2" == "success" && "$P2" != "failed" ]] ||
-             [[ "$A3" == "success" && "$P3" != "failed" ]]; then
-            success=true
+          if [[ "$MERGE_REQUESTED" == "true" ]]; then
+            [[ "$MERGE_EXIT" == "0" ]] && success=true
+          elif [[ "$TASK_MODE" == "report" ]]; then
+            [[ "$A1" == "success" ]] && success=true
+          else
+            if [[ "$A1" == "success" && "$P1" != "failed" ]] || [[ "$A2" == "success" && "$P2" != "failed" ]] || [[ "$A3" == "success" && "$P3" != "failed" ]]; then success=true; fi
+            if [[ "$DW1" == "true" || "$DW2" == "true" || "$DW3" == "true" ]]; then success=true; fi
           fi
           if [[ "$success" == "true" ]]; then
-            echo "Hybrid agent completed successfully; CI verification is advisory."
+            if [[ "$DW1" == "true" || "$DW2" == "true" || "$DW3" == "true" ]] && [[ "$A1" != "success" && "$A2" != "success" && "$A3" != "success" ]]; then
+              echo "Durable progress checkpointed; no duplicate fallback started. Use /oc continue."
+            else
+              echo "OpenCode control-plane operation completed."
+            fi
             exit 0
           fi
-          echo "::error title=Agent recovery exhausted or blocked::No successful agent publication was completed."
+          echo "::error title=Agent operation not completed::No successful completion or durable checkpoint was produced."
           exit 1
+      - name: Persist session milestone
+        if: always() && env.OC_SESSION_REQUIRED == 'true' && env.OC_TASK_MODE == 'code'
+        continue-on-error: true
+        shell: bash
+        env:
+          DW1: ${{ steps.attempt_1.outputs.durable_work }}
+          DW2: ${{ steps.attempt_2.outputs.durable_work }}
+          DW3: ${{ steps.attempt_3.outputs.durable_work }}
+          A1: ${{ steps.attempt_1.outputs.agent_outcome }}
+          A2: ${{ steps.attempt_2.outputs.agent_outcome }}
+          A3: ${{ steps.attempt_3.outputs.agent_outcome }}
+        run: |
+          set -euo pipefail
+          durable=false
+          [[ "$DW1" == "true" || "$DW2" == "true" || "$DW3" == "true" ]] && durable=true
+          phase=blocked
+          status=active
+          next="inspect the durable branch and continue"
+          if [[ "$durable" == "true" ]]; then phase=checkpointed; next="resume with /oc continue"; fi
+          if [[ "$A1" == "success" || "$A2" == "success" || "$A3" == "success" ]]; then phase=completed; status=complete; next="await user direction"; fi
+          OC_DURABLE_WORK="$durable" OC_SESSION_PHASE="$phase" OC_SESSION_STATUS="$status" OC_SESSION_NEXT_ACTION="$next" bash .github/scripts/record-oc-session-progress.sh || true
 
       - name: Record /oc run observability record
         if: always()
+        continue-on-error: true
         shell: bash
         env:
           OC_OBS_RUN_ID: ${{ github.run_id }}
@@ -470,6 +520,20 @@ jobs:
           OC_OBS_CI_RUN_ID: ${{ steps.attempt_1.outputs.ci_run_id || steps.attempt_2.outputs.ci_run_id || steps.attempt_3.outputs.ci_run_id }}
           OC_OBS_CI_SURFACES: ${{ steps.attempt_1.outputs.ci_surfaces || steps.attempt_2.outputs.ci_surfaces || steps.attempt_3.outputs.ci_surfaces }}
         run: bash .github/scripts/write-oc-run-record.sh
+
+      - name: Upload /oc session context artifact
+        if: always() && env.OC_SESSION_REQUIRED == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+        with:
+          name: oc-session-context-${{ github.run_id }}
+          path: |
+            ${{ env.OC_SESSION_STATE_FILE }}
+            ${{ env.OC_ISSUE_CONTEXT_SEED_FILE }}
+            ${{ env.OC_ISSUE_CONTEXT_INDEX_FILE }}
+            ${{ env.OC_REFERENCE_CONTEXT_FILE }}
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Upload /oc run record artifact
         if: always()
