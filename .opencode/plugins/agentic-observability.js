@@ -23,6 +23,8 @@ export const AgenticObservability = async () => {
         else if (event.type === "tool.execute.before") emit("tool → " + toolName(event.properties?.tool ?? event.tool))
         else if (event.type === "tool.execute.after") emit("tool ✓ " + toolName(event.properties?.tool ?? event.tool))
         else if (event.type === "todo.updated") emit("plan updated")
+        else if (event.type === "session.compacted") emit("session compacted; continuing with preserved context")
+        else if (event.type === "session.updated") emit("session updated")
         else if (event.type === "session.idle") emit("session idle")
       } catch (_) {}
     },
