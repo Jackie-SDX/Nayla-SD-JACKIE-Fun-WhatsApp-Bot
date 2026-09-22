@@ -174,23 +174,14 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
     merged_at="$(jq -r '.mergedAt // ""' <<<"$pr")"
     head_sha="$(jq -r '.headRefOid // ""' <<<"$pr")"
     pr_number="$(jq -r '.number // ""' <<<"$pr")"
+    merged_observed=false
     if [[ "$pr_state" == "MERGED" || -n "$merged_at" ]]; then
-      verified=true
-      verified_sha="$head_sha"
-      emit verified true
-      emit retryable false
-      emit pr_url "$pr_url"
-      emit ci_run_id "$head_sha"
-      emit verified_sha "$head_sha"
-      emit ci_surfaces "merged-pr"
-      emit ci_observation_end "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-      echo "Remote target PR verified (merged): $pr_url ($head_sha)"
-      exit 0
+      merged_observed=true
     fi
     if [[ -n "$expected_head" && "$expected_head" != "$head_sha" ]]; then
-      reason="target PR head ($head_sha) does not match the controller published target head ($expected_head)"
+      reason="target PR head ($head_sha) does not match the published target head ($expected_head)"
     fi
-    if [[ -z "$reason" ]]; then
+    if [[ -z "$reason" && "$merged_observed" != "true" ]]; then
       branch_sha="$(gh api "/repos/$rrepo/git/ref/heads/$rbranch" 2>/dev/null | jq -r ".object.sha // \"\"" 2>/dev/null || true)"
       if [[ -z "$branch_sha" ]]; then
         reason="target branch ref $rbranch is not observable"
@@ -244,7 +235,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
     emit verified_sha "$head_sha"
     emit ci_surfaces "$CI_OBSERVED_SURFACES"
     emit ci_observation_end "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "Remote target PR verified: $pr_url"
+    echo "Remote target PR verified: $pr_url${merged_observed:+ (merge observed)}"
     exit 0
   fi
   if [[ "$pending" == "true" && "$SECONDS" -ge "$deadline" ]]; then
@@ -415,13 +406,11 @@ emit_ci_failure_comment() {
     echo "CI-failure comment for run $ci_display already exists; skipping duplicate."
     return 0
   fi
-  local safe_tail=""
-  if [[ "$ci_run_id" =~ ^[0-9]+$ ]]; then
-    safe_tail="$(gh run view "$ci_run_id" --log-failed 2>/dev/null | tail -n 120 || true)"
-    safe_tail="$(printf '%s' "$safe_tail" | sed -E         -e 's/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g'         -e 's/(sk-or-v1-[[:alnum:]_-]{20,})/[REDACTED_EXTERNAL_API_KEY]/g'         -e 's/Bearer[[:space:]]+[^[:space:]]+/Bearer [REDACTED]/g')"
-  fi
   [[ -n "$pr_display" ]] || pr_display="not identified"
-  local evidence="$safe_tail"; [[ -n "$evidence" ]] || evidence="No sanitized CI log was available."
+  local ci_url="not available"
+  if [[ "$ci_run_id" =~ ^[0-9]+$ ]]; then
+    ci_url="https://github.com/$repo/actions/runs/$ci_run_id"
+  fi
   gh issue comment "$target" --body "$(cat <<EOF
 <!-- oc-ci-failure-run-id:$ci_display attempt:$attempt -->
 ## /oc CI verification found a failure
@@ -434,8 +423,8 @@ Reason: $failure_reason
 
 Inspect this exact CI evidence and continue from the current repository/PR state rather than creating duplicate work.
 
-Sanitized failure evidence:
-$evidence
+CI run: $ci_url
+Detailed runner logs remain in the Actions run; they are not copied into the issue comment.
 EOF
 )"
 }

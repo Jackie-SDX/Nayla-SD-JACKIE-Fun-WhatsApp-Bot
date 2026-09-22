@@ -10,7 +10,7 @@ permission:
   bash: deny
   websearch: allow
   webfetch: allow
-  external_directory: deny
+  external_directory: allow
 ---
 
 Act as a hostile-but-factual verifier.

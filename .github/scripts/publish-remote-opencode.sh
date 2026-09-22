@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Controller-owned publication for remote-target /oc runs.
+# Optional remote-target publication/reconciliation helper for /oc runs.
 #
 # Runs inside the prepared target workspace, restores the target's own OpenCode
 # policy files (quarantined by prepare-oc-target.sh) so the published branch
@@ -38,28 +38,6 @@ title="$(jq -r '.issue.title // .pull_request.title // "OpenCode remote-target t
 # Restore the target's own quarantined policy files first, then remove the
 # controller policy that was installed for the run. The target keeps its
 # repository exactly as it is apart from the agent's change.
-restore_quarantine() {
-  local qdir list rel dest
-  qdir="${OC_TARGET_QUARANTINE:-}"
-  list="$(jq -r '.quarantine_list // ""' "$state_file" 2>/dev/null || true)"
-  installed="$(jq -r '.installed_list // ""' "$state_file" 2>/dev/null || true)"
-  if [[ -n "$installed" && -f "$installed" ]]; then
-    while IFS= read -r rel; do
-      [[ -n "$rel" ]] || continue
-      rm -rf "$ws/$rel"
-    done < "$installed"
-  fi
-  if [[ -n "$list" && -f "$list" ]]; then
-    while IFS= read -r rel; do
-      [[ -n "$rel" ]] || continue
-      if [[ -e "$qdir/$rel" ]]; then
-        mkdir -p "$ws/$(dirname "$rel")"
-        mv "$qdir/$rel" "$ws/$rel"
-      fi
-    done < "$list"
-  fi
-}
-restore_quarantine
 
 if [[ -z "$(git -C "$ws" status --short)" ]]; then
   echo "Remote target workspace has no changes after this run."
@@ -117,7 +95,7 @@ oc_git_push -C "$ws" --set-upstream origin "HEAD:$branch" || {
 }
 echo "Pushed remote target branch: $repo@$branch ($head_sha)"
 
-pr_url="$(gh pr create --repo "$repo" --base "$base" --head "$branch" --title "oc: $title" --body "$(printf 'Automated /oc remote-target task from the controller repository.\n\n- Target repository: %s\n- Target base: %s\n- Branch: %s\n- The change was produced and published by controller-owned OpenCode logic.\n\nReview the resulting diff and the target repository'\''s own CI checks before merging.' "$repo" "$base" "$branch")" 2>/dev/null || true)"
+pr_url="$(gh pr create --repo "$repo" --base "$base" --head "$branch" --title "oc: $title" --body "$(printf 'Automated /oc remote-target task from the workflow repository.\n\n- Target repository: %s\n- Target base: %s\n- Branch: %s\n- The change was produced and published by optional workflow automation.\n\nReview the resulting diff and the target repository'\''s own CI checks before merging.' "$repo" "$base" "$branch")" 2>/dev/null || true)"
 if [[ -z "$pr_url" ]]; then
   existing_json="$(gh pr list --repo "$repo" --head "$branch" --base "$base" --state open --limit 10 --json number,url,headRefOid 2>/dev/null || printf '%s' '[]')"
   existing="$(jq -r '.[0].url // ""' <<<"$existing_json" 2>/dev/null || true)"

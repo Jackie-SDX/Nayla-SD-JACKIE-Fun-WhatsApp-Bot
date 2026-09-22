@@ -63,7 +63,7 @@ run_agent() {
 }
 
 # The Copilot publication lane is local-only: a remote target is always owned
-# by controller publication/verification logic, and run-copilot-attempt.sh
+# by workflow publication/verification logic, and run-copilot-attempt.sh
 # would mutate the controller checkout instead of the target workspace.
 if [[ "$provider" == "github-copilot" && "$mode" == "remote" ]]; then
   echo "::error title=Copilot lane is local-only::github-copilot is not supported for remote /oc targets." >&2
