@@ -144,7 +144,7 @@ out ci_surfaces "unobserved"
 classify_outcome="not-applicable"
 classify_rc=""
 if [[ "$agent_rc" -ne 0 ]] && [[ "$provider" != "none" ]] &&
-   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" && "$termination_reason" != "provider-unavailable" ]] &&
+   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" ]] &&
    [[ -n "$safe_log_path" ]]; then
   set +e
   CURRENT_PROVIDER="$provider" SAFE_LOG="$safe_log_path" bash .github/scripts/classify-provider-failure.sh
