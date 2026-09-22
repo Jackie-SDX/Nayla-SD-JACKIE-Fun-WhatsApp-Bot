@@ -4,10 +4,13 @@ set -u
 attempt="${OC_ATTEMPT:-peer}"
 runner_temp="${RUNNER_TEMP:-/tmp}"
 peer_log="$runner_temp/copilot-peer-${attempt}.safe.log"
+state_file="$runner_temp/copilot-peer-collab.state"
 result_file="$runner_temp/copilot-peer-${attempt}.result"
 mkdir -p "$runner_temp"
 : > "$peer_log"
 peer_started_at="$(date +%s)"
+max_rounds="$(printenv COPILOT_PEER_MAX_ROUNDS 2>/dev/null || printf 5)"
+round="$(printenv COPILOT_PEER_ROUND 2>/dev/null || printf 1)"
 
 write_peer_result() {
   local result="$1"
@@ -16,8 +19,29 @@ write_peer_result() {
     echo "COPILOT_PEER_RESULT=$result"
     echo "COPILOT_PEER_ELAPSED_SECONDS=$elapsed"
     echo "COPILOT_PEER_LOG_PATH=$peer_log"
+    echo "COPILOT_PEER_ROUNDS_USED=$(grep -c "^round=" "$state_file" 2>/dev/null || true)"
   } > "$result_file"
 }
+
+if ! [[ "$round" =~ ^[1-9][0-9]*$ ]] || ! [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || (( round > max_rounds )); then
+  echo "[COPILOT] peer round $round exceeds maximum $max_rounds; skipping without failing OpenCode"
+  write_peer_result skipped_limit
+  exit 0
+fi
+
+task="${COPILOT_PEER_TASK:-}"
+[[ -n "$task" ]] || task="${1:-Review the current work as an independent engineering peer. Identify risks, missing tests, and concrete fixes.}"
+diff_signature="$(git diff --binary 2>/dev/null | sha256sum | awk "{print \$1}")"
+task_signature="$(printf "%s\n%s\n%s" "$round" "$task" "$diff_signature" | sha256sum | awk "{print \$1}")"
+if grep -Fq "signature=$task_signature" "$state_file" 2>/dev/null; then
+  echo "[COPILOT] duplicate objective on unchanged state; skipping round $round"
+  write_peer_result skipped_duplicate
+  exit 0
+fi
+{
+  echo "round=$round"
+  echo "signature=$task_signature"
+} >> "$state_file"
 
 peer_token="${COPILOT_GITHUB_TOKEN:-}"
 if [[ -z "$peer_token" && -f "${COPILOT_PEER_TOKEN_FILE:-}" ]]; then
@@ -62,8 +86,6 @@ PY
   mcp_args+=(--additional-mcp-config "@$mcp_config" --allow-tool "composio")
 fi
 
-task="${COPILOT_PEER_TASK:-}"
-[[ -n "$task" ]] || task="${1:-Review the current work as an independent engineering peer. Identify risks, missing tests, and concrete fixes.}"
 state="$(git status --short 2>/dev/null | head -80)"
 diff_stat="$(git diff --stat 2>/dev/null | head -40)"
 policy_root="${OC_CONTROLLER_ROOT:-$PWD}"
@@ -78,6 +100,8 @@ Question/task:
 $task
 
 You are operating in the SAME isolated worktree that OpenCode is using.
+
+Give concise visible engineering notes before material actions: hypothesis, evidence, next action, result. Do not flood the shared stage with timestamps, hashes, or token-level narration. Read the shared task context in bounded batches before consequential changes.
 Current state:
 $state
 
@@ -99,11 +123,15 @@ sanitize() {
 echo "[OC][copilot-peer] inviting Copilot in the current worktree"
 set +e
 GITHUB_TOKEN="$peer_token" "$copilot_bin" \
-  --model auto \
+  --model "${COPILOT_PEER_MODEL:-auto}" \
+  --agent "${COPILOT_PEER_AGENT:-general-purpose}" \
   --stream=on \
   --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \
   --no-ask-user \
   --allow-tool "shell" \
+  --allow-tool "read" \
+  --allow-tool "url" \
+  --allow-tool "memory" \
   --allow-tool "write" \
   --deny-tool "shell(git commit)" \
   --deny-tool "shell(git push)" \
@@ -112,11 +140,12 @@ GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   --deny-tool "shell(gh)" \
   --deny-tool "shell(curl)" \
   --deny-tool "shell(wget)" \
+  --secret-env-vars "COPILOT_GITHUB_TOKEN,GITHUB_TOKEN,GH_TOKEN,UNIVERSAL_TOKEN,OPENROUTER_API_KEY,OPENCODE_API_KEY,COMPOSIO_API_KEY" \
   ${mcp_args[@]} \
   -p "$prompt" 2>&1 |
   while IFS= read -r line || [[ -n "$line" ]]; do
     safe="$(sanitize "$line")"
-    printf "%s\n" "$safe" | tee -a "$peer_log"
+    printf "[COPILOT] %s\n" "$safe" | tee -a "$peer_log"
   done
 rc=${PIPESTATUS[0]}
 set -e
@@ -124,7 +153,7 @@ set -e
 if [[ "$rc" -eq 0 ]]; then
   write_peer_result completed
 else
-  echo "COPILOT_PEER_RESULT=unavailable" > "$result_file"
+  write_peer_result unavailable
   echo "::warning title=Copilot peer unavailable::Peer session exited non-zero; OpenCode continues with its own evidence and work."
 fi
 exit 0
