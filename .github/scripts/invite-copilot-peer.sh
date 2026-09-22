@@ -119,6 +119,13 @@ Inspect, test, and edit this worktree as useful. Do not commit, push, reset, cle
 Return findings and make concrete corrective edits when justified.
 OpenCode will re-read your changes and independently validate the resulting tree."
 
+is_noise_line() {
+  case "$1" in
+    Resume\ copilot*|Tokens\ *|AI\ Credits\ *|Changes\ *|*copilot --resume=*) return 0 ;;
+  esac
+  return 1
+}
+
 sanitize() {
   local line="$1" secret
   for secret in "${peer_token:-}" "${COPILOT_GITHUB_TOKEN:-}" "${OPENROUTER_API_KEY:-}" "${GITHUB_TOKEN:-}" "${GH_TOKEN:-}" "${UNIVERSAL_TOKEN:-}" "${OPENCODE_API_KEY:-}" "${COMPOSIO_API_KEY:-}"; do
@@ -153,6 +160,7 @@ GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   ${mcp_args[@]} \
   -p "$prompt" 2>&1 |
   while IFS= read -r line || [[ -n "$line" ]]; do
+    if is_noise_line "$line"; then continue; fi
     safe="$(sanitize "$line")"
     printf "[COPILOT] %s\n" "$safe" | tee -a "$peer_log"
   done
