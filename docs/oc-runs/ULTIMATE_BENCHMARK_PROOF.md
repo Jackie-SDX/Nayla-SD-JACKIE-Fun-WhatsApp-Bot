@@ -122,16 +122,27 @@ repair is pushed to the SAME branch.
 - **Verify:** the final PR SHA is confirmed green across every observable CI
   surface (check-runs and commit statuses).
 
-### Observed failure evidence
+### Observed failure evidence (live, remote)
 
-`[FILLED BELOW FROM LIVE CI LOG AFTER INTENTIONAL FAILURE]`
+- **PR:** [https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/pull/110](https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/pull/110)
+- **Head SHA at failure:** `920ac60e68105b83173a7669d7011100c9e87381` (branch `opencode/issue108-20260922152710`)
+- **Failing check run:** `benchmark-108-intentional-failure` → run `35750538862`, conclusion **failure** (10s).
+- **Concurrent green surface:** `enterprise-agent-validation` → run `35750538713`, ran on the same SHA via `pull_request`.
+- **Verbatim failing log tail (gh run view --log-failed):**
+  ```
+  ##[group]Run echo "::error title=benchmark-108-intentional-failure::..."
+  ##[error]Deliberate temporary CI failure for issue #108 benchmark log observation
+  ...workflow and re-observe the same PR going green.
+  ##[error]Process completed with exit code 1.
+  ```
+- Observed via `gh run list --branch ...` (conclusion `failure`) and `gh run view <id> --log-failed` (exact step log). No guesswork: the failure is captured from the real GitHub Actions API for the exact PR head SHA.
 
 ## 6. Final status
 
-- PR: (created; URL recorded in the final report)
-- Final verified SHA: (recorded in the final report)
+- PR: https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/pull/110
+- Final verified SHA: recorded in the final report on the issue.
 - CI: green on the final SHA across all observable surfaces.
-- Scope: only this file remains in the diff.
+- Scope: only this file remains in the diff (temporary benchmark workflow removed).
 - Rounds used: 2 of 5 (max honored).
 
 ---
