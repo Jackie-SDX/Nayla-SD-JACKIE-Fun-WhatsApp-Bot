@@ -141,39 +141,53 @@ copilot_tool_args=()
 if [[ "$peer_mode" != "critic" ]]; then
   copilot_tool_args+=(--allow-tool "write")
 fi
-if [[ "$peer_mode" == "critic" ]]; then
-  copilot_agent_args+=(--agent "code-review")
-elif [[ -n "${COPILOT_PEER_AGENT:-}" ]]; then
+# Keep critic instructions inline; custom-agent callbacks are not guaranteed in Actions.
+if [[ -n "${COPILOT_PEER_AGENT:-}" ]]; then
   copilot_agent_args+=(--agent "$COPILOT_PEER_AGENT")
 fi
-GITHUB_TOKEN="$peer_token" "$copilot_bin" \
-  --model "${COPILOT_PEER_MODEL:-auto}" \
-  "${copilot_agent_args[@]}" \
-  --stream=on \
-  --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \
-  --no-ask-user \
-  --allow-tool "shell" \
-  --allow-tool "read" \
-  --allow-tool "url" \
-  --allow-tool "memory" \
-  "${copilot_tool_args[@]}" \
-  --deny-tool "shell(git commit)" \
-  --deny-tool "shell(git push)" \
-  --deny-tool "shell(git reset)" \
-  --deny-tool "shell(git clean)" \
-  --deny-tool "shell(gh)" \
-  --deny-tool "shell(curl)" \
-  --deny-tool "shell(wget)" \
-  --secret-env-vars "COPILOT_GITHUB_TOKEN,GITHUB_TOKEN,GH_TOKEN,UNIVERSAL_TOKEN,OPENROUTER_API_KEY,OPENCODE_API_KEY,COMPOSIO_API_KEY" \
-  ${mcp_args[@]} \
-  -p "$prompt" 2>&1 |
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    if is_noise_line "$line"; then continue; fi
-    safe="$(sanitize "$line")"
-    printf "[COPILOT] %s\n" "$safe" | tee -a "$peer_log"
-  done
-rc=${PIPESTATUS[0]}
+run_copilot() {
+  local use_custom_agent="${1:-1}"
+  local agent_args=()
+  if [[ "$use_custom_agent" == "1" ]]; then agent_args=("${copilot_agent_args[@]}"); fi
+  GITHUB_TOKEN="$peer_token" "$copilot_bin" \
+    --model "${COPILOT_PEER_MODEL:-auto}" \
+    "${agent_args[@]}" \
+    --stream=on \
+    --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \
+    --no-ask-user \
+    --allow-tool "shell" \
+    --allow-tool "read" \
+    --allow-tool "url" \
+    --allow-tool "memory" \
+    "${copilot_tool_args[@]}" \
+    --deny-tool "shell(git commit)" \
+    --deny-tool "shell(git push)" \
+    --deny-tool "shell(git reset)" \
+    --deny-tool "shell(git clean)" \
+    --deny-tool "shell(gh)" \
+    --deny-tool "shell(curl)" \
+    --deny-tool "shell(wget)" \
+    --secret-env-vars "COPILOT_GITHUB_TOKEN,GITHUB_TOKEN,GH_TOKEN,UNIVERSAL_TOKEN,OPENROUTER_API_KEY,OPENCODE_API_KEY,COMPOSIO_API_KEY" \
+    ${mcp_args[@]} \
+    -p "$prompt" 2>&1 |
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if is_noise_line "$line"; then continue; fi
+      safe="$(sanitize "$line")"
+      printf "[COPILOT] %s\n" "$safe" | tee -a "$peer_log"
+    done
+  return "${PIPESTATUS[0]}"
+}
+
+run_copilot 1
+rc=$?
+if [[ "$rc" -ne 0 && -n "${copilot_agent_args[*]:-}" ]]; then
+  echo "::warning title=Copilot custom agent unavailable::Custom Copilot agent invocation failed; retrying the same peer prompt without a custom-agent callback."
+  printf "\n" >> "$peer_log"
+  run_copilot 0
+  rc=$?
+fi
 kill "$hook_tail_pid" 2>/dev/null || true
+
 wait "$hook_tail_pid" 2>/dev/null || true
 set -e
 
