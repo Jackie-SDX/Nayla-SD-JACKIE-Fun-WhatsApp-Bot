@@ -128,9 +128,9 @@ Search; `composio_search` connection active).
 | Peer Round 1 completed | `$RUNNER_TEMP/copilot-peer-issue108-resume-r1.result` | `COPILOT_PEER_RESULT=completed`, method `direct-no-agent-flag` | verified |
 | Composio search live | `COMPOSIO_MULTI_EXECUTE_TOOL` / `COMPOSIO_SEARCH_WEB` ×2 | `success_count=2`, citations include docs.github.com URLs above | verified |
 | Critic subagent | `task critic` | Failed: free-tier restriction; adversarial pass done by OpenCode inline | verified (degraded path) |
-| Local tests (pre-publication) | `npm test`, `npm run test:invariants` | Recorded in final section after run | pending → filled at close |
-| Temp remote CI failure observed | `gh run view <id> --log-failed` on exact PR head | Recorded in §5 after publication | pending → filled at close |
-| Same-branch repair + green exact head | check-runs on final SHA | Recorded in §5 after repair | pending → filled at close |
+| Local tests (pre-publication) | `npm test`, `npm run test:invariants`, `npm run lint` (after `npm ci`) | `ALL TESTS PASSED`; `16 invariants checked, 0 failure(s)`; eslint exit 0 | verified |
+| Temp remote CI failure observed | `gh run view 35752579172 --log-failed` on exact PR head `e47608f` | conclusion **failure**; verbatim `##[error]Process completed with exit code 1.` | verified |
+| Same-branch repair + green exact head | check-runs on `1f41378`; `gh pr checks 111` | `validate` success / pass; `mergeable=MERGEABLE` | verified |
 
 ## 5. Temporary benchmark-only CI failure → observed → repaired
 
@@ -175,13 +175,35 @@ The temporary workflow must be absent from the final PR diff.
 - **Repair action:** `git rm .github/workflows/benchmark-issue108-intentional-failure.yml`
   + record this evidence in the proof file; push to the **same** branch
   `opencode/issue108-20260922160529` (no force-push, no branch rewrite).
-- **Post-repair verification:** pending exact repair SHA check-runs / `gh pr checks`
-  recorded in §6 after the green watch completes.
+- **Repair commit:** `1f41378bc94df447d6d1624a58eef45914e9f9c9` (removed temp
+  workflow; proof updated). PR #111 head moved `e47608f` → `1f41378`.
+- **Post-repair check-run (real):** `validate` (enterprise-agent-validation) →
+  run [`35752676244`](https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/actions/runs/35752676244),
+  conclusion **success** for exact SHA `1f41378` via
+  `gh api commits/1f41378.../check-runs`.
+- **PR checks:** `gh pr checks 111` → `validate pass`; `mergeable=MERGEABLE`,
+  `mergeStateStatus=CLEAN`.
+- **Commit-status surface:** `gh api commits/<sha>/status` → `total_count=0`
+  (no external commit statuses configured on this repo; check-run surface is
+  the observable CI evidence, consistent with prior PR #110).
 
 ## 6. Final status
 
-_Pending close-out: final SHA, green check-runs, diff = this file only, rounds
-used, tests, publication URL._
+- **PR:** https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/pull/111
+- **Temp-failure head (observed red):** `e47608fb4387f58270ca1e3b0d92745d50958976`
+  — run `35752579172` conclusion failure (`benchmark-108-intentional-failure`).
+- **Repair head (observed green):** `1f41378bc94df447d6d1624a58eef45914e9f9c9`
+  — run `35752676244` success (`validate` check-run).
+- **Diff vs main:** `docs/oc-runs/ULTIMATE_BENCHMARK_PROOF.md` only
+  (`git diff --name-only main...HEAD` and `gh pr diff 111 --name-only`).
+- **Temp workflow:** absent from final tree (removed in repair commit).
+- **Rounds used:** **2 / 5** (Round 1 analysis; Round 2 single peer edit).
+- **Tests:** `npm test` pass; `npm run test:invariants` 16/16; `npm run lint`
+  clean after `npm ci`.
+- **Prior history included:** controller failure run `35746900144` / fix PR #109
+  / base `f8a7b1b`; prior attempt PR #110 retained as historical thread evidence
+  only.
+- **No WhatsApp application code changes.**
 
 ---
 
