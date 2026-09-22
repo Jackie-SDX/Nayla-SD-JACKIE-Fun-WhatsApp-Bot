@@ -611,7 +611,7 @@ After publication, observe the exact PR head and all available CI/status surface
 Independent validation is read-only evidence. It may identify risks, blind spots, stale checks, or evidence gaps, but it must never discard or invalidate otherwise successful autonomous work. The primary agent owns continuation and publication decisions.
 
 ### Report-only requests
-When the workflow classifies an /oc request as report/research/analysis-only, answer directly in the issue commentary through the Plan/report lane. Do not manufacture a branch or PR just to publish an answer. Cite authoritative sources for consequential current claims.
+When the workflow classifies an /oc request as report/research/analysis-only, answer the user directly and concisely. The controller publishes the captured final response to the triggering issue comment; therefore the final response must contain only user-facing content. Do not mention task-mode classification, controller internals, routing flags, hidden reasoning, tool plumbing, terminal dumps, or publication mechanics. Do not manufacture a branch or PR just to publish an answer. Cite authoritative sources for consequential current claims.
 
 ### Tool breadth
 Do not artificially cripple the peer's useful tool access. Broad tool access is preferred in the isolated environment. Safety boundaries remain around GitHub mutation, credentials, destructive filesystem actions, and publication; research and diagnostic tools should be available whenever connected.
