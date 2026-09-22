@@ -192,6 +192,10 @@ Observations from the run history:
 
 ---
 
+## 6.1 Implemented follow-up — provider-aware Copilot fallback
+
+The control plane now treats the observed Zen `FreeTierError`/403 context rejection as a provider-unavailable transition when the OpenCode process itself returns exit 0. The attempt emits `termination_reason=provider-unavailable`, the classifier advances to the next provider, and model-memory recording does not poison the OpenCode model for a provider-wide failure. GitHub Actions also grants the Copilot Requests permission and can use the short-lived workflow token when no dedicated Copilot token is supplied. A deterministic regression test pins the 403 -> provider-unavailable -> Copilot transition.
+
 ## 7. Verification checklist for the senior engineer
 
 After any control-plane change, before merge, run:

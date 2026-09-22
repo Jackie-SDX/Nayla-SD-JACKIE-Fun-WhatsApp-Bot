@@ -40,6 +40,8 @@ agent_cwd=""
 : > "$safe_log"
 : > "$progress_log"
 
+provider_failure_kind=""
+
 cleanup() {
   [[ -n "${heartbeat_pid:-}" ]] && kill "$heartbeat_pid" 2>/dev/null || true
   if [[ -n "$agent_worktree" && -d "$agent_worktree" ]]; then
@@ -183,6 +185,13 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
 done < "$fifo" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
 wait "$agent_pid"
 exit_code=$?
+
+if [[ "$exit_code" -eq 0 ]] && grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$safe_log"; then
+  exit_code=75
+  provider_failure_kind="free-tier-context"
+  echo "::warning title=OpenCode Zen unavailable in this runtime::Zen free-tier context rejected the request; advancing to the next configured provider."
+fi
+
 agent_branch=""
 if [[ -n "$agent_worktree" && -e "$agent_worktree/.git" ]]; then
   agent_branch="$(git -C "$agent_worktree" branch --show-current 2>/dev/null || true)"
@@ -194,6 +203,7 @@ elapsed=$(( $(date +%s) - start_epoch ))
 termination_reason="completed"
 case "$exit_code" in
   124) termination_reason="timeout" ;;
+  75) termination_reason="provider-unavailable" ;;
   125|126|127) termination_reason="failed" ;;
   128|129|130|131|132|133|134|135|136|137|138|139|140|141|142|143|144|145|146|147|148|149|150|151|152|153|154|155|156|157|158|159) termination_reason="signal" ;;
   0) termination_reason="completed" ;;
@@ -205,6 +215,7 @@ printf "[OC][attempt=%s][elapsed=%ss] finished exit_code=%s termination_reason=%
 {
   printf "exit_code=%s\n" "$exit_code"
   printf "termination_reason=%s\n" "$termination_reason"
+  printf "provider_failure_kind=%s\n" "$provider_failure_kind"
 } >> "$output_file"
 
 echo "[OC][attempt=${attempt}] live stream complete; exit_code=${exit_code}; termination_reason=${termination_reason}"

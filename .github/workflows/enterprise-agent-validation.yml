@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .github/scripts/oc-control-plane-config.sh .github/scripts/run-attempt-pipeline.sh .github/scripts/recover-verify-failure.sh .github/scripts/record-model-memory.sh .github/scripts/write-oc-run-record.sh .github/actions/oc-attempt/action.yml .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md docs/oc-runs/README.md eslint.config.js scripts/test-simple-web-crawler.js scripts/test-agent-invariants.js; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .github/scripts/oc-control-plane-config.sh .github/scripts/run-attempt-pipeline.sh .github/scripts/recover-verify-failure.sh .github/scripts/record-model-memory.sh .github/scripts/test-provider-fallback.sh .github/scripts/write-oc-run-record.sh .github/actions/oc-attempt/action.yml .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md docs/oc-runs/README.md eslint.config.js scripts/test-simple-web-crawler.js scripts/test-agent-invariants.js; do
             test -f "$f"
           done
           jq empty opencode.json
@@ -48,6 +48,7 @@ jobs:
           bash -n .github/scripts/ingest-evidence.sh
           bash -n .github/scripts/test-ingest-evidence.sh
           bash -n .github/scripts/oc-control-plane-config.sh
+           bash -n .github/scripts/test-provider-fallback.sh
           bash -n .github/scripts/run-attempt-pipeline.sh
           bash -n .github/scripts/recover-verify-failure.sh
           bash -n .github/scripts/record-model-memory.sh
@@ -106,6 +107,8 @@ jobs:
           # integration authenticates its branch/commit/push/PR lifecycle
           # through the Actions OIDC token (restored and live-tested in e215ff1).
           assert "id-token: write" in opencode
+           assert "copilot-requests: write" in opencode
+           assert "secrets.COPILOT_GITHUB_TOKEN || github.token" in opencode
           # The former oc-control.yml must not be reintroduced as a second
           # comment listener; the invariant is file-existence based so a
           # documentation comment in opencode.yml may still name it.

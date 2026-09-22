@@ -94,6 +94,7 @@ fi
 
 safe_log_path="$(read_back_output safe_log_path)"
 termination_reason="$(read_back_output termination_reason)"
+provider_failure_kind="$(read_back_output provider_failure_kind)"
 
 if [[ "$agent_rc" -eq 0 ]]; then
   agent_outcome="success"
@@ -143,7 +144,7 @@ out ci_surfaces "unobserved"
 classify_outcome="not-applicable"
 classify_rc=""
 if [[ "$agent_rc" -ne 0 ]] && [[ "$provider" != "none" ]] &&
-   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" ]] &&
+   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" && "$termination_reason" != "provider-unavailable" ]] &&
    [[ -n "$safe_log_path" ]]; then
   set +e
   CURRENT_PROVIDER="$provider" SAFE_LOG="$safe_log_path" bash .github/scripts/classify-provider-failure.sh
