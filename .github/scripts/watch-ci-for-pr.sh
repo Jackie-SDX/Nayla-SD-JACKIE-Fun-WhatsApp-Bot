@@ -29,6 +29,7 @@ snapshot() {
     status_total:($s.total_count // 0),
     status_pending:([ $s.statuses[]? | select(.state=="pending") ]|length),
     status_fail:([ $s.statuses[]? | select(.state=="failure" or .state=="error") ]|length),
+    status_green:([ $s.statuses[]? | select(.state=="success") ]|length),
     status_contexts:([ $s.statuses[]? | select(.state=="failure" or .state=="error") | .context ]|join(", "))
   }'
 }
@@ -37,7 +38,7 @@ while :; do
   state="$(snapshot)"
   failures="$(jq -r '.check_fail + .status_fail' <<<"$state")"
   pending="$(jq -r '.check_pending + .status_pending' <<<"$state")"
-  greens="$(jq -r '.check_green' <<<"$state")"
+  greens="$(jq -r '.check_green + .status_green' <<<"$state")"
   total="$(jq -r '.check_total + .status_total' <<<"$state")"
   echo "[CI] PR #$pr $short_sha: observed=$total green=$greens pending=$pending failures=$failures" | tee -a "$report"
 
