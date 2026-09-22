@@ -25,12 +25,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .github/scripts/oc-control-plane-config.sh .github/scripts/run-attempt-pipeline.sh .github/scripts/recover-verify-failure.sh .github/scripts/record-model-memory.sh .github/scripts/test-provider-fallback.sh .github/scripts/invite-copilot-peer.sh .github/scripts/write-oc-run-record.sh .github/actions/oc-attempt/action.yml .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md docs/oc-runs/README.md eslint.config.js scripts/test-simple-web-crawler.js scripts/test-agent-invariants.js; do
+          for f in opencode.json .github/workflows/opencode.yml .github/workflows/opencode-cache.yml .github/scripts/select-opencode-route.sh .github/scripts/run-opencode-attempt.sh .github/scripts/run-copilot-attempt.sh .github/scripts/publish-copilot-change.sh .github/scripts/classify-provider-failure.sh .github/scripts/prepare-composio-mcp.sh .github/scripts/cleanup-composio-mcp.sh .github/scripts/post-oc-continuation.sh .github/scripts/reconcile-opencode-result.sh .github/scripts/verify-agent-result.sh .github/scripts/oc-publish-lib.sh .github/scripts/resolve-oc-target.sh .github/scripts/prepare-oc-target.sh .github/scripts/publish-remote-opencode.sh .github/scripts/test-oc-target.sh .github/scripts/ingest-evidence.sh .github/scripts/test-ingest-evidence.sh .github/scripts/oc-control-plane-config.sh .github/scripts/run-attempt-pipeline.sh .github/scripts/recover-verify-failure.sh .github/scripts/record-model-memory.sh .github/scripts/test-provider-fallback.sh .github/scripts/invite-copilot-peer.sh .github/scripts/write-oc-run-record.sh .github/actions/oc-attempt/action.yml .opencode/agents/critic.md .opencode/instructions.md .github/copilot-instructions.md .github/dependabot.yml .github/CODEOWNERS docs/ENTERPRISE_AGENT_AUDIT.md .github/scripts/collect-oc-context.sh .github/scripts/select-oc-task-mode.sh .github/scripts/watch-ci-for-pr.sh .github/scripts/independent-audit-advisory.sh .github/scripts/recover-opencode-ci.sh .github/scripts/log-copilot-hook.sh .github/hooks/ultimate-agent-observability.json .opencode/plugins/agentic-observability.js docs/GITHUB_NATIVE_COPILOT_AUDIT.md docs/HYBRID_AGENT_ARCHITECTURE_AUDIT.md docs/CONCURRENCY_AND_ISOLATION_AUDIT.md docs/PROJECT_HISTORY_AND_ARCHITECTURE.md docs/oc-runs/README.md eslint.config.js scripts/test-simple-web-crawler.js scripts/test-agent-invariants.js; do
             test -f "$f"
           done
           jq empty opencode.json
           ruby -e 'require "yaml"; Dir[".github/workflows/*.yml",".github/dependabot.yml"].uniq.each { |f| YAML.load_file(f); puts "YAML OK: #{f}" }'
           bash -n .github/scripts/select-opencode-route.sh
+          bash -n .github/scripts/collect-oc-context.sh
+          bash -n .github/scripts/select-oc-task-mode.sh
+          bash -n .github/scripts/watch-ci-for-pr.sh
+          bash -n .github/scripts/independent-audit-advisory.sh
+          bash -n .github/scripts/recover-opencode-ci.sh
+          bash -n .github/scripts/log-copilot-hook.sh
+          jq empty .github/hooks/ultimate-agent-observability.json
           bash -n .github/scripts/run-opencode-attempt.sh
           bash -n .github/scripts/run-copilot-attempt.sh
           bash -n .github/scripts/publish-copilot-change.sh
@@ -180,6 +187,33 @@ jobs:
           grep -Fq 'all skipped is never verified' .github/scripts/test-oc-target.sh
           grep -Fq 'late-arriving external-status failure' .github/scripts/test-oc-target.sh
           echo 'publication-window verification contract: OK'
+
+      - name: Validate Ultimate agentic control plane contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Capture complete task context' .github/workflows/opencode.yml
+          grep -Fq 'Select task mode' .github/workflows/opencode.yml
+          grep -Fq 'Autonomous CI recovery loop' .github/workflows/opencode.yml
+          grep -Fq 'Independent agent audit (advisory)' .github/workflows/opencode.yml
+          grep -Fq 'task_mode:' .github/actions/oc-attempt/action.yml
+          grep -Fq 'copilot_peer_result:' .github/actions/oc-attempt/action.yml
+          grep -Fq 'COPILOT_PEER_MAX_ROUNDS' .github/workflows/opencode.yml
+          grep -Fq 'max_rounds=' .github/scripts/invite-copilot-peer.sh
+          grep -Fq 'duplicate objective on unchanged state' .github/scripts/invite-copilot-peer.sh
+          grep -Fq 'Read the complete issue context' .github/scripts/collect-oc-context.sh
+          grep -Fq 'advisory only' .github/scripts/independent-audit-advisory.sh
+          grep -Fq 'max_rounds' .github/scripts/recover-opencode-ci.sh
+          grep -Fq 'check_fail' .github/scripts/watch-ci-for-pr.sh
+          grep -Fq 'status_green' .github/scripts/watch-ci-for-pr.sh
+          grep -Fq '[COPILOT][hook]' .github/scripts/log-copilot-hook.sh
+          jq -e '.version == 1 and (.hooks.postToolUse | length) > 0 and (.hooks.postToolUseFailure | length) > 0' .github/hooks/ultimate-agent-observability.json >/dev/null
+          grep -Fq 'tool.execute.before' .opencode/plugins/agentic-observability.js
+          grep -Fq 'tool.execute.after' .opencode/plugins/agentic-observability.js
+          grep -Fq 'session.compacted' .opencode/plugins/agentic-observability.js
+          grep -Fq 'Ultimate agentic operating standard' .opencode/instructions.md
+          grep -Fq 'Ultimate peer operating standard' .github/copilot-instructions.md
+          echo 'ultimate agentic control-plane contract: OK'
 
       - name: Validate hybrid architecture
         shell: bash
