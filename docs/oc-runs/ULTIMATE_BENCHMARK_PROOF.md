@@ -137,12 +137,28 @@ repair is pushed to the SAME branch.
   ```
 - Observed via `gh run list --branch ...` (conclusion `failure`) and `gh run view <id> --log-failed` (exact step log). No guesswork: the failure is captured from the real GitHub Actions API for the exact PR head SHA.
 
+### Repair -> same PR green
+
+- **Repair commit:** `bb2bb527a2dccc146846e8952473dd1798063cb2` removed the temporary
+  benchmark workflow (`git rm` + push to the SAME branch `opencode/issue108-20260922152710`;
+  no force-push, no branch rewrite). PR #110 head moved `920ac60` -> `bb2bb52`.
+- **Post-repair check-run (real):** `validate` (enterprise-agent-validation, topic
+  `validate`) → run `35750751867`, conclusion **success** for the exact repair SHA
+  (`gh api commits/<sha>/check-runs`).
+- **PR checks:** `gh pr checks 110` → `validate pass`; `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`.
+- **Note (documented, not a defect of this PR):** GitHub Apps `render` and `freebuff-web`
+  register `queued` check-suites on EVERY PR head in this repository (verified identical on
+  PR #106 and PR #109 heads); they never complete for any PR, are not triggered by this
+  change, and do not block the Actions `validate` green state observed above.
+
 ## 6. Final status
 
 - PR: https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/pull/110
-- Final verified SHA: recorded in the final report on the issue.
-- CI: green on the final SHA across all observable surfaces.
-- Scope: only this file remains in the diff (temporary benchmark workflow removed).
+- Temp-failure head (observed red): `920ac60e68105b83173a7669d7011100c9e87381` — run `35750538862` failure.
+- Repair head (observed green): `bb2bb527a2dccc146846e8952473dd1798063cb2` — run `35750751867` success (validate check-run).
+- CI: green on the repair SHA across the observable Actions check-run surface; `render`/`freebuff-web` queued app check-suites are a pre-existing repo-wide condition present on every PR.
+- Scope: only `docs/oc-runs/ULTIMATE_BENCHMARK_PROOF.md` remains in the diff
+  (`git diff --name-only main...HEAD`), temporary benchmark workflow removed.
 - Rounds used: 2 of 5 (max honored).
 
 ---
