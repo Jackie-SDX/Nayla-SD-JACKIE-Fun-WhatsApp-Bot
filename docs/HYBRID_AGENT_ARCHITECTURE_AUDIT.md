@@ -47,3 +47,7 @@ OpenCode's current Zen documentation lists Big Pickle and MiMo-V2.5 Free as free
 ## Two-brain peer path
 
 OpenCode can invite Copilot during the same task: `invite-copilot-peer.sh` runs Copilot against the SAME isolated worktree, allowing inspection, testing, and corrective edits. OpenCode then re-reads the tree and remains responsible for the final decision. This is not failover: a missing or failed peer is non-fatal and the primary task continues.
+
+## OpenRouter recovery path
+
+A Zen free-tier context rejection can route the next attempt through OpenCode using the `openrouter/free` router. This preserves the OpenCode runtime and worktree; Copilot remains available as a peer or terminal fallback. The route is credential-gated and non-blocking.
