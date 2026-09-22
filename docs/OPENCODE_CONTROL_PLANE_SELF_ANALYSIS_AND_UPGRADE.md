@@ -202,7 +202,7 @@ The hybrid architecture now supports deliberate in-task collaboration, not only 
 
 ## 6.3 Implemented follow-up — OpenRouter recovery
 
-A Zen free-tier context rejection now emits an OpenRouter recovery hint. When `OPENROUTER_API_KEY` exists, the next attempt can switch the SAME OpenCode runtime to `openrouter/free`; otherwise the existing Copilot route remains available. This keeps the three-attempt budget while increasing the chance that OpenCode remains alive long enough to invite Copilot.
+A Zen free-tier context rejection now emits an OpenRouter recovery hint. When `OPENROUTER_API_KEY` exists, the next attempt can switch the SAME OpenCode runtime to `openrouter/openrouter/free`; otherwise the existing Copilot route remains available. This keeps the three-attempt budget while increasing the chance that OpenCode remains alive long enough to invite Copilot.
 
 ## 7. Verification checklist for the senior engineer
 

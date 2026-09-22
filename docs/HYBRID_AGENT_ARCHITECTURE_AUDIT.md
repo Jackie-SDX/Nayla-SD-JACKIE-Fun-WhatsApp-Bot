@@ -50,4 +50,4 @@ OpenCode can invite Copilot during the same task: `invite-copilot-peer.sh` runs 
 
 ## OpenRouter recovery path
 
-A Zen free-tier context rejection can route the next attempt through OpenCode using the `openrouter/free` router. This preserves the OpenCode runtime and worktree; Copilot remains available as a peer or terminal fallback. The route is credential-gated and non-blocking.
+A Zen free-tier context rejection can route the next attempt through OpenCode using the `openrouter/openrouter/free` router. This preserves the OpenCode runtime and worktree; Copilot remains available as a peer or terminal fallback. The route is credential-gated and non-blocking.
