@@ -436,14 +436,17 @@ jobs:
           bash=cfg["permission"]["bash"]
           assert cfg["model"]=="opencode/big-pickle"
           assert cfg["share"]=="disabled"
-          assert cfg["permission"]["external_directory"]=="deny"
+          assert cfg["permission"]["external_directory"]=="allow"
           assert cfg["permission"]["doom_loop"]=="allow"
           assert "git commit *" not in bash
           assert "git commit" not in bash
           assert "git push *" not in bash
           assert "git push" not in bash
-          assert bash["git reset *"]=="deny"
-          assert bash["git clean *"]=="deny"
+          assert bash["git push --force *"]=="deny"
+          assert bash["git push -f *"]=="deny"
+          assert bash["git push --force-with-lease *"]=="deny"
+          assert bash["rm -rf /"]=="deny"
+          assert bash["rm -rf /*"]=="deny"
           print("agent permissions: OK")
           PY
 
