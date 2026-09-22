@@ -23,6 +23,7 @@ jobs:
       !startsWith(github.event.comment.body, '/opencode retry failed jobs')
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       issues: write
       pull-requests: read
     env:
@@ -30,6 +31,11 @@ jobs:
     outputs:
       accepted: ${{ steps.claim.outputs.accepted }}
     steps:
+      - name: Checkout repository for claim script
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 1
+          persist-credentials: false
       - name: Claim unique /oc comment delivery
         id: claim
         shell: bash
