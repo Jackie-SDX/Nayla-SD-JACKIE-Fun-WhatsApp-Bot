@@ -195,6 +195,19 @@ if [[ "$exit_code" -eq 0 ]] && grep -Eiq "FreeTierError|free tier can only be us
   echo "::warning title=OpenCode Zen unavailable in this runtime::Zen free-tier context rejected the request; advancing to the next configured provider."
 fi
 
+peer_result_file="$runner_temp/copilot-peer-${attempt}.result"
+copilot_peer_result=""
+copilot_peer_elapsed_seconds=""
+copilot_peer_log_path=""
+if [[ -f "$peer_result_file" ]]; then
+  copilot_peer_result="$(sed -n "s/^COPILOT_PEER_RESULT=//p" "$peer_result_file" | tail -n 1)"
+  copilot_peer_elapsed_seconds="$(sed -n "s/^COPILOT_PEER_ELAPSED_SECONDS=//p" "$peer_result_file" | tail -n 1)"
+  copilot_peer_log_path="$(sed -n "s/^COPILOT_PEER_LOG_PATH=//p" "$peer_result_file" | tail -n 1)"
+  printf "copilot_peer_result=%s\n" "$copilot_peer_result" >> "$output_file"
+  printf "copilot_peer_elapsed_seconds=%s\n" "$copilot_peer_elapsed_seconds" >> "$output_file"
+  printf "copilot_peer_log_path=%s\n" "$copilot_peer_log_path" >> "$output_file"
+fi
+
 agent_branch=""
 if [[ -n "$agent_worktree" && -e "$agent_worktree/.git" ]]; then
   agent_branch="$(git -C "$agent_worktree" branch --show-current 2>/dev/null || true)"
