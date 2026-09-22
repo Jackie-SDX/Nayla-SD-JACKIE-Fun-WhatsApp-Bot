@@ -19,7 +19,8 @@ if [[ "$route_index" =~ ^[0-9]+$ ]] && [[ "$retry_current" == "1" || "$advance_r
 fi
 
 excluded=",${OPENCODE_EXCLUDED_PROVIDERS:-},"
-models_csv="${OPENCODE_ZEN_FREE_MODELS:-big-pickle,mimo-v2.5-free}"
+models_csv="${OPENCODE_ZEN_FREE_MODELS:-big-pickle,mimo-v2.6-flash-free}"
+recovery_model="${OPENCODE_RECOVERY_MODEL:-}"
 route_hint="${OPENCODE_ROUTE_HINT:-}"
 IFS=',' read -r -a models <<< "$models_csv"
 
@@ -108,6 +109,14 @@ fi
 
 # A Zen free-tier context rejection is provider-level. Prefer the next
 # OpenCode runtime through OpenRouter when explicitly hinted.
+# Provider/model error recovery: use a provider-suggested free model once on the next route.
+if [[ -n "$recovery_model" && "$start" -gt 0 && "$recovery_model" == *"-free" &&
+      "$recovery_model" != "${OPENCODE_SELECTED_MODEL##*/}" && -n "${OPENCODE_API_KEY:-}" && ",$excluded," != *,opencode,* ]]; then
+  select_route "$start" opencode "opencode/$recovery_model" "opencode/$recovery_model"
+  if [[ -n "$GITHUB_ENV" ]]; then echo "OPENCODE_RECOVERY_MODEL=" >> "$GITHUB_ENV"; fi
+  exit 0
+fi
+
 if [[ "$route_hint" == "openrouter" && "$start" -gt 0 && "$start" -lt "$index" && -n "${OPENROUTER_API_KEY:-}" && ",$excluded," != *,openrouter,* ]]; then
   select_route "$start" openrouter "openrouter/openrouter/free" "openrouter/openrouter/free"
   if [[ -n "$GITHUB_ENV" ]]; then

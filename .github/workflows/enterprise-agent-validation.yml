@@ -217,6 +217,7 @@ jobs:
           assert "github-copilot/auto" in selector
           assert "openrouter/openrouter/free" in selector
           assert "OPENCODE_ROUTE_HINT" in selector
+          assert "OPENCODE_RECOVERY_MODEL" in selector
           assert cfg["mcp"]["composio"]["type"]=="local"
           assert cfg["mcp"]["composio"]["enabled"] is True
           assert "mcp-remote@0.14.2" in cfg["mcp"]["composio"]["command"]
@@ -404,7 +405,7 @@ jobs:
             env=dict(os.environ)
             env.pop("COPILOT_GITHUB_TOKEN",None)
             env.pop("OPENCODE_EXCLUDED_PROVIDERS",None)
-            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                      OPENCODE_ROUTE_INDEX=route_index, GITHUB_ENV=os.path.join(d,"env"),
                      GITHUB_OUTPUT=os.path.join(d,"out"))
             if copilot:
@@ -412,7 +413,7 @@ jobs:
             subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
             return Path(os.path.join(d,"out")).read_text()
           assert "route=opencode/big-pickle" in pick("",None)
-          assert "route=opencode/mimo-v2.5-free" in pick("1",None)
+          assert "route=opencode/mimo-v2.6-flash-free" in pick("1",None)
           assert "route=github-copilot/auto" in pick("2","y")
           assert "route=none" in pick("2",None)
           assert "route=none" in pick("3","y")
@@ -421,19 +422,19 @@ jobs:
           d=tempfile.mkdtemp()
           env=dict(os.environ)
           env.pop("COPILOT_GITHUB_TOKEN",None)
-          env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+          env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                      OPENCODE_ROUTE_INDEX="0", OPENCODE_RETRY_CURRENT_ROUTE="1",
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
-          assert "route=opencode/mimo-v2.5-free" in Path(os.path.join(d,"out")).read_text()
+          assert "route=opencode/mimo-v2.6-flash-free" in Path(os.path.join(d,"out")).read_text()
           d=tempfile.mkdtemp()
           env=dict(os.environ)
           env.pop("COPILOT_GITHUB_TOKEN",None)
-          env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+          env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                      OPENCODE_ROUTE_INDEX="0", OPENCODE_ADVANCE_ROUTE="1",
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
-          assert "route=opencode/mimo-v2.5-free" in Path(os.path.join(d,"out")).read_text()
+          assert "route=opencode/mimo-v2.6-flash-free" in Path(os.path.join(d,"out")).read_text()
           # Bad-model memory (audit item 6): a freshly recorded failed model is
           # skipped at index 0 so the next lane is selected; an expired entry
           # is ignored and the recorded model stays first. Only a fresh record
@@ -443,14 +444,14 @@ jobs:
             d=tempfile.mkdtemp()
             env=dict(os.environ)
             env.pop("COPILOT_GITHUB_TOKEN",None)
-            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.5-free",
+            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                        OPENCODE_ROUTE_INDEX="0", OPENCODE_BAD_MODELS=entry,
                        OPENCODE_BAD_MODELS_MAX_AGE_HOURS="24",
                        GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
             subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
             return Path(os.path.join(d,"out")).read_text(), Path(os.path.join(d,"env")).read_text()
           out_txt, env_txt = pick_bad("big-pickle=%d" % now)
-          assert "route=opencode/mimo-v2.5-free" in out_txt, "fresh bad-model must be skipped"
+          assert "route=opencode/mimo-v2.6-flash-free" in out_txt, "fresh bad-model must be skipped"
           assert "OPENCODE_ROUTE_INDEX=1" in env_txt, "ladder index must advance past a fresh bad-model"
           out_txt, env_txt = pick_bad("big-pickle=%d" % (now - 25*3600))
           assert "route=opencode/big-pickle" in out_txt, "expired bad-model must be ignored"

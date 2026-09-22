@@ -50,7 +50,9 @@ oc_git_authed() {
   oc_publish_auth_header || return 1
   local git_server="$GITHUB_SERVER_URL"
   [[ -n "$git_server" ]] || git_server="https://github.com"
-  GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c core.askPass= -c "http.$git_server/.extraheader=$OC_PUBLISH_AUTH_HEADER" "$@"
+  git config --local --unset-all "http.$git_server/.extraheader" 2>/dev/null || true
+  git config --local --unset-all "http.extraheader" 2>/dev/null || true
+  GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c core.askPass= -c "http.$git_server/.extraheader=$OC_PUBLISH_AUTH_HEADER" "$@"
 }
 
 # Pushes using the explicit auth mechanism; never relies on credential helpers.

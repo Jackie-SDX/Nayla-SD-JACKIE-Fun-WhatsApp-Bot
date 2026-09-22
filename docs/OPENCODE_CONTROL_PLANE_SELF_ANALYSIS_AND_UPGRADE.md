@@ -204,6 +204,10 @@ The hybrid architecture now supports deliberate in-task collaboration, not only 
 
 A Zen free-tier context rejection now emits an OpenRouter recovery hint. When `OPENROUTER_API_KEY` exists, the next attempt can switch the SAME OpenCode runtime to `openrouter/openrouter/free`; otherwise the existing Copilot route remains available. This keeps the three-attempt budget while increasing the chance that OpenCode remains alive long enough to invite Copilot.
 
+## 6.4 Implemented follow-up — adaptive model recovery
+
+The selector now captures provider-supplied `Did you mean:` free-model suggestions and tries the suggested model exactly once on the next bounded route. The default Zen secondary candidate now matches the runtime-observed `mimo-v2.6-flash-free`; future catalog drift can self-heal without speculative model probes.
+
 ## 7. Verification checklist for the senior engineer
 
 After any control-plane change, before merge, run:

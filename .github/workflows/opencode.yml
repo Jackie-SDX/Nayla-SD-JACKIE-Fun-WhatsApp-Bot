@@ -48,7 +48,7 @@ jobs:
       OPENCODE_AGENT_TIMEOUT_MINUTES: "350"
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.5-free' }}
+      OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.6-flash-free' }}
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
       COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
@@ -170,6 +170,16 @@ jobs:
           [[ -n "$COMPOSIO_API_KEY" ]] && echo "Composio MCP credential: configured" || echo "::warning title=Composio unavailable::COMPOSIO_API_KEY is not configured."
           [[ -n "${UNIVERSAL_TOKEN:-}" ]] && echo "Universal GitHub credential: configured" || echo "Universal GitHub credential: not configured; using the workflow GitHub token."
           echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
+
+      - name: Prepare peer credential file
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          peer_token_file="$RUNNER_TEMP/copilot-peer-token"
+          printf '%s' "$COPILOT_GITHUB_TOKEN" > "$peer_token_file"
+          chmod 600 "$peer_token_file"
+          echo "COPILOT_PEER_TOKEN_FILE=$peer_token_file" >> "$GITHUB_ENV"
 
       - name: Prepare remote target workspace
         if: steps.target.outputs.mode == 'remote'
