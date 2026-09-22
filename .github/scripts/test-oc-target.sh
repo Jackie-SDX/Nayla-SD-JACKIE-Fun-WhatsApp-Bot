@@ -7,7 +7,7 @@
 # publication guard that blocked the earlier failing run.
 #
 # All fixtures live under mktemp directories and are removed on exit; nothing
-# is ever created inside the controller worktree.
+# is ever created inside the workflow runner worktree.
 
 set -euo pipefail
 
@@ -173,73 +173,55 @@ grep -q '^target_branch=oc/remote-Jackie-SDX-something$' "$GITHUB_OUTPUT" \
 # 2. prepare-oc-target.sh isolation + stable, resumable branch
 # ---------------------------------------------------------------------------
 TARGET_SRC="$TESTS/target-src"
-CONTROLLER="$TESTS/controller"
-mkdir -p "$TARGET_SRC/.opencode/agents" "$TARGET_SRC/plugins" "$CONTROLLER/.opencode/agents"
+mkdir -p "$TARGET_SRC/.opencode/agents" "$TARGET_SRC/plugins"
 git -C "$TARGET_SRC" init -q -b main
 git -C "$TARGET_SRC" config user.name "fixture"
 git -C "$TARGET_SRC" config user.email "fixture@example.com"
 printf 'target instructions\n' > "$TARGET_SRC/.opencode/instructions.md"
 printf '{target:true}\n' > "$TARGET_SRC/opencode.json"
-printf 'trust me\n'      > "$TARGET_SRC/AGENTS.md"
-printf 'plugin\n'        > "$TARGET_SRC/plugins/thing.js"
-printf 'code\n'          > "$TARGET_SRC/code.txt"
+printf 'trust me\n' > "$TARGET_SRC/AGENTS.md"
+printf 'plugin\n' > "$TARGET_SRC/plugins/thing.js"
+printf 'code\n' > "$TARGET_SRC/code.txt"
 git -C "$TARGET_SRC" add -A && git -C "$TARGET_SRC" commit -qm init
-printf '{controller:true}\n' > "$CONTROLLER/opencode.json"
-printf 'controller enterprise policy\n' > "$CONTROLLER/.opencode/instructions.md"
-printf 'critic rules\n' > "$CONTROLLER/.opencode/agents/critic.md"
-FAKE_TOKEN="ghp_test000000000000000000000000"
+FAKE_TOKEN="ghp_test000000000000000000000"
 
-run_prepare() { # run_prepare <name> <task> [extra_env...]
+run_prepare() {
   local name="$1" task="$2"; shift 2
   GITHUB_OUTPUT="$TESTS/prep-out-$name"; GITHUB_ENV="$TESTS/prep-env-$name"
   : > "$GITHUB_OUTPUT"; : > "$GITHUB_ENV"
   OC_TARGET_REPO="Jackie-SDX/SomeRepo" OC_TARGET_BASE="main" OC_TARGET_TASK="$task" \
-  OC_CONTROLLER_ROOT="$CONTROLLER" RUNNER_TEMP="$TESTS" \
+  RUNNER_TEMP="$TESTS" \
   OC_TARGET_CLONE_URL="file://$TARGET_SRC" GH_TOKEN="$FAKE_TOKEN" \
   GITHUB_ENV="$GITHUB_ENV" GITHUB_OUTPUT="$GITHUB_OUTPUT" \
-  bash "$SCRIPTS/prepare-oc-target.sh" "$@" >"$TESTS/prep-run-$name.log" 2>&1
+  bash "$SCRIPTS/prepare-oc-target.sh" >"$TESTS/prep-run-$name.log" 2>&1
 }
 
 run_prepare first "add a feature" || bad "prepare-oc-target.sh first run"
-ws1="$(grep -E '^OC_TARGET_WORKSPACE=' "$TESTS/prep-env-first" | cut -d= -f2 | tail -1)"
-branch1="$(grep -E '^OC_TARGET_BRANCH=' "$TESTS/prep-env-first" | cut -d= -f2 | tail -1)"
-if [[ -n "$ws1" ]] && [[ "$(cat "$ws1/opencode.json")" == "$(cat "$CONTROLLER/opencode.json")" && "$(cat "$ws1/.opencode/instructions.md")" == "controller enterprise policy" ]]; then
-  ok "controller OpenCode config and instructions are authoritative in the target workspace"
+ws1="$(grep -E "^OC_TARGET_WORKSPACE=" "$TESTS/prep-env-first" | cut -d= -f2 | tail -1)"
+branch1="$(grep -E "^OC_TARGET_BRANCH=" "$TESTS/prep-env-first" | cut -d= -f2 | tail -1)"
+if [[ -n "$ws1" ]] && [[ "$(cat "$ws1/opencode.json")" == "{target:true}" ]] && [[ "$(cat "$ws1/.opencode/instructions.md")" == "target instructions" ]] && [[ "$(cat "$ws1/AGENTS.md")" == "trust me" ]] && [[ -f "$ws1/plugins/thing.js" ]]; then
+  ok "target-local OpenCode policy and project files stay intact in the remote workspace"
 else
-  bad "controller OpenCode config and instructions are authoritative in the target workspace"
-fi
-if [[ -f "$ws1/.opencode/agents/critic.md" ]]; then
-  ok "controller critic agent is installed in the target workspace"
-else
-  bad "controller critic agent is installed in the target workspace"
-fi
-if [[ ! -e "$ws1/AGENTS.md" && ! -e "$ws1/plugins" && "$(cat "$ws1/.opencode/instructions.md")" == "controller enterprise policy" ]]; then
-  ok "target-owned AGENTS.md/plugins/.opencode policy is quarantined away from the run"
-else
-  bad "target-owned AGENTS.md/plugins/.opencode policy is quarantined away from the run"
+  bad "target-local OpenCode policy and project files stay intact in the remote workspace"
 fi
 
-# second identical task must derive the same stable branch
 run_prepare second "add a feature"
-branch2="$(grep -E '^OC_TARGET_BRANCH=' "$TESTS/prep-env-second" | cut -d= -f2 | tail -1)"
+branch2="$(grep -E "^OC_TARGET_BRANCH=" "$TESTS/prep-env-second" | cut -d= -f2 | tail -1)"
 if [[ -n "$branch1" && "$branch1" == "$branch2" ]]; then
   ok "target branch is stable and deterministic for the same task"
 else
   bad "target branch is stable and deterministic for the same task"
 fi
 
-# simulate a previously pushed branch -> resume must reuse it
 git -C "$TARGET_SRC" checkout -q -b "$branch1" >/dev/null 2>&1 || git -C "$TARGET_SRC" branch -q "$branch1"
 run_prepare third "add a feature"
-resume3="$(grep -E '^OC_TARGET_RESUME=' "$TESTS/prep-env-third" | cut -d= -f2 | tail -1)"
-branch3="$(grep -E '^OC_TARGET_BRANCH=' "$TESTS/prep-env-third" | cut -d= -f2 | tail -1)"
+resume3="$(grep -E "^OC_TARGET_RESUME=" "$TESTS/prep-env-third" | cut -d= -f2 | tail -1)"
+branch3="$(grep -E "^OC_TARGET_BRANCH=" "$TESTS/prep-env-third" | cut -d= -f2 | tail -1)"
 if [[ "$resume3" == "1" && "$branch3" == "$branch1" ]]; then
   ok "existing remote target branch is resumed (resume=1, same branch); no duplicate work"
 else
   bad "existing remote target branch is resumed (resume=1, same branch); no duplicate work"
 fi
-
-# ---------------------------------------------------------------------------
 # 3. publication guard: nested Git repos and .octmp can never be staged
 # ---------------------------------------------------------------------------
 GUARD_REPO="$TESTS/guard-repo"
@@ -284,11 +266,11 @@ else
   bad "publication guard allows a legitimate, secret-free change"
 fi
 
-# no fixtures can ever appear in the controller worktree
+# no fixtures can ever appear in the workflow runner worktree
 if [[ -e "$ROOT_DIR/.octmp" ]]; then
-  bad "controller worktree contains an .octmp fixture (should be impossible; tests are isolated)"
+  bad "workflow runner worktree contains an .octmp fixture (should be impossible; tests are isolated)"
 else
-  ok "controller worktree is free of .octmp fixtures after the contract tests"
+  ok "workflow runner worktree is free of .octmp fixtures after the contract tests"
 fi
 
 # ---------------------------------------------------------------------------
