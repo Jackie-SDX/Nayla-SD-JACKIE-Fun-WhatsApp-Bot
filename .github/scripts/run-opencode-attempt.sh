@@ -46,23 +46,8 @@ session_state_file="${OC_SESSION_STATE_FILE:-}"
 provider_failure_kind=""
 
 checkpoint_worktree() {
-  [[ -n "$agent_worktree" && -d "$agent_worktree" ]] || return 0
-  [[ -n "$session_branch" ]] || return 0
-  if [[ -z "$(git -C "$agent_worktree" status --porcelain --untracked-files=normal 2>/dev/null)" ]]; then return 0; fi
-  if ! git -C "$agent_worktree" diff --check >/dev/null 2>&1; then
-    echo "::warning title=Checkpoint skipped::Current partial work failed git diff --check; preserving the worktree until runner cleanup."
-    return 0
-  fi
-  git -C "$agent_worktree" add -A >/dev/null 2>&1 || return 0
-  git -C "$agent_worktree" diff --cached --quiet >/dev/null 2>&1 && return 0
-  git -C "$agent_worktree" config user.name "github-actions[bot]" >/dev/null 2>&1 || true
-  git -C "$agent_worktree" config user.email "41898282+github-actions[bot]@users.noreply.github.com" >/dev/null 2>&1 || true
-  git -C "$agent_worktree" commit -m "checkpoint(oc): durable session attempt $attempt" >/dev/null 2>&1 || return 0
-  if git -C "$agent_worktree" push origin "HEAD:$session_branch" >/dev/null 2>&1; then
-    echo "[OC][attempt=$attempt] durable checkpoint pushed to $session_branch"
-  else
-    echo "::warning title=Checkpoint push degraded::Local checkpoint commit exists but could not be pushed."
-  fi
+  [[ -n "$agent_worktree" && -d "$agent_worktree" && -n "$session_branch" ]] || return 0
+  OC_ATTEMPT="$attempt" OC_SESSION_BRANCH="$session_branch" bash "$controller_root/.github/scripts/checkpoint-oc-working-tree.sh" "$agent_worktree" || true
 }
 cleanup() {
   [[ -n "${heartbeat_pid:-}" ]] && kill "$heartbeat_pid" 2>/dev/null || true
