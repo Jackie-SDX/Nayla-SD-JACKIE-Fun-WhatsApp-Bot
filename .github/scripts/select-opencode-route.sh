@@ -20,6 +20,7 @@ fi
 
 excluded=",${OPENCODE_EXCLUDED_PROVIDERS:-},"
 models_csv="${OPENCODE_ZEN_FREE_MODELS:-big-pickle,mimo-v2.5-free}"
+route_hint="${OPENCODE_ROUTE_HINT:-}"
 IFS=',' read -r -a models <<< "$models_csv"
 
 is_free_model() {
@@ -103,6 +104,16 @@ else
     [[ -n "$model" ]] || continue
     is_free_model "$model" && index=$((index + 1))
   done
+fi
+
+# A Zen free-tier context rejection is provider-level. Prefer the next
+# OpenCode runtime through OpenRouter when explicitly hinted.
+if [[ "$route_hint" == "openrouter" && "$start" -gt 0 && "$start" -lt "$index" && -n "${OPENROUTER_API_KEY:-}" && ",$excluded," != *,openrouter,* ]]; then
+  select_route "$start" openrouter "openrouter/free" "openrouter/free"
+  if [[ -n "$GITHUB_ENV" ]]; then
+    echo "OPENCODE_ROUTE_HINT=" >> "$GITHUB_ENV"
+  fi
+  exit 0
 fi
 
 copilot_index="$index"
