@@ -410,7 +410,8 @@ emit_ci_failure_comment() {
   local ci_url="not available"
   if [[ "$ci_run_id" =~ ^[0-9]+$ ]]; then
     ci_url="https://github.com/$repo/actions/runs/$ci_run_id"
-  fi  gh issue comment "$target" --body "$(cat <<EOF
+  fi
+  gh issue comment "$target" --body "$(cat <<EOF
 <!-- oc-ci-failure-run-id:$ci_display attempt:$attempt -->
 ## /oc CI verification found a failure
 
