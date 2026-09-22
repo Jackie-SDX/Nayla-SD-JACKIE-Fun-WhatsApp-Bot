@@ -56,3 +56,4 @@ verified commit: the records are never committed back to the repository.
 
 No aggregation workflow is implemented yet; a follow-up task may summarize the
 uploaded artifacts into a committed `docs/oc-runs/index.md`.
+This README is documentation-only and carries no runtime behavior.
