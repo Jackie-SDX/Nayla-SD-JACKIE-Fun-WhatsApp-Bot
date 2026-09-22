@@ -120,10 +120,7 @@ Return findings and make concrete corrective edits when justified.
 OpenCode will re-read your changes and independently validate the resulting tree."
 
 is_noise_line() {
-  case "$1" in
-    Resume\ copilot*|Tokens\ *|AI\ Credits\ *|Changes\ *|*copilot --resume=*) return 0 ;;
-  esac
-  return 1
+  printf '%s' "$1" | grep -Eq '^(Resume copilot|Tokens |AI Credits |Changes |.*copilot --resume=)'
 }
 
 sanitize() {
