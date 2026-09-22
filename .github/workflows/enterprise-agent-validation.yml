@@ -255,6 +255,7 @@ jobs:
           prep=Path(".github/scripts/prepare-composio-mcp.sh").read_text()
           ins=Path(".opencode/instructions.md").read_text()
           runner=Path(".github/scripts/run-opencode-attempt.sh").read_text()
+          pipeline=Path(".github/scripts/run-attempt-pipeline.sh").read_text()
           selector=Path(".github/scripts/select-opencode-route.sh").read_text()
           critic=Path(".opencode/agents/critic.md").read_text()
           cont=Path(".github/scripts/post-oc-continuation.sh").read_text()
