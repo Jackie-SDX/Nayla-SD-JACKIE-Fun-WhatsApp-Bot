@@ -148,11 +148,35 @@ The temporary workflow must be absent from the final PR diff.
 
 ### Observed failure evidence (live, remote)
 
-_Pending this run’s publication — filled after remote observation._
+- **PR:** https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/pull/111
+- **Head SHA at failure:** `e47608fb4387f58270ca1e3b0d92745d50958976`
+  (branch `opencode/issue108-20260922160529`)
+- **Failing check run:** `intentional-failure` (workflow
+  `benchmark-108-intentional-failure`) → run
+  [`35752579172`](https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/actions/runs/35752579172),
+  conclusion **failure** for the exact head SHA.
+- **Diagnosis from real log** (`gh run view 35752579172 --log-failed`):
+  step *Intentional benchmark-only failure* ran
+  `echo "::error title=benchmark-108-intentional-failure::..."` then `exit 1`.
+- **Verbatim failing log tail:**
+  ```
+  ##[error]Deliberate temporary CI failure for issue #108 benchmark log observation
+  This step fails on purpose so the agent can capture the real remote
+  GitHub Actions failure log for the exact PR head SHA, then remove this
+  workflow and re-observe the same PR going green.
+  ##[error]Process completed with exit code 1.
+  ```
+- **Check-runs API on exact SHA:** `intentional-failure` = completed/failure;
+  `validate` was still in_progress at observation time (not used as the failure
+  signal).
 
 ### Repair → same PR green
 
-_Pending this run’s repair — filled after remote observation._
+- **Repair action:** `git rm .github/workflows/benchmark-issue108-intentional-failure.yml`
+  + record this evidence in the proof file; push to the **same** branch
+  `opencode/issue108-20260922160529` (no force-push, no branch rewrite).
+- **Post-repair verification:** pending exact repair SHA check-runs / `gh pr checks`
+  recorded in §6 after the green watch completes.
 
 ## 6. Final status
 
