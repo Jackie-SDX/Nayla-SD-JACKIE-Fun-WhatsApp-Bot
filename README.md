@@ -30,7 +30,7 @@ A GitHub-Actions-hosted "autonomous software engineer" platform. A repo owner ty
 | Validation gate | `.github/workflows/enterprise-agent-validation.yml` | 531-line `validate` job gating control-plane branches |
 | Cache | `.github/workflows/opencode-cache.yml` | Trusted cache creation (restore-only on interactive runs) |
 | Attempt pipeline | `.github/actions/oc-attempt/action.yml` | One-attempt composite unit |
-| Runtime scripts | `.github/scripts/*.sh` (27) + 1 `.awk` | Routing, verification, publication, recovery, evidence, observability |
+| Runtime scripts | `.github/scripts/*.sh` (26) + 1 `.awk` | Routing, verification, publication, recovery, evidence, observability |
 | Agent policy | `.opencode/instructions.md`, `.opencode/agents/critic.md` | The agent rulebook + adversarial reviewer |
 | Agent runtime config | `opencode.json` | Model, permissions, Composio MCP, sharing |
 | Audit / history docs | `docs/*.md` | The written reasoning behind every invariant |

@@ -14,7 +14,7 @@
 
 ## 1. Why this payload exists
 
-Two prior hand-offs (PR #91) bundled the **whole repository** — both systems, bot
+The earlier hand-off (PR #91) bundled the **whole repository** — both systems, bot
 included. This payload is the corrected, minimal version you asked for: **only the
 OpenCode machinery**, everything else deleted from the branch, plus everything
 needed to (a) audit it, (b) harden it further, and (c) ship it as an enterprise
@@ -193,7 +193,7 @@ with such references.
 
 | File | Reference | Action for control-plane-only repos |
 | --- | --- | --- |
-| `enterprise-agent-validation.yml` | line 28 static file list (trailing `eslint.config.js scripts/test-simple-web-crawler.js scripts/test-agent-invariants.js`); `jq empty package.json` (line 55); `npm test` job (line 59); `npm ci`+`npm run lint`+`npm run test:invariants` job (lines 64–68) | Keep the bullets that assert control-plane files exist; delete or adapt the three app jobs. Do **not** weaken the verifier/concurrency/selector contract assertions. |
+| `enterprise-agent-validation.yml` | line 28 static file list (trailing `eslint.config.js scripts/test-simple-web-crawler.js scripts/test-agent-invariants.js`); `jq empty package.json` (line 55); `npm test` job (line 59); `npm ci`+`npm run lint`+`npm run test:invariants` job (lines 61–68) | Keep the bullets that assert control-plane files exist; delete or adapt the three app jobs. Do **not** weaken the verifier/concurrency/selector contract assertions. |
 | `.github/scripts/validate-application.sh` | `jq empty package.json` (unconditional, line 7), `-f`-guarded app tests (lines 16–25), `npm test` when `package.json` has a test script | Guard the `jq empty package.json` with `[[ -f package.json ]] &&` (or drop the file if you don't need it). |
 | `.github/scripts/verify-agent-result.sh` | lines 281–287: runs `npm test` only when `-f package.json` | Already self-guarding; no change needed. |
 | `.opencode/instructions.md` / `.github/copilot-instructions.md` | reference `NAYLA_PROJECT_DOCUMENTATION.md` ("repository first read") and product invariants | In a new repo, replace with the invariant doc for *your* target system. The instruction file is authoritative policy: edit deliberately, keep the evidence-ladder/recovery/Composio/secrets sections intact. |
