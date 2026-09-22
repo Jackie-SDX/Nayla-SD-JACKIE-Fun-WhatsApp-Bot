@@ -181,7 +181,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
     if [[ -n "$expected_head" && "$expected_head" != "$head_sha" ]]; then
       reason="target PR head ($head_sha) does not match the published target head ($expected_head)"
     fi
-    if [[ -z "$reason" ]]; then
+    if [[ -z "$reason" && "$merged_observed" != "true" ]]; then
       branch_sha="$(gh api "/repos/$rrepo/git/ref/heads/$rbranch" 2>/dev/null | jq -r ".object.sha // \"\"" 2>/dev/null || true)"
       if [[ -z "$branch_sha" ]]; then
         reason="target branch ref $rbranch is not observable"
