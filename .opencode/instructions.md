@@ -575,3 +575,7 @@ In remote-target mode, run the helper from the target workspace while `OC_CONTRO
 ## OpenRouter recovery lane
 
 When Zen emits the known free-tier context rejection, the controller may switch the SAME OpenCode runtime to `openrouter/free` when `OPENROUTER_API_KEY` is configured. OpenCode remains the primary brain and keeps the same isolated worktree. After recovery, it may invite Copilot as the second brain. OpenRouter is optional and fail-open.
+
+## Adaptive model recovery
+
+When a provider reports `Model not found` plus a `Did you mean:` free-model suggestion, the controller may try that suggested `-free` model once on the next bounded route. Do not probe models speculatively or loop. Composio schema/argument errors are recoverable: inspect the tool schema, correct the arguments, and continue; a Composio-only failure must never terminate an otherwise runnable task.

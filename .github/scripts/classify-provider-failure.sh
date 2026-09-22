@@ -25,6 +25,11 @@ if grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$s
 fi
 
 if grep -Eiq '(model[[:space:]_-]*(not[[:space:]_-]*found|unavailable)|not available for account|unknown model|invalid model)' "$safe_log"; then
+  suggested="$(grep -Ei 'Did you mean:' "$safe_log" | grep -oE '[A-Za-z0-9][A-Za-z0-9._-]*-free' | head -n 1 || true)"
+  if [[ -n "$suggested" ]]; then
+    printf "OPENCODE_RECOVERY_MODEL=%s\n" "$suggested" >> "$GITHUB_ENV"
+    echo "Provider suggested a free model replacement: $suggested"
+  fi
   echo "Failure appears model-specific; advancing to the next untried route."
   advance_route
   exit 0
