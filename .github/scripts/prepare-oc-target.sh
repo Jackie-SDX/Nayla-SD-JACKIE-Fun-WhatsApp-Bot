@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Prepares an isolated remote-target workspace for a task-isolated /oc run.
 #
-# - Clones the target repository into RUNNER_TEMP (never into the controller
+# - Clones the target repository into RUNNER_TEMP (never into the workflow
 #   worktree, so its .git can never be staged by a later publication step).
 # - Quarantines target-owned OpenCode policy (.opencode, opencode.json/.jsonc,
-#   AGENTS.md, plugins) away from the run and installs the controller's
-#   OpenCode config/instructions into the workspace, so the controller's
+#   AGENTS.md, plugins) away from the run and installs the workflow's
+#   OpenCode config/instructions into the workspace, so the workflow's
 #   enterprise policy is authoritative for the target run. Target policy files
 #   are restored before publication so the target keeps its own files.
 # - Creates one stable branch per (repo, base, task) and reuses an existing
@@ -68,7 +68,7 @@ git -C "$ws" config user.email "41898282+github-actions[bot]@users.noreply.githu
 
 # Reuse an existing stable branch on resume (or when a prior attempt already
 # pushed it) instead of starting duplicate work from scratch. Branch queries
-# run against the target workspace's origin; the controller-repository origin
+# run against the target workspace's origin; the workflow-repository origin
 # in cwd is never consulted.
 if remote_sha="$(cd "$ws" && oc_git_authed ls-remote --exit-code origin "refs/heads/$branch" 2>/dev/null | awk '{print $1}')" && [[ -n "$remote_sha" ]]; then
   oc_git_authed -C "$ws" fetch -q origin "refs/heads/$branch:refs/remotes/origin/$branch"
