@@ -81,5 +81,5 @@ grep -Fq 'needs: oc_claim' "$root/.github/workflows/opencode.yml"
 grep -Fq 'claim-oc-command.sh' "$root/.github/workflows/opencode.yml"
 grep -Fq 'peer_mode' "$root/.github/scripts/invite-copilot-peer.sh"
 grep -Fq 'writer_output_file' "$root/.github/scripts/invite-copilot-peer.sh"
-grep -Fq 'OC_COLILOET_COLLAB_REQUESTED' "$root/.github/scripts/run-opencode-attempt.sh"
+grep -Fq 'OC_COPILOT_COLLAB_REQUESTED' "$root/.github/scripts/run-opencode-attempt.sh"
 echo 'oc communication/reaction contract: OK'

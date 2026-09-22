@@ -47,7 +47,7 @@ else
     fi
   elif printf '%s' "$lower" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
     mode=code; intent=code; session_required=true
-  elif [[ "$publish_seruested" == true ]]; then
+  elif [[ "$publish_requested" == true ]]; then
     mode=code; intent=publish; session_required=true
   else
     mode=report; intent=answer
