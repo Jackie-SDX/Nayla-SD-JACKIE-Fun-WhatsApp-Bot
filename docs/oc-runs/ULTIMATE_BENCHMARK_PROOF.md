@@ -194,10 +194,14 @@ The temporary workflow must be absent from the final PR diff.
   — run `35752579172` conclusion failure (`benchmark-108-intentional-failure`).
 - **Repair head (observed green):** `1f41378bc94df447d6d1624a58eef45914e9f9c9`
   — run `35752676244` success (`validate` check-run).
-- **Final verified PR head:** `6b308ae33b7bb670fa40f372797b3aae01202067`
-  — run [`35752840726`](https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/actions/runs/35752840726)
-  `validate` **success**; `gh pr checks 111` → validate pass;
-  `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`.
+- **Final verified PR head:** this commit’s exact SHA on branch
+  `opencode/issue108-20260922160529` — latest observed green:
+  run [`35752973442`](https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/actions/runs/35752973442)
+  `validate` **success** at head `fd2e857e4a60d88ffe9d6ca0c3be439f2c440fd0`
+  (the head immediately prior to embedding this self-referential note; the
+  controller re-watches the final push the same way);
+  `gh pr checks 111` → validate pass; `mergeable=MERGEABLE`,
+  `mergeStateStatus=CLEAN`. Diff remains proof-file-only.
 - **Diff vs main:** `docs/oc-runs/ULTIMATE_BENCHMARK_PROOF.md` only
   (`git diff --name-only main...HEAD` and `gh pr diff 111 --name-only`).
 - **Temp workflow:** absent from final tree (removed in repair commit).
