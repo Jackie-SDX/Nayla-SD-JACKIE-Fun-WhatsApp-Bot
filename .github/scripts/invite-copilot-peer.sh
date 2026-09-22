@@ -137,6 +137,10 @@ set +e
 (tail -n 0 -F "$hook_log" 2>/dev/null | while IFS= read -r hook_line; do printf "%s\n" "$hook_line"; done) &
 hook_tail_pid=$!
 copilot_agent_args=()
+copilot_tool_args=()
+if [[ "$peer_mode" != "critic" ]]; then
+  copilot_tool_args+=(--allow-tool "write")
+fi
 if [[ "$peer_mode" == "critic" ]]; then
   copilot_agent_args+=(--agent "code-review")
 elif [[ -n "${COPILOT_PEER_AGENT:-}" ]]; then
@@ -152,6 +156,7 @@ GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   --allow-tool "read" \
   --allow-tool "url" \
   --allow-tool "memory" \
+  "${copilot_tool_args[@]}" \
   --deny-tool "shell(git commit)" \
   --deny-tool "shell(git push)" \
   --deny-tool "shell(git reset)" \
