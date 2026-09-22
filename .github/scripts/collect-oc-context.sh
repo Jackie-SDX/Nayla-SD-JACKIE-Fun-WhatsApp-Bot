@@ -23,7 +23,7 @@ gh api "/repos/$repo/issues/$target" > "$issue_json"
   echo "# /oc complete issue context"
   echo
   echo "Source: GitHub issue #$target in $repo"
-  echo "The complete conversation is stored here. Read it in bounded batches; do not load the entire file into one prompt."
+  echo "Read the complete issue context in bounded batches; do not load the entire file into one prompt."
   echo
   echo "## Issue"
   jq -r '"- Number: #\(.number)\n- Title: \(.title // "")\n- Author: @\(.user.login // "unknown")\n- State: \(.state // "unknown")\n- Created: \(.created_at // "")\n\n### Body\n\n\(.body // "")\n\n---\n"' "$issue_json"
