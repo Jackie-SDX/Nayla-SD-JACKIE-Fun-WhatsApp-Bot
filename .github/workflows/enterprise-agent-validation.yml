@@ -214,6 +214,7 @@ jobs:
           grep -Fq 'Ultimate agentic operating standard' .opencode/instructions.md
           grep -Fq 'Ultimate peer operating standard' .github/copilot-instructions.md
           echo 'ultimate agentic control-plane contract: OK'
+          exit 0
 
       - name: Validate hybrid architecture
         shell: bash
