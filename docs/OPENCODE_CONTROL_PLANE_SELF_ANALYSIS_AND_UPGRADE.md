@@ -196,6 +196,10 @@ Observations from the run history:
 
 The control plane now treats the observed Zen `FreeTierError`/403 context rejection as a provider-unavailable transition when the OpenCode process itself returns exit 0. The attempt emits `termination_reason=provider-unavailable`, the classifier advances to the next provider, and model-memory recording does not poison the OpenCode model for a provider-wide failure. GitHub Actions also grants the Copilot Requests permission and can use the short-lived workflow token when no dedicated Copilot token is supplied. A deterministic regression test pins the 403 -> provider-unavailable -> Copilot transition.
 
+## 6.2 Implemented follow-up — two-brain peer collaboration
+
+The hybrid architecture now supports deliberate in-task collaboration, not only failover. OpenCode can summon Copilot with `.github/scripts/invite-copilot-peer.sh`; Copilot works in the SAME isolated worktree, while publication and final verification remain controller responsibilities. Peer availability, installation, or model failure is fail-open, so collaboration never becomes a task blocker. A separate bounded peer credit budget is used.
+
 ## 7. Verification checklist for the senior engineer
 
 After any control-plane change, before merge, run:

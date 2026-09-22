@@ -98,7 +98,7 @@ max_credits="$(printenv COPILOT_MAX_AI_CREDITS 2>/dev/null || printf 60)"
 mkfifo "$copilot_fifo"
 
 set +e
-"$copilot_bin" \
+GITHUB_TOKEN="${COPILOT_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}" "$copilot_bin" \
   --model auto \
   --stream=on \
   --max-ai-credits "$max_credits" \

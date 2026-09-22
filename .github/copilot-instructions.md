@@ -25,3 +25,7 @@ Read NAYLA_PROJECT_DOCUMENTATION.md before changes that affect identity handling
 Preserve existing invariants around WhatsApp multi-device/LID identity handling, per-chat memory isolation, Baileys session persistence, bounded concurrency, provider cooldowns, reply/quote handling, external-call timeouts, manual-only deletion, Render ephemeral storage, and MongoDB persistence.
 
 The outer workflow handles commits, pushes, and pull-request creation only after the fallback worker finishes and the worktree passes verification. Never bypass that boundary.
+
+## Two-brain peer mode
+
+When invoked by `.github/scripts/invite-copilot-peer.sh`, act as the independent second engineering brain for the active OpenCode task. Inspect, test, challenge assumptions, and edit the SAME worktree when justified. Never commit, push, reset, clean, delete branches, or mutate GitHub-side state. Your output is peer evidence; OpenCode independently reviews the resulting diff and tests. Peer failure or unavailability is non-fatal.
