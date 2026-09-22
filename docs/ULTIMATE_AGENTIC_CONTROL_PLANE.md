@@ -45,3 +45,16 @@ Optional Copilot and Composio failures are quality reductions rather than automa
 ## Target benchmark
 
 The Ultimate benchmark should demonstrate: complete issue understanding, dual-agent planning, current web research through Composio, constructive peer editing, OpenCode synthesis, deterministic tests, publication, live CI observation, real CI failure diagnosis and repair, bounded recursive recovery, advisory independent audit, and a final evidence record—without human intervention during the run.
+
+
+## Apex final-stage protocol
+
+The control plane is designed around a persistent issue-scoped session rather than a disposable six-hour process. Durable Git state lives on a stable task branch; the issue's mutable session snapshot records the current phase, next action, branch, PR/head, tests, CI and evidence references. A new `/oc continue` invocation reloads that state, revalidates it against GitHub, and continues the same task lineage.
+
+Conversation history is complete at the source but bounded at the model boundary. The collector keeps the full issue/comment/review history and an index; the active prompt starts from a compact seed and retrieves only required ranges. Referenced issues/PRs are collected separately so one issue cannot silently contaminate another issue's active instructions.
+
+Copilot is an active second engineering brain: a constructive peer can inspect and edit the shared task worktree when justified, followed by a read-only `code-review` critic pass. These are fail-open auxiliaries; they do not override a successful primary result.
+
+PR creation is explicit. Ordinary `/oc` chat, explanation, research, and inspection stay in the issue conversation. `/oc continue` resumes the session. `/oc` publication creates a PR only when the request explicitly asks for publication. `/oc merge ...` is a separate guarded operation that rechecks the exact PR head and current checks before merging.
+
+All large API surfaces are treated as paginated/chunked data. The controller avoids repeatedly loading giant payloads, and API rate-limit signals are treated as operational state rather than reasons to destroy valid work.

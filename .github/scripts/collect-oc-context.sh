@@ -1,52 +1,119 @@
 #!/usr/bin/env bash
 set -euo pipefail
-target="$TARGET_NUMBER"
-runner_temp="$(printenv RUNNER_TEMP 2>/dev/null || printf /tmp)"
-out="$runner_temp/oc-issue-context.md"
-max_bytes="$(printenv OC_CONTEXT_MAX_BYTES 2>/dev/null || printf 2000000)"
+
+target="$(printenv TARGET_NUMBER || printf 0)"
+repo="$(printenv GITHUB_REPOSITORY || true)"
+runner_temp="${RUNNER_TEMP:-/tmp}"
+request_file="${OC_REQUEST_FILE:-$runner_temp/oc-request.txt}"
+full="$runner_temp/oc-issue-context-full.md"
+seed="$runner_temp/oc-issue-context-seed.md"
+index="$runner_temp/oc-issue-context.index"
+refs="$runner_temp/oc-reference-context.md"
+seed_bytes="${OC_CONTEXT_SEED_BYTES:-300000}"
+
 mkdir -p "$runner_temp"
-tmp="$(mktemp)"
+: > "$full"; : > "$index"; : > "$refs"
+[[ "$target" =~ ^[0-9]+$ && "$target" != 0 && -n "$repo" ]] || exit 0
+
 issue_json="$(mktemp)"
-comments_json="$(mktemp)"
-reviews_json="$(mktemp)"
-trap 'rm -f "$tmp" "$issue_json" "$comments_json" "$reviews_json"' EXIT
-: > "$out"
-
-if ! [[ "$target" =~ ^[0-9]+$ ]] || [ "$target" = "0" ]; then
-  echo "OC_ISSUE_CONTEXT_FILE=$out" >> "$GITHUB_OUTPUT"
-  echo "OC_ISSUE_CONTEXT_FILE=$out" >> "$GITHUB_ENV"
-  exit 0
-fi
-
-gh api "/repos/$GITHUB_REPOSITORY/issues/$target" > "$issue_json"
-gh api --paginate --slurp "/repos/$GITHUB_REPOSITORY/issues/$target/comments?per_page=100" > "$comments_json" || printf '[]' > "$comments_json"
-gh api --paginate --slurp "/repos/$GITHUB_REPOSITORY/pulls/$target/comments?per_page=100" > "$reviews_json" 2>/dev/null || printf '[]' > "$reviews_json"
+trap 'rm -f "$issue_json"' EXIT
+gh api "/repos/$repo/issues/$target" > "$issue_json"
 
 {
-  echo "# /oc task context"
-  echo "Read the complete issue context in chronological order; retrieve source comments in batches when the local bound is reached."
-  jq -r '"## Issue\n\n- Number: #\(.number)\n- Title: \(.title // "")\n- Author: @\(.user.login // "unknown")\n- State: \(.state // "unknown")\n- Created: \(.created_at // "")\n\n### Issue body\n\n\(.body // "")\n"' "$issue_json"
+  echo "# /oc complete issue context"
+  echo
+  echo "Source: GitHub issue #$target in $repo"
+  echo "Complete issue context is read in bounded batches; do not load the entire file into one prompt."
+  echo "Read the complete issue context from beginning to end using bounded batches."
+  echo
+  echo "## Issue"
+  jq -r '"- Number: #\(.number)\n- Title: \(.title // "")\n- Author: @\(.user.login // "unknown")\n- State: \(.state // "unknown")\n- Created: \(.created_at // "")\n\n### Body\n\n\(.body // "")\n\n---\n"' "$issue_json"
   echo "## Issue comments (chronological)"
-  jq -r 'add // [] | sort_by(.created_at)[] | "### Comment #\(.id) — @\(.user.login // "unknown") — \(.created_at // "")\n\n\(.body // "")\n\n---\n"' "$comments_json"
-  if jq -e 'add // [] | length > 0' "$reviews_json" >/dev/null 2>&1; then
-    echo "## Pull-request review comments (chronological)"
-    jq -r 'add // [] | sort_by(.created_at)[] | "### Review comment #\(.id) — @\(.user.login // "unknown") — \(.created_at // "")\n\n\(.body // "")\n\n---\n"' "$reviews_json"
-  fi
-} > "$out"
+} >> "$full"
 
-size="$(wc -c < "$out")"
-if [ "$size" -gt "$max_bytes" ]; then
-  half=$((max_bytes / 2))
+comment_count=0
+last_comment_id=0
+while IFS= read -r encoded; do
+  [[ -n "$encoded" ]] || continue
+  row="$(printf '%s' "$encoded" | base64 -d 2>/dev/null || true)"
+  id="$(jq -r '.[0]' <<<"$row")"
+  user="$(jq -r '.[1] // "unknown"' <<<"$row")"
+  created="$(jq -r '.[2] // ""' <<<"$row")"
+  body="$(jq -r '.[3] // ""' <<<"$row")"
+  start="$(( $(wc -l < "$full") + 1 ))"
   {
-    head -c "$half" "$out"
-    echo
-    echo "[CONTEXT WINDOW BOUNDARY: middle omitted from local snapshot due to safety bound. Re-read source comments in batches before consequential decisions.]"
-    echo
-    tail -c "$half" "$out"
-  } > "$tmp"
-  mv "$tmp" "$out"
-fi
+    printf '### Comment #%s — @%s — %s\n\n' "$id" "$user" "$created"
+    printf '%s\n\n---\n' "$body"
+  } >> "$full"
+  end="$(wc -l < "$full")"
+  printf '%s\t%s\t%s\t%s\n' "$id" "$created" "$start" "$end" >> "$index"
+  comment_count=$((comment_count + 1))
+  last_comment_id="$id"
+done < <(gh api --paginate --jq '.[] | [.id, .user.login, .created_at, .body] | @base64' "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null || true)
 
-echo "OC_ISSUE_CONTEXT_FILE=$out" >> "$GITHUB_OUTPUT"
-echo "OC_ISSUE_CONTEXT_FILE=$out" >> "$GITHUB_ENV"
-echo "Captured complete task context: $out ($(wc -c < "$out") bytes)"
+echo "## Pull-request review comments (chronological)" >> "$full"
+while IFS= read -r encoded; do
+  [[ -n "$encoded" ]] || continue
+  row="$(printf '%s' "$encoded" | base64 -d 2>/dev/null || true)"
+  id="$(jq -r '.[0]' <<<"$row")"
+  user="$(jq -r '.[1] // "unknown"' <<<"$row")"
+  created="$(jq -r '.[2] // ""' <<<"$row")"
+  body="$(jq -r '.[3] // ""' <<<"$row")"
+  start="$(( $(wc -l < "$full") + 1 ))"
+  {
+    printf '### Review comment #%s — @%s — %s\n\n' "$id" "$user" "$created"
+    printf '%s\n\n---\n' "$body"
+  } >> "$full"
+  end="$(wc -l < "$full")"
+  printf 'review:%s\t%s\t%s\t%s\n' "$id" "$created" "$start" "$end" >> "$index"
+done < <(gh api --paginate --jq '.[] | [.id, .user.login, .created_at, .body] | @base64' "/repos/$repo/pulls/$target/comments?per_page=100" 2>/dev/null || true)
+
+request="$(cat "$request_file" 2>/dev/null || jq -r '.comment.body // ""' "${GITHUB_EVENT_PATH:-/dev/null}" 2>/dev/null || true)"
+grep -Eo 'https?://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(issues|pull)/[0-9]+' <<<"$request" 2>/dev/null | sort -u | head -n 5 |
+while IFS= read -r url; do
+  path="${url#https://github.com/}"
+  owner="$(cut -d/ -f1 <<<"$path")"
+  rrepo="$(cut -d/ -f2 <<<"$path")"
+  kind="$(cut -d/ -f3 <<<"$path")"
+  number="$(cut -d/ -f4 <<<"$path")"
+  [[ "$number" =~ ^[0-9]+$ ]] || continue
+  [[ "$kind" == issues || "$kind" == pull ]] || continue
+  {
+    echo
+    echo "## Referenced GitHub item: $url"
+    echo
+    gh api "/repos/$owner/$rrepo/issues/$number" 2>/dev/null |
+      jq -r '"Title: \(.title // "")\nAuthor: @\(.user.login // "unknown")\nState: \(.state // "unknown")\n\n\(.body // "")\n\n---"' || true
+    gh api --paginate --jq '.[] | "### Comment #\(.id) — @\(.user.login // "unknown") — \(.created_at // "")\n\n\(.body // "")\n\n---"' "/repos/$owner/$rrepo/issues/$number/comments?per_page=100" 2>/dev/null || true
+  } >> "$refs"
+done
+
+full_size="$(wc -c < "$full")"
+{
+  head -c "$seed_bytes" "$full"
+  echo
+  echo "[CONTEXT SEED BOUNDARY: complete source remains in OC_ISSUE_CONTEXT_FILE; use read-oc-context.sh for additional batches.]"
+  echo
+  tail -c "$seed_bytes" "$full"
+} > "$seed"
+
+{
+  printf 'OC_ISSUE_CONTEXT_FILE=%s\n' "$full"
+  printf 'OC_ISSUE_CONTEXT_SEED_FILE=%s\n' "$seed"
+  printf 'OC_ISSUE_CONTEXT_INDEX_FILE=%s\n' "$index"
+  printf 'OC_REFERENCE_CONTEXT_FILE=%s\n' "$refs"
+  printf 'OC_ISSUE_COMMENT_COUNT=%s\n' "$comment_count"
+  printf 'OC_ISSUE_LAST_COMMENT_ID=%s\n' "$last_comment_id"
+  printf 'OC_ISSUE_CONTEXT_BYTES=%s\n' "$full_size"
+} >> "${GITHUB_OUTPUT:-/dev/null}"
+{
+  printf 'OC_ISSUE_CONTEXT_FILE=%s\n' "$full"
+  printf 'OC_ISSUE_CONTEXT_SEED_FILE=%s\n' "$seed"
+  printf 'OC_ISSUE_CONTEXT_INDEX_FILE=%s\n' "$index"
+  printf 'OC_REFERENCE_CONTEXT_FILE=%s\n' "$refs"
+  printf 'OC_ISSUE_COMMENT_COUNT=%s\n' "$comment_count"
+  printf 'OC_ISSUE_LAST_COMMENT_ID=%s\n' "$last_comment_id"
+  printf 'OC_ISSUE_CONTEXT_BYTES=%s\n' "$full_size"
+} >> "${GITHUB_ENV:-/dev/null}"
+
+echo "Captured complete issue context: $full ($full_size bytes, comments=$comment_count)"

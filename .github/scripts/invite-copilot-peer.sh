@@ -14,6 +14,7 @@ export OC_COPILOT_HOOK_LOG="$hook_log"
 peer_started_at="$(date +%s)"
 max_rounds="$(printenv COPILOT_PEER_MAX_ROUNDS 2>/dev/null || printf 5)"
 round="$(printenv COPILOT_PEER_ROUND 2>/dev/null || printf 1)"
+peer_mode="$(printenv COPILOT_PEER_MODE 2>/dev/null || printf peer)"
 
 write_peer_result() {
   local result="$1"
@@ -135,9 +136,19 @@ echo "[OC][copilot-peer] inviting Copilot in the current worktree"
 set +e
 (tail -n 0 -F "$hook_log" 2>/dev/null | while IFS= read -r hook_line; do printf "%s\n" "$hook_line"; done) &
 hook_tail_pid=$!
+copilot_agent_args=()
+copilot_tool_args=()
+if [[ "$peer_mode" != "critic" ]]; then
+  copilot_tool_args+=(--allow-tool "write")
+fi
+if [[ "$peer_mode" == "critic" ]]; then
+  copilot_agent_args+=(--agent "code-review")
+elif [[ -n "${COPILOT_PEER_AGENT:-}" ]]; then
+  copilot_agent_args+=(--agent "$COPILOT_PEER_AGENT")
+fi
 GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   --model "${COPILOT_PEER_MODEL:-auto}" \
-  --agent "${COPILOT_PEER_AGENT:-general-purpose}" \
+  "${copilot_agent_args[@]}" \
   --stream=on \
   --max-ai-credits "${COPILOT_PEER_MAX_AI_CREDITS:-30}" \
   --no-ask-user \
@@ -145,7 +156,7 @@ GITHUB_TOKEN="$peer_token" "$copilot_bin" \
   --allow-tool "read" \
   --allow-tool "url" \
   --allow-tool "memory" \
-  --allow-tool "write" \
+  "${copilot_tool_args[@]}" \
   --deny-tool "shell(git commit)" \
   --deny-tool "shell(git push)" \
   --deny-tool "shell(git reset)" \

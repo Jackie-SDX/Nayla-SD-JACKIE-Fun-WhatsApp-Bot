@@ -216,6 +216,33 @@ jobs:
           echo 'ultimate agentic control-plane contract: OK'
           exit 0
 
+      - name: Validate apex durable-session and command contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in .github/scripts/oc-session-state.sh .github/scripts/prepare-oc-session.sh .github/scripts/publish-oc-session.sh .github/scripts/merge-oc-request.sh .github/scripts/read-oc-context.sh .github/scripts/record-oc-session-progress.sh .github/scripts/checkpoint-oc-working-tree.sh .github/scripts/oc-command-control.sh .github/scripts/test-oc-intent.sh .github/scripts/test-oc-session-state.sh .github/scripts/test-oc-context.sh; do
+            test -f "$f"
+            bash -n "$f"
+          done
+          bash .github/scripts/test-oc-intent.sh
+          bash .github/scripts/test-oc-session-state.sh
+          bash .github/scripts/test-oc-context.sh
+          grep -Fq 'oc-session-state.sh load' .github/scripts/oc-command-control.sh
+          grep -Fq 'prepare-oc-session.sh' .github/scripts/oc-command-control.sh
+          grep -Fq 'checkpoint-oc-working-tree.sh' .github/scripts/run-opencode-attempt.sh
+          grep -Fq 'COPILOT_PEER_MODE' .github/scripts/run-opencode-attempt.sh
+          grep -Fq 'code-review' .github/scripts/invite-copilot-peer.sh
+          grep -Fq 'publish_requested' .github/scripts/select-oc-task-mode.sh
+          grep -Fq 'resume_requested' .github/scripts/select-oc-task-mode.sh
+          grep -Fq 'PUBLISH_REQUESTED' .github/scripts/run-attempt-pipeline.sh
+          grep -Fq 'durable_work' .github/scripts/run-attempt-pipeline.sh
+          grep -Fq 'durable_work != '"'"'true'"'"'' .github/workflows/opencode.yml
+          grep -Fq 'OC_PUBLISH_REQUESTED' .github/workflows/opencode.yml
+          grep -Fq 'Upload /oc session context artifact' .github/workflows/opencode.yml
+          grep -Fq 'Complete issue context' .github/scripts/collect-oc-context.sh
+          grep -Fq 'oc-reference-context' .github/scripts/collect-oc-context.sh
+          echo 'apex durable-session / command / context / two-brain contract: OK'
+
       - name: Validate hybrid architecture
         shell: bash
         run: |
@@ -228,6 +255,7 @@ jobs:
           prep=Path(".github/scripts/prepare-composio-mcp.sh").read_text()
           ins=Path(".opencode/instructions.md").read_text()
           runner=Path(".github/scripts/run-opencode-attempt.sh").read_text()
+          pipeline=Path(".github/scripts/run-attempt-pipeline.sh").read_text()
           selector=Path(".github/scripts/select-opencode-route.sh").read_text()
           critic=Path(".opencode/agents/critic.md").read_text()
           cont=Path(".github/scripts/post-oc-continuation.sh").read_text()
@@ -248,7 +276,9 @@ jobs:
           assert "reconcile-opencode-result.sh" in wf
           assert "termination_reason != 'timeout'" in wf
           assert "timeout --signal=TERM" in runner
-          assert "opencode github run" in runner
+          assert "opencode run --dir" in runner
+          assert "OC_SESSION_BRANCH" in runner
+          assert "PUBLISH_REQUESTED" in pipeline
           assert "github-copilot/auto" in selector
           assert "openrouter/openrouter/free" in selector
           assert "OPENCODE_ROUTE_HINT" in selector
@@ -389,7 +419,8 @@ jobs:
           assert "oc_guard_repo_publication" in lib
           assert "160000" in lib
           assert "refusing to publish" in lib.lower()
-          assert "opencode github run" in runner
+          assert "opencode run --dir" in runner
+          assert "PUBLISH_REQUESTED" in pipeline
           print("remote-target contract files: OK")
           PY
           bash .github/scripts/test-oc-target.sh

@@ -2,6 +2,14 @@
 set -euo pipefail
 
 route_index="${OPENCODE_ROUTE_INDEX:-}"
+
+if [[ "$(printenv OC_MERGE_REQUESTED 2>/dev/null || printf false)" == "true" ]]; then
+  echo "selected=false" >> "$GITHUB_OUTPUT"
+  echo "provider=none" >> "$GITHUB_OUTPUT"
+  echo "route=merge" >> "$GITHUB_OUTPUT"
+  echo "Skipping agent routing for explicit merge request."
+  exit 0
+fi
 start=0
 if [[ "$route_index" =~ ^[0-9]+$ ]]; then
   start=$route_index

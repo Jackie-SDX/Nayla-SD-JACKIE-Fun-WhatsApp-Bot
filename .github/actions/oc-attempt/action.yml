@@ -102,6 +102,12 @@ outputs:
   result_state:
     description: Durable attempt result state used to prevent false fallback after publication.
     value: ${{ steps.run.outputs.result_state }}
+  durable_work:
+    description: true when useful task work exists on the durable session branch.
+    value: ${{ steps.run.outputs.durable_work }}
+  session_head_sha:
+    description: Exact durable session branch head observed after the attempt.
+    value: ${{ steps.run.outputs.session_head_sha }}
 runs:
   using: composite
   steps:
