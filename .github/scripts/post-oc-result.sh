@@ -19,9 +19,9 @@ body=""
 
 if [[ "${MERGE_REQUESTED:-false}" == "true" ]]; then
   if [[ "${MERGE_EXIT:-1}" == "0" ]]; then
-    body="$marker\n## /oc\nMerge command completed successfully."
+    body="$(printf "%s\n## /oc\nMerge command completed successfully." "$marker")"
   else
-    body="$marker\n## /oc\nMerge command did not complete successfully. No merge success is claimed."
+    body="$(printf "%s\n## /oc\nMerge command did not complete successfully. No merge success is claimed." "$marker")"
   fi
 elif [[ "$task_mode" == "report" ]]; then
   attempt=""
@@ -40,11 +40,11 @@ elif [[ "$task_mode" == "report" ]]; then
     fi
   done
   if [[ -n "$response_file" ]]; then
-    answer="$(cat "$response_file" | tr -d '\r' | sed -E '/^\[OPENCODE\]/d; /^\[COPILOT\]/d; /\[object Object\]/d' | sed -e 's/[[:space:]]*$//' | cut -c1-12000)"
+    answer="$(cat "$response_file" | tr -d '\r' | sed -E '/^\[OPENCODE\]/d; /^\[COPILOT\]/d; /\[object Object\]/d; s/(gh[ps]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})/[REDACTED_GITHUB_TOKEN]/g; s/(sk-or-v1-[A-Za-z0-9_-]{20,})/[REDACTED_EXTERNAL_API_KEY]/g; s/(AIza[A-Za-z0-9_-]{20,})/[REDACTED_GOOGLE_KEY]/g; s/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' | sed -e 's/[[:space:]]*$//' | cut -c1-12000)"
   else
     answer="OpenCode completed, but no clean final response was captured."
   fi
-  body="$marker\n## /oc\n\n$answer"
+  body="$(printf "%s\n## /oc\n\n%s" "$marker" "$answer")"
 else
   selected="0"
   for n in 3 2 1; do
@@ -56,7 +56,7 @@ else
     if [[ "$outcome" == "success" ]]; then selected="$n"; break; fi
   done
   if [[ "$selected" == "0" ]]; then
-    body="$marker\n## /oc\nAgent did not complete successfully. No success is claimed."
+    body="$(printf "%s\n## /oc\nAgent did not complete successfully. No success is claimed." "$marker")"
   else
     case "$selected" in
       3) pub="${P3:-}"; ver="${V3:-}"; pr="${PR3:-}"; sha="${SHA3:-}" ;;
@@ -85,7 +85,7 @@ else
     elif [[ "$pub" == "published" ]]; then
       summary="$summary Independent CI verification is not currently recorded as green."
     fi
-    body="$marker\n## /oc\n$summary"
+    body="$(printf "%s\n## /oc\n%s" "$marker" "$summary")"
   fi
 fi
 
