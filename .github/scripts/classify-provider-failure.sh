@@ -20,12 +20,23 @@ fi
 if grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$safe_log"; then
   printf "OPENCODE_ROUTE_HINT=openrouter\n" >> "$GITHUB_ENV"
   echo "OpenCode Zen free-tier context is unavailable; preferring the optional OpenRouter OpenCode lane."
+  case ",$excluded," in
+    *,"$provider",*) ;;
+    *)
+      if [[ -n "$excluded" ]]; then
+        excluded="$excluded,$provider"
+      else
+        excluded="$provider"
+      fi
+      ;;
+  esac
+  printf 'OPENCODE_EXCLUDED_PROVIDERS=%s\n' "$excluded" >> "$GITHUB_ENV"
   advance_route
   exit 0
 fi
 
 if grep -Eiq '(model[[:space:]_-]*(not[[:space:]_-]*found|unavailable)|not available for account|unknown model|invalid model)' "$safe_log"; then
-  suggested="$(grep -Ei 'Did you mean:' "$safe_log" | grep -oE '[A-Za-z0-9][A-Za-z0-9._-]*-free' | head -n 1 || true)"
+  suggested="$(grep -Ei 'Did you mean:' "$safe_log" | sed -E 's/.*Did you mean:[[:space:]]*//' | grep -oE '[A-Za-z0-9][A-Za-z0-9._-]*-free' | head -n 1 || true)"
   if [[ -n "$suggested" ]]; then
     printf "OPENCODE_RECOVERY_MODEL=%s\n" "$suggested" >> "$GITHUB_ENV"
     echo "Provider suggested a free model replacement: $suggested"

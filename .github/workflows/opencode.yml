@@ -158,6 +158,9 @@ jobs:
       - name: Select task mode
         id: task_mode
         shell: bash
+        env:
+          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
         run: bash .github/scripts/oc-command-control.sh
 
       - name: Resolve and verify OpenCode release
@@ -170,11 +173,12 @@ jobs:
           set -euo pipefail
           json="$(mktemp)"
           trap 'rm -f "$json"' EXIT
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}")
           if [[ -n "$OPENCODE_VERSION_PIN" ]]; then
-            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 "${auth[@]}" \
               "https://api.github.com/repos/anomalyco/opencode/releases/tags/v$OPENCODE_VERSION_PIN" -o "$json"
           else
-            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 \
+            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 5 --max-time 20 "${auth[@]}" \
               https://api.github.com/repos/anomalyco/opencode/releases/latest -o "$json"
           fi
           tag="$(jq -r '.tag_name' "$json")"
