@@ -34,13 +34,14 @@ It does not treat successful CPack generation as proof of release readiness.
 ## 2. Confidence
 
 **Repository/CI topology: HIGH confidence.**  
+**Complete tracked-snapshot byte verification: HIGH confidence.**  
 **Package configuration conclusions: HIGH confidence.**  
 **Selected artifact-structure/binary-header claims: HIGH confidence for the recovered v0.0.9 GitHub Actions artifacts inspected in Round 2.**  
 **Cryptographic signature validity, notarization, installer execution, and clean-machine behavior: NOT YET PROVEN.**
 
 The repository tree was recursively enumerated in full. Relevant packaging/release files were then inspected in bounded sections. Current authoritative documentation was researched for CMake/CPack, Windows distribution/signing, Apple signing/notarization, Debian packaging, GitHub attestations, GitLab behavior, and reproducible builds.
 
-A separate adversarial LLM review was run over the normalized evidence set.
+Round 3 performed a full tracked-snapshot retrieval at the exact audited commit: all 156 tree entries (121 files, 34 directories plus the root tree entry) were enumerated without truncation; all 121 tracked file blobs were fetched as raw bytes and each was verified against the Git blob SHA. The tree declares 1,588,283 file bytes. High-risk source files were then re-read directly and the complete snapshot was searched for release/version/signing/archive/cache/identity controls. The audit does not claim that every byte was mentally reasoned over by an independent reviewer; it claims byte-complete retrieval and hash verification of the entire tracked snapshot, plus targeted source-level forensic analysis.
 
 OpenCode/Copilot were not exposed as callable independent reviewer integrations. That is recorded as a missing verification rather than represented as completed.
 
@@ -772,6 +773,10 @@ Purpose:
 | GitLab can publish partial releases | High | proven by configuration |
 | Artifact provenance/SBOM not cryptographically published | High | unresolved |
 | GitHub release overwrite configuration | High | configuration finding |
+| GitHub release resolves VERSION after configure/build, leaving internal package metadata at the local placeholder | Critical | proven from full source + Round 2 artifact |
+| GitHub Windows cache gate is conditioned on old NaylaCruz repository identity | High | proven from source |
+| CMake package metadata still points at NaylaCruz repository/author identity | High | proven from source |
+| Release workflow contains stale 85-package inventory comment | Medium | proven from source |
 | Linux runtime compatibility depends on host loader/glibc and undeclared host shared libraries | High | proven for representative tarball; matrix-wide validation pending |
 | Complete runtime DLL/shared-library/framework closure not proven | High | matrix-wide validation pending |
 | Reproducibility not demonstrated | High | unresolved |
@@ -786,6 +791,8 @@ Purpose:
 ### Repository/static validation
 Performed:
 - full recursive repository-tree inventory;
+- complete raw retrieval of all 121 tracked blobs at the audited commit;
+- Git blob SHA verification for all 121 files with zero mismatches;
 - targeted retrieval of all packaging, CPack, installer, workflow, GitLab, dependency, install and documentation surfaces;
 - bounded analysis of long workflow files;
 - cross-reference of install targets and release packaging;
@@ -929,6 +936,121 @@ Round 2 did not establish:
 - deterministic/reproducible rebuilds;
 - GitLab production-release artifact parity.
 
+
+
+
+## 21A. Round 3 — complete tracked-snapshot verification
+
+Round 3 closed the repository-content coverage gap from the earlier targeted/static passes.
+
+### Exact repository snapshot
+
+Audited ref:
+
+`11d1726324f02f53988e9047ed3018a9545ff631`
+
+Git tree result:
+
+- 156 total tree entries returned;
+- 121 file blobs;
+- 34 directory trees;
+- recursive tree response was **not truncated**;
+- declared tracked-file bytes: **1,588,283**.
+
+Every one of the 121 file blobs was fetched through the connected GitHub raw-content path and persisted as raw bytes. For every fetched file, the Git blob object hash was independently recomputed as:
+
+`sha1("blob " + byte_length + NUL + raw_bytes)`
+
+and matched the SHA published by GitHub's recursive tree.
+
+Result:
+
+**121/121 files byte-verified against the audited Git snapshot; 0 mismatches.**
+
+This is stronger evidence than rendered GitHub-page inspection because line endings, binary data, and non-text bytes were all included in the verification.
+
+### Round 3 source-level findings
+
+#### Critical: GitHub release version resolution occurs too late
+
+The repository's CMake project defaults to:
+
+`CPP_PROJECT_TEMPLATE_VERSION = 0.0.1.0`
+
+when the CI does not pass an explicit version before `project(... VERSION ...)`.
+
+The GitHub release workflow performs the real tag-version resolution in a later step named **Resolve release version and naming**. That step runs only after:
+
+- CMake configure;
+- build;
+- tests;
+- install;
+- canonical CPack package-name determination.
+
+It exports `VERSION` and `RELEASE_PREFIX` for subsequent filenames, but it does **not** pass `-D CPP_PROJECT_TEMPLATE_VERSION=...` back into the already-completed CMake configuration.
+
+The result is exactly consistent with the Round 2 artifact finding:
+
+- published filename: `cpp-project-template_0.0.9_linux-gcc-x86_64.deb`
+- internal DEB metadata: `Version: 0.0.1`
+
+The fourth CMake version component in `0.0.1.0` is not represented in the Debian package version, yielding `0.0.1`.
+
+This is not merely a packaging-renaming problem. It is a **source-of-truth ordering defect in the GitHub release workflow**.
+
+The GitLab pipeline provides useful contrast: its shared version-resolution anchors compute `RESOLVED_VERSION` and pass `-D CPP_PROJECT_TEMPLATE_VERSION=$RESOLVED_VERSION` during configure. Therefore GitHub and GitLab do not currently share the same release-version contract.
+
+#### High: Windows release cache gate is keyed to the wrong repository identity
+
+The GitHub release workflow contains:
+
+`if: github.repository == 'NaylaCruz/cpp-project-template' && (...cache misses...)`
+
+inside the Windows release cache gate.
+
+The audited repository is:
+
+`Jackie-SDX/cpp-project-template`
+
+Therefore the final cache-enforcement step is skipped on the current canonical repository even when the required package/tool caches miss.
+
+The job still runs, but the stated release-cache contract is not actually enforced for the repository being released.
+
+This is a configuration/control-plane defect rather than a runtime artifact defect.
+
+#### Medium: stale release-workflow inventory comment
+
+The current release workflow still contains a comment describing an **85-package** expected inventory while the active release contract is 54 platform packages.
+
+This does not by itself alter execution, but it is stale control-plane documentation inside a safety-critical release workflow and increases maintenance/error risk.
+
+#### Medium: package metadata identity is duplicated in source configuration
+
+The full-source pass confirms `CMakeLists.txt` still declares:
+
+- homepage: `https://github.com/NaylaCruz/cpp-project-template`
+- author/vendor identity: `NaylaCruz`
+
+This directly explains why the published DEB carried the old identity. The Round 2 artifact finding therefore has a source-level root cause as well as an artifact-level manifestation.
+
+#### Confirmed macOS architecture gap
+
+The GUI target in `src/projectwx/src/CMakeLists.txt` is created with `add_executable(... WIN32 ...)` and does not set the CMake `MACOSX_BUNDLE` target property.
+
+The project does set bundle-related variables in `cmake/cpack_module.cmake`, but those variables alone are not proof that the target is a real macOS application bundle.
+
+The Round 1 conclusion is therefore confirmed by the full-source pass: the missing target-level bundle declaration remains an actual source-configuration issue.
+
+### Round 3 unchanged conclusions
+
+Round 3 does not overturn the existing evidence that:
+
+- Windows ZIP + NSIS + WiX should remain;
+- Linux tar.gz + DEB + RPM should remain;
+- macOS ZIP + DMG should remain;
+- Windows .7z should remain unpublished;
+- code signing, notarization, SBOM/provenance and reproducibility remain incomplete;
+- artifact install/upgrade/erase/launch behavior remains unproven matrix-wide.
 
 ## 22. Required future artifact validation
 
@@ -1107,7 +1229,9 @@ No CPP repository code or packaging configuration was changed as part of this au
 
 The current system is capable of producing a large cross-platform artifact matrix, and v0.0.9 demonstrates that its strongest GitHub path can validate and publish the intended package inventory.
 
-Round 2 materially strengthened the evidence base by recovering and parsing real GitHub Actions build artifacts. It also exposed concrete release defects that static configuration review alone did not prove:
+Round 2 materially strengthened the evidence base by recovering and parsing real GitHub Actions build artifacts.
+
+Round 3 then closed the repository-content coverage gap: the entire tracked snapshot was retrieved as raw bytes and every Git blob hash matched the audited commit. Round 3 also established the source-level cause of the DEB version drift and identified the stale GitHub cache-gate repository condition. It also exposed concrete release defects that static configuration review alone did not prove:
 
 - the published GCC x86_64 DEB carries Version: 0.0.1 under a v0.0.9 filename;
 - the same DEB still identifies NaylaCruz as maintainer/homepage;
