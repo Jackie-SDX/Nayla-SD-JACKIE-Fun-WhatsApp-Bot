@@ -53,8 +53,23 @@ else
     mode=report; intent=answer
   fi
 fi
-emit_env(){ printf '%s=%s\n' "$1" "$2" >> "${GITHUB_ENV:-/dev/null}"; printf '%s=%s\n' "$1" "$2" >> "${GITHUB_OUTPUT:-/dev/null}"; }
+emit_value() {
+  local key="$1" value="$2" file="$3" delim
+  if [[ "$value" == *$'\n'* ]]; then
+    delim="EOF_${key}_${RANDOM}_${RANDOM}"
+    while printf '%s' "$value" | grep -Fq "$delim"; do
+      delim="EOF_${key}_${RANDOM}_${RANDOM}"
+    done
+    printf '%s<<%s\n%s\n%s\n' "$key" "$delim" "$value" "$delim" >> "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+emit_env(){ emit_value "$1" "$2" "${GITHUB_ENV:-/dev/null}"; emit_value "$1" "$2" "${GITHUB_OUTPUT:-/dev/null}"; }
+emit_out(){ emit_value "$1" "$2" "${GITHUB_OUTPUT:-/dev/null}"; }
 emit_env OC_COMMAND_TEXT "$request"
+emit_out mode "$mode"
+emit_out intent "$intent"
 emit_env OC_REQUEST_FILE "$request_file"
 emit_env OC_TASK_MODE "$mode"
 emit_env OC_INTENT "$intent"
