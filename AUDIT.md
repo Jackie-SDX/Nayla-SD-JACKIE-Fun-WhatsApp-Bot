@@ -34,8 +34,9 @@ It does not treat successful CPack generation as proof of release readiness.
 ## 2. Confidence
 
 **Repository/CI topology: HIGH confidence.**  
-**Package configuration conclusions: MEDIUM-HIGH confidence.**  
-**Binary-level claims: LIMITED, because artifact bytes could not be downloaded in the available runtime.**
+**Package configuration conclusions: HIGH confidence.**  
+**Selected artifact-structure/binary-header claims: HIGH confidence for the recovered v0.0.9 GitHub Actions artifacts inspected in Round 2.**  
+**Cryptographic signature validity, notarization, installer execution, and clean-machine behavior: NOT YET PROVEN.**
 
 The repository tree was recursively enumerated in full. Relevant packaging/release files were then inspected in bounded sections. Current authoritative documentation was researched for CMake/CPack, Windows distribution/signing, Apple signing/notarization, Debian packaging, GitHub attestations, GitLab behavior, and reproducible builds.
 
@@ -44,10 +45,12 @@ A separate adversarial LLM review was run over the normalized evidence set.
 OpenCode/Copilot were not exposed as callable independent reviewer integrations. That is recorded as a missing verification rather than represented as completed.
 
 The following remain unproven:
-- binary signatures and certificate chains;
-- Apple notarization/stapling state;
-- exact installer behavior on clean machines;
-- exact runtime DLL/shared-library/framework closure;
+- cryptographic validity and certificate-chain verification for the embedded Windows PE certificate tables;
+- validity of the Windows MSI signature, if any;
+- Apple app-bundle structure inside the nested release ZIP;
+- Apple code-signing identity, Hardened Runtime, notarization, stapling, and Gatekeeper assessment;
+- exact installer install/upgrade/uninstall behavior on clean machines;
+- complete runtime DLL/shared-library/framework closure across the whole release matrix;
 - bit-for-bit reproducibility;
 - binary-level SBOM/provenance verification;
 - actual GitLab release output for the same tag.
@@ -239,8 +242,16 @@ Strengths:
 - release inventory validation;
 - SHA-256 publication.
 
+Round 2 representative artifact evidence:
+- the archive contains both projectcli.exe and projectwx.exe;
+- both are AMD64 PE32+ payloads;
+- the expected MSVC runtime DLL set is present;
+- no unexpected extra files were found.
+
 Hardening:
-- runtime dependency closure;
+- runtime dependency closure across the full matrix;
+- verify embedded payload signatures and certificate chains;
+- sign the installer itself;
 - binary architecture verification for every variant;
 - clean-machine launch;
 - documentation/license inventory;
@@ -367,9 +378,14 @@ Current dependency declarations include:
 - libstdc++6 >= 12
 - GUI alternative including libwxgtk3.2-1 or libwxgtk3.2-dev
 
-The use of a development package as a runtime alternative requires specific package-level validation.
+The Round 2 artifact inspection found a concrete metadata defect in the representative published GCC x86_64 DEB: the filename is cpp-project-template_0.0.9_linux-gcc-x86_64.deb, but the package control metadata declares Version: 0.0.1. The same control record also identifies Maintainer: NaylaCruz and Homepage: https://github.com/NaylaCruz/cpp-project-template, which do not match the audited repository identity. This is a release metadata/source-of-truth failure, not merely a documentation concern.
 
-This audit does not claim the generated DEB is invalid because the artifact bytes were not available.
+The actual control metadata also confirms the runtime dependency declaration:
+libc6 (>= 2.32), libstdc++6 (>= 12), libwxgtk3.2-1 | libwxgtk3.2-dev.
+
+The package contains control and md5sums in control.tar.gz; no maintainer scripts or conffiles were detected in the inspected control archive.
+
+This evidence upgrades DEB from a purely static concern to a concrete FIX finding.
 
 Validation required:
 - dpkg-deb metadata/content;
@@ -429,11 +445,19 @@ Install rules currently place:
 
 The repository search did not identify a general cross-platform runtime dependency closure stage using mechanisms such as CMake BundleUtilities/fixup_bundle or file(GET_RUNTIME_DEPENDENCIES).
 
-This is an evidence gap, not a proven binary defect.
+Round 2 closes part of the runtime-payload evidence gap:
+
+- Representative Windows x64 standalone ZIP: both executables are present and the expected MSVC runtime DLL set is bundled.
+- Representative Linux x86_64 tar.gz: both executables are ELF64/x86-64 with PT_INTERP /lib64/ld-linux-x86-64.so.2, and no .so files are bundled.
+- Therefore the Linux standalone archive is not self-contained in the broadest sense: it explicitly depends on a compatible host glibc dynamic loader/runtime, while other shared dependencies such as wxWidgets are not carried as local .so files.
+
+This is not necessarily a defect; it is an explicit runtime compatibility requirement that must be documented and validated across supported Linux distributions.
+
+The remaining evidence gap is full dependency closure across the entire release matrix and actual packaged launchability.
 
 Risk is highest for:
-- dynamic Windows configurations;
-- Linux shared libraries;
+- dynamic Windows configurations outside the inspected MSVC x64 representative;
+- Linux distributions with incompatible glibc/wxGTK baselines;
 - macOS dylibs/frameworks;
 - multi-toolchain variants.
 
@@ -560,11 +584,13 @@ SHA-256 is integrity evidence, not publisher authenticity or build provenance.
 
 ### Windows
 
-No visible:
-- Authenticode signing;
-- signing certificate selection;
-- RFC 3161 timestamping;
-- pre-publication signature verification.
+Repository configuration does not show an explicit installer-signing stage, and Round 2 artifact inspection now provides direct binary evidence:
+
+- The representative v0.0.9 NSIS installer cpp-project-template_0.0.9_windows-msvc-x86_64_nsis.exe has a valid MZ/PE structure but PE Security Directory (DataDirectory[4]) VA=0, Size=0. No embedded Authenticode certificate table was detected in the installer itself.
+- The representative payload executables inside the standalone ZIP, bin/projectcli.exe and bin/projectwx.exe, are both PE32+ AMD64 (Machine=0x8664) and both contain non-zero PE Security Directory entries, proving that certificate-table data is embedded in those payload binaries. The actual signer identity, trust chain, timestamp, and cryptographic validity were not verified.
+- The WiX MSI is a valid OLE Compound File. The available binary inspection did not establish its signature state.
+
+Therefore the Windows finding is now more precise: the representative NSIS installer is concretely unsigned at the PE certificate-table level, while the bundled payload executables contain embedded certificate tables whose validity is still unverified.
 
 Sources:
 - https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options
@@ -738,14 +764,16 @@ Purpose:
 
 | Risk | Severity | Status |
 |---|---|---|
+| Published GCC x86_64 DEB declares Version 0.0.1 under a v0.0.9 filename | Critical | proven from artifact bytes |
+| Published DEB metadata still identifies NaylaCruz repo/maintainer | High | proven from artifact bytes |
+| Representative NSIS installer has no PE certificate table | High | proven from artifact bytes |
 | macOS app-bundle structure not fully established | Critical | unresolved |
 | macOS signing/Hardened Runtime/notarization not demonstrated | Critical | unresolved |
-| Windows installer signing/timestamping not demonstrated | High | unresolved |
 | GitLab can publish partial releases | High | proven by configuration |
 | Artifact provenance/SBOM not cryptographically published | High | unresolved |
 | GitHub release overwrite configuration | High | configuration finding |
-| Linux runtime dependency declarations may be brittle | High | requires artifact validation |
-| Runtime DLL/shared-library/framework closure not proven | High | requires artifact validation |
+| Linux runtime compatibility depends on host loader/glibc and undeclared host shared libraries | High | proven for representative tarball; matrix-wide validation pending |
+| Complete runtime DLL/shared-library/framework closure not proven | High | matrix-wide validation pending |
 | Reproducibility not demonstrated | High | unresolved |
 | Architecture verification not uniform | Medium/High | configuration finding |
 | macOS GCC product profile differs and skips tests | Medium | proven in v0.0.9 run |
@@ -785,21 +813,122 @@ Observed:
 - SHA256SUMS;
 - no .7z.
 
-### Binary-level validation limitation
+### Round 2 artifact-level validation
 
-Direct GitHub binary downloads were unavailable because the analysis runtime could not resolve the external GitHub hostname. The connected GitHub metadata/API returned asset identifiers, sizes, names and SHA-256 digests, but no binary payload through the available action.
+Round 2 used the connected GitHub Actions artifact download path plus a cloud-browser byte-inspection bridge to recover and inspect actual v0.0.9 build artifacts. This materially closes the artifact-byte limitation from Round 1.
 
-Therefore this audit intentionally does not claim to have performed:
-- signature verification;
-- installer execution;
-- package extraction;
-- ldd or dependency closure;
-- Mach-O inspection;
-- RPM/DEB scriptlet inspection;
-- Gatekeeper validation;
-- SmartScreen testing;
-- install/upgrade/uninstall testing;
-- reproducibility comparison.
+#### Linux representative artifact
+
+GitHub Actions artifact:
+- workflow run: 35877971162
+- artifact: release-Linux
+- artifact ID: 10759980392
+- GitHub artifact SHA-256: 1f9ea4c776cc02e496b9d872b3455510caa9d80e265e6b9031863f52cc42fd9b
+- recovered raw ZIP size: 344,631 bytes
+- recovered raw ZIP SHA-256: 1f9ea4c776cc02e496b9d872b3455510caa9d80e265e6b9031863f52cc42fd9b
+
+The raw artifact passed an independent byte-level digest equality check against GitHub artifact metadata.
+
+Outer members:
+- cpp-project-template_0.0.9_linux-gcc-x86_64.deb
+- cpp-project-template_0.0.9_linux-gcc-x86_64.rpm
+- cpp-project-template_0.0.9_linux-gcc-x86_64.tar.gz
+
+The tarball was decompressed and parsed:
+- bin/projectcli: ELF64/x86-64, little-endian, PT_INTERP /lib64/ld-linux-x86-64.so.2, mode 0755
+- bin/projectwx: ELF64/x86-64, little-endian, PT_INTERP /lib64/ld-linux-x86-64.so.2, mode 0755
+- no .so files were present in the tarball
+- documentation/license/icon/desktop files were present.
+
+The DEB was parsed as an ar archive:
+- debian-binary
+- control.tar.gz
+- data.tar.gz
+
+Its control archive contains:
+- control
+- md5sums
+- no maintainer scripts or conffiles detected.
+
+Actual control metadata:
+- Package: cpp-project-template
+- Version: 0.0.1
+- Architecture: amd64
+- Maintainer: NaylaCruz
+- Homepage: https://github.com/NaylaCruz/cpp-project-template
+- Depends: libc6 (>= 2.32), libstdc++6 (>= 12), libwxgtk3.2-1 | libwxgtk3.2-dev
+
+This is inconsistent with the published v0.0.9 filename and audited repository identity.
+
+The RPM contains a structurally valid RPM lead and a non-empty signature-header region. Specific signer identity and cryptographic verification were not established.
+
+#### Windows representative artifact
+
+GitHub Actions artifact:
+- artifact: release-Windows
+- artifact ID: 10758957748
+- size: 8,331,117 bytes
+
+Outer members:
+- cpp-project-template_0.0.9_windows-msvc-x86_64.zip
+- cpp-project-template_0.0.9_windows-msvc-x86_64_nsis.exe
+- cpp-project-template_0.0.9_windows-msvc-x86_64_wix.msi
+
+The nested standalone ZIP contains:
+- bin/projectcli.exe
+- bin/projectwx.exe
+- MSVC runtime DLLs including concrt140.dll, msvcp140*.dll, vcruntime140*.dll
+- documentation/license
+- image resource
+- no unexpected extra files
+- no .7z.
+
+Payload PE measurements:
+- projectcli.exe: MZ+PE, Machine 0x8664 AMD64, PE32+ 0x20b, Security Directory VA=286720, Size=115384
+- projectwx.exe: MZ+PE, Machine 0x8664 AMD64, PE32+ 0x20b, Security Directory VA=5074944, Size=115720
+
+The non-zero security directories prove embedded certificate-table data exists in those two payload executables. The actual certificate chain, signer, timestamp and cryptographic validity were not verified.
+
+NSIS installer:
+- MZ+PE
+- installer PE Machine 0x14c (Intel 386) — this describes the installer stub, not the bundled application payload
+- Security Directory VA=0, Size=0
+- no embedded Authenticode certificate table detected.
+
+WiX MSI:
+- valid OLE Compound File structure
+- signature state not established from the available byte inspection.
+
+#### macOS representative artifact
+
+GitHub Actions artifact:
+- artifact: release-macOS
+- artifact ID: 10759307322
+- artifact size: 204,206 bytes
+
+Outer members were recovered:
+- cpp-project-template_0.0.9_macos-apple-clang-x86_64.dmg — 155,229 bytes uncompressed / 143,034 bytes compressed
+- cpp-project-template_0.0.9_macos-apple-clang-x86_64.zip — 61,917 bytes uncompressed / 60,746 bytes compressed
+
+Browser-side decompression limitations prevented reliable extraction of the nested macOS ZIP directory and a conclusive UDIF koly footer test on the inner DMG bytes. Therefore:
+- real .app bundle structure remains unproven;
+- the attempted compressed-member footer scan is not treated as proof of an invalid DMG;
+- signing/notarization remains unverified.
+
+#### What Round 2 still does not prove
+
+Round 2 did not establish:
+- clean install/upgrade/uninstall behavior;
+- actual runtime launch on target OS images;
+- SmartScreen behavior;
+- Apple Gatekeeper/notarization result;
+- certificate-chain validity for the embedded Windows payload signatures;
+- MSI signing validity;
+- Linux package installation/resolution across target distro versions;
+- full release-matrix runtime closure;
+- deterministic/reproducible rebuilds;
+- GitLab production-release artifact parity.
+
 
 ## 22. Required future artifact validation
 
@@ -933,6 +1062,7 @@ Priority:
 ### Release evidence
 - https://github.com/Jackie-SDX/cpp-project-template/releases/tag/v0.0.9
 - https://github.com/Jackie-SDX/cpp-project-template/actions/runs/35877971162
+- GitHub Actions artifacts for Round 2 were recovered through the connected artifact-download path and inspected byte-level in a cloud-browser sandbox; artifact IDs and measured sizes are recorded in the Round 2 validation section.
 
 ### CMake / CPack
 - https://cmake.org/cmake/help/latest/manual/cpack-generators.7.html
@@ -975,18 +1105,18 @@ This document records the repository and release architecture as evidenced on 20
 
 No CPP repository code or packaging configuration was changed as part of this audit.
 
-The current system is already capable of producing a large cross-platform artifact matrix, and v0.0.9 demonstrates that its strongest GitHub path can validate and publish the intended package inventory.
+The current system is capable of producing a large cross-platform artifact matrix, and v0.0.9 demonstrates that its strongest GitHub path can validate and publish the intended package inventory.
 
-The remaining work is primarily about trustworthiness rather than more packaging formats:
+Round 2 materially strengthened the evidence base by recovering and parsing real GitHub Actions build artifacts. It also exposed concrete release defects that static configuration review alone did not prove:
 
-- prove the exact artifact;
-- sign it;
-- attest to its provenance;
-- verify it;
-- make the release immutable;
-- make GitHub and GitLab enforce the same contract;
-- prove dependency/runtime correctness;
-- prove reproducibility;
-- prove install/upgrade/uninstall behavior.
+- the published GCC x86_64 DEB carries Version: 0.0.1 under a v0.0.9 filename;
+- the same DEB still identifies NaylaCruz as maintainer/homepage;
+- the representative NSIS installer has no embedded Authenticode certificate table;
+- the representative Windows application payloads do contain embedded certificate tables;
+- the representative Linux binaries are ELF64/x86-64 and depend on the host /lib64/ld-linux-x86-64.so.2;
+- the Linux tarball carries no shared .so files;
+- macOS outer release structure is proven, but the .app and notarization chain remain unresolved.
 
-Until those controls are demonstrated on actual artifacts, the project should be described as a well-developed cross-platform packaging pipeline under hardening, not as an evidence-backed enterprise-grade software distribution system.
+The remaining work is therefore primarily about release trust, metadata correctness, platform validation, and reproducibility rather than adding more packaging formats.
+
+Until those controls are corrected and demonstrated across the release matrix, the project should be described as a well-developed cross-platform packaging pipeline under hardening, not as an evidence-backed enterprise-grade software distribution system.
