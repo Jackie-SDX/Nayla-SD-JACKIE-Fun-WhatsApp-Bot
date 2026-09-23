@@ -220,15 +220,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in .github/scripts/oc-session-state.sh .github/scripts/prepare-oc-session.sh .github/scripts/publish-oc-session.sh .github/scripts/merge-oc-request.sh .github/scripts/read-oc-context.sh .github/scripts/record-oc-session-progress.sh .github/scripts/checkpoint-oc-working-tree.sh .github/scripts/oc-command-control.sh .github/scripts/test-oc-intent.sh .github/scripts/test-oc-session-state.sh .github/scripts/test-oc-context.sh; do
+          for f in .github/scripts/oc-session-state.sh .github/scripts/prepare-oc-session.sh .github/scripts/publish-oc-session.sh .github/scripts/merge-oc-request.sh .github/scripts/read-oc-context.sh .github/scripts/record-oc-session-progress.sh .github/scripts/checkpoint-oc-working-tree.sh .github/scripts/oc-command-control.sh .github/scripts/test-oc-intent.sh .github/scripts/test-oc-session-state.sh .github/scripts/test-oc-command-control.sh .github/scripts/test-oc-context.sh; do
             test -f "$f"
             bash -n "$f"
           done
           bash .github/scripts/test-oc-intent.sh
           bash .github/scripts/test-oc-session-state.sh
+          bash .github/scripts/test-oc-command-control.sh
           bash .github/scripts/test-oc-context.sh
           grep -Fq 'oc-session-state.sh load' .github/scripts/oc-command-control.sh
           grep -Fq 'prepare-oc-session.sh' .github/scripts/oc-command-control.sh
+          grep -Fq 'read_back_output' .github/scripts/oc-command-control.sh
           grep -Fq 'checkpoint-oc-working-tree.sh' .github/scripts/run-opencode-attempt.sh
           grep -Fq 'COPILOT_PEER_MODE' .github/scripts/run-opencode-attempt.sh
           # Custom critic callbacks are optional; the regression contract requires
