@@ -16,7 +16,11 @@ fi
 }
 
 marker="<!-- oc-comment-claim:$comment_id -->"
-comments="$(gh api --paginate --slurp "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null || printf '[]')"
+if ! comments="$(gh api --paginate --slurp "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null)"; then
+  echo "Unable to inspect existing /oc claims; refusing to execute." >&2
+  printf 'accepted=false\n' >> "${GITHUB_OUTPUT:-/dev/null}"
+  exit 1
+fi
 if jq -e --arg marker "$marker" 'add // [] | any(.[]; (.body // "") | contains($marker))' <<<"$comments" >/dev/null 2>&1; then
   echo "Duplicate /oc delivery for comment $comment_id; skipping agent execution."
   printf 'accepted=false\n' >> "${GITHUB_OUTPUT:-/dev/null}"

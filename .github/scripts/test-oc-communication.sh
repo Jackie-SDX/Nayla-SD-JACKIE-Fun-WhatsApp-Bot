@@ -75,8 +75,51 @@ JSON
 GITHUB_EVENT_PATH="$tmp/event-code.json" GITHUB_ENV="$tmp/env-code" GITHUB_OUTPUT="$tmp/out-code" bash "$root/.github/scripts/select-oc-task-mode.sh"
 grep -Fq 'OC_TASK_MODE=code' "$tmp/env-code"
 grep -Fq 'OC_CONTENT_TASK=false' "$tmp/env-code"
+grep -Fq 'mode=code' "$tmp/out-code"
+grep -Fq 'intent=code' "$tmp/out-code"
+
+cat > "$tmp/event-content2.json" <<'JSON'
+{"comment":{"id":12,"body":"/oc Answer this question in two lines.\nSecond line of the question body."},"issue":{"number":12}}
+JSON
+: > "$tmp/env-content2"
+: > "$tmp/out-content2"
+GITHUB_EVENT_PATH="$tmp/event-content2.json" GITHUB_ENV="$tmp/env-content2" GITHUB_OUTPUT="$tmp/out-content2" bash "$root/.github/scripts/select-oc-task-mode.sh"
+grep -Fq 'mode=report' "$tmp/out-content2"
+grep -Fq 'intent=answer' "$tmp/out-content2"
+
+cat > "$tmp/event-multiline.json" <<'JSON'
+{"comment":{"id":13,"body":"/oc Fix the GitHub workflow\nFirst action item for the agent to work on.\nSecond action item with more detail about the CI pipeline."},"issue":{"number":13}}
+JSON
+: > "$tmp/env-multiline"
+: > "$tmp/out-multiline"
+GITHUB_EVENT_PATH="$tmp/event-multiline.json" GITHUB_ENV="$tmp/env-multiline" GITHUB_OUTPUT="$tmp/out-multiline" bash "$root/.github/scripts/select-oc-task-mode.sh"
+grep -Fq 'OC_COMMAND_TEXT<<' "$tmp/env-multiline"
+grep -Fq 'OC_COMMAND_TEXT<<' "$tmp/out-multiline"
+grep -Fq 'OC_TASK_MODE=code' "$tmp/env-multiline"
+! grep -q 'OC_COMMAND_TEXT=Fix the parser' "$tmp/env-multiline"
+! grep -q 'OC_COMMAND_TEXT=Fix the parser' "$tmp/out-multiline"
 
 bash -n "$root/.github/scripts/claim-oc-command.sh"
+claim_tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp" "$claim_tmp"' EXIT
+claim_bin="$claim_tmp/bin"
+mkdir -p "$claim_bin"
+cat > "$claim_bin/gh" <<'FAKECLAIMGH'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 22
+FAKECLAIMGH
+chmod +x "$claim_bin/gh"
+printf '%s\n' '{"comment":{"id":42},"issue":{"number":7}}' > "$claim_tmp/event.json"
+set +e
+PATH="$claim_bin:$PATH" GITHUB_REPOSITORY=example/repo \
+  GITHUB_EVENT_PATH="$claim_tmp/event.json" GITHUB_OUTPUT="$claim_tmp/output" \
+  bash "$root/.github/scripts/claim-oc-command.sh" >"$claim_tmp/log" 2>&1
+claim_rc=$?
+set -e
+[[ "$claim_rc" -ne 0 ]]
+grep -Fq 'accepted=false' "$claim_tmp/output"
+grep -Fq 'refusing to execute' "$claim_tmp/log"
 grep -Fq 'needs: oc_claim' "$root/.github/workflows/opencode.yml"
 grep -Fq 'claim-oc-command.sh' "$root/.github/workflows/opencode.yml"
 grep -Fq 'peer_mode' "$root/.github/scripts/invite-copilot-peer.sh"
