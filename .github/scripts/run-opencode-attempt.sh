@@ -93,7 +93,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
 else
   initial_sha="${OC_INITIAL_SHA:-}"
   [[ -n "$initial_sha" ]] || initial_sha="$(git rev-parse HEAD)"
-  agent_worktree="$runner_temp/opencode-agent-$-$attempt"
+  agent_worktree="$runner_temp/opencode-agent-$$-$attempt"
   if ! git -C "$controller_root" config extensions.worktreeConfig true >/dev/null 2>&1; then
     echo "::error title=Agent worktree configuration failed::Could not enable per-worktree Git configuration." >&2
     exit 2
@@ -272,11 +272,14 @@ fi
 
 provider_warning="false"
 if [[ "$exit_code" -eq 0 ]] && grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$safe_log"; then
-  # Auxiliary/subagent provider failures must never override the primary
-  # OpenCode process result. The primary process exit code is authoritative.
-  provider_failure_kind="free-tier-context-warning"
-  provider_warning="true"
-  echo "::warning title=OpenCode auxiliary provider warning::A Zen free-tier context error was observed in auxiliary activity; the primary OpenCode run returned success, so preserving success and continuing to verification."
+  # A Zen free-tier context rejection is a provider-unavailable transition even
+  # when the primary OpenCode process returns exit 0 (documented contract in
+  # docs/OPENCODE_CONTROL_PLANE_SELF_ANALYSIS_AND_UPGRADE.md 6.1 and pinned by
+  # test-provider-fallback.sh). Emitting 75 lets the classifier advance the
+  # ladder and leaves OpenCode model memory unpoisoned for a provider-wide event.
+  provider_failure_kind="free-tier-context"
+  exit_code=75
+  echo "::warning title=OpenCode provider unavailable::A Zen free-tier context rejection was observed with exit 0; classifying the attempt as provider-unavailable so the next route can be tried."
 fi
 
 peer_result_file="$runner_temp/copilot-peer-${attempt}.result"
