@@ -22,13 +22,19 @@ model="$(printenv GEMINI_ADVISORY_MODEL 2>/dev/null || true)"
 models_csv="$(printenv GEMINI_ADVISORY_MODELS 2>/dev/null || true)"
 [ -n "$models_csv" ] || models_csv="$model,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
 providers_csv="$(printenv GEMINI_ADVISORY_PROVIDER_ORDER 2>/dev/null || true)"
-[ -n "$providers_csv" ] || providers_csv="gemini,openrouter,groq"
+[ -n "$providers_csv" ] || providers_csv="gemini,groq,openrouter"
+phase="$(printenv GEMINI_ADVISORY_PHASE 2>/dev/null || true)"
+[ -n "$phase" ] || phase="plan"
+priority="$(printenv GEMINI_ADVISORY_PRIORITY 2>/dev/null || true)"
+[ -n "$priority" ] || priority="plan"
+evidence_file="$(printenv GEMINI_ADVISORY_EVIDENCE_FILE 2>/dev/null || true)"
+questions="$(printenv GEMINI_ADVISORY_QUESTIONS 2>/dev/null || true)"
 max_calls="$(printenv GEMINI_ADVISORY_MAX_CALLS 2>/dev/null || true)"
 [ "$max_calls" -eq "$max_calls" ] 2>/dev/null || max_calls=5
 [ "$max_calls" -gt 0 ] 2>/dev/null || max_calls=5
 min_interval="$(printenv GEMINI_ADVISORY_MIN_INTERVAL_SECONDS 2>/dev/null || true)"
-[ "$min_interval" -eq "$min_interval" ] 2>/dev/null || min_interval=15
-[ "$min_interval" -ge 0 ] 2>/dev/null || min_interval=15
+[ "$min_interval" -eq "$min_interval" ] 2>/dev/null || min_interval=12
+[ "$min_interval" -ge 0 ] 2>/dev/null || min_interval=12
 state_file="$runner_temp/gemini-advisory-rate.state"
 
 mkdir -p "$runner_temp"
@@ -83,6 +89,20 @@ safe_packet="$runner_temp/gemini-review-packet-$attempt.safe.md"
     git -C "$worktree" status --short 2>/dev/null | head -120 || true
     git -C "$worktree" diff --stat 2>/dev/null | head -80 || true
     git -C "$worktree" log -5 --oneline 2>/dev/null || true
+  fi
+  printf '%s\n' "" "# Phase-specific evidence"
+  if [[ "$phase" != "plan" ]]; then
+    if [ -d "$worktree/.git" ]; then
+      printf '%s\n' "# Current diff/checks"
+      git -C "$worktree" diff --stat 2>/dev/null | head -80 || true
+      git -C "$worktree" diff --check 2>/dev/null | head -80 || true
+    fi
+    if [ -n "$evidence_file" ] && [ -f "$evidence_file" ]; then
+      printf '%s\n' "" "# Sanitized implementation evidence"
+      tail -c 60000 "$evidence_file" 2>/dev/null || true
+    fi
+    printf '%s\n' "" "# Specific review questions"
+    echo "${questions:-Review current evidence for correctness, failures, missing tests, regressions, and the smallest justified next action.}"
   fi
   printf '%s\n' "" "# Issue/task context"
   if [ -n "$context_file" ] && [ -f "$context_file" ]; then
@@ -161,7 +181,15 @@ save_review() {
   emit gemini_advisory_status completed
   emit gemini_advisory_provider "$provider"
   emit gemini_advisory_file "$review_file"
-  echo "[OC][advisory] review completed by $provider/$used_model"
+  echo "[GEMINI][phase=$phase][priority=$priority] review completed by $provider/$used_model"
+  assessment="$(jq -r '.assessment // "unknown"' "$review_file" 2>/dev/null || printf unknown)"
+  confidence="$(jq -r '.confidence // "unknown"' "$review_file" 2>/dev/null || printf unknown)"
+  summary="$(jq -r '.reasoning_summary // .evidence_summary // empty' "$review_file" 2>/dev/null || true)"
+  echo "[GEMINI][phase=$phase] assessment=$assessment confidence=$confidence"
+  [ -n "$summary" ] && echo "[GEMINI][phase=$phase] evidence summary: $summary"
+  jq -r '.critical_issues[]? // .critical_findings[]? // empty' "$review_file" 2>/dev/null | while IFS= read -r item; do echo "[GEMINI][phase=$phase] finding: $item"; done
+  jq -r '.important_suggestions[]? // .recommended_changes[]? // empty' "$review_file" 2>/dev/null | while IFS= read -r item; do echo "[GEMINI][phase=$phase] recommendation: $item"; done
+  jq -r '.tests[]? // empty' "$review_file" 2>/dev/null | while IFS= read -r item; do echo "[GEMINI][phase=$phase] test: $item"; done
 }
 
 gemini_call() {
