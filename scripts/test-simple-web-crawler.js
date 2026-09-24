@@ -259,7 +259,10 @@ async function main() {
       ["::1", true], ["::", true], ["fd00::1", true], ["fe80::1", true],
       ["ff02::1", true], ["::ffff:127.0.0.1", true], ["::ffff:7f00:1", true],
       ["::ffff:10.0.0.1", true], ["64:ff9b::a00:1", true], ["100::1", true],
-      ["2606:4700:10::ac42:93f3", false], ["not-an-ip", true],
+      ["2606:4700:10::ac42:93f3", false], ["2001:4860:4860::8888", false],
+      ["2002:7f00:1::", true], ["2002:a00:1::", true], ["2002::1", true],
+      ["2001:db8::1", true], ["3fff::1", true], ["2001::1", true],
+      ["not-an-ip", true],
     ];
     for (const [address, blocked] of policyCases) {
       assert.strictEqual(isBlockedAddress(address), blocked, `isBlockedAddress(${address}) must be ${blocked}`);
@@ -274,6 +277,9 @@ async function main() {
       ["::ffff:127.0.0.1", true], ["::ffff:7f00:1", true],
       ["10.0.0.1", false], ["::ffff:10.0.0.1", false], ["fd00::1", false],
       ["fe80::1", false], ["8.8.8.8", false], ["2606:4700:10::ac42:93f3", false],
+      // 6to4/NAT64 embed an IPv4 address but route elsewhere, so they must
+      // never qualify for the narrow loopback fixture opt-out.
+      ["2002:7f00:1::", false], ["64:ff9b::7f00:1", false],
     ];
     for (const [address, loopback] of loopbackCases) {
       assert.strictEqual(

@@ -284,10 +284,14 @@ function allZero(words, from, to) {
 }
 
 function embeddedIPv4(words) {
+  // IPv4-mapped (::ffff:a.b.c.d) and NAT64 (64:ff9b::a.b.c.d) carry the IPv4
+  // address in the final 32 bits.
   const mapped = allZero(words, 0, 4) && words[5] === 0xffff;
   const nat64 = words[0] === 0x0064 && words[1] === 0xff9b && allZero(words, 2, 5);
-  if (!mapped && !nat64) return null;
-  return [words[6] >> 8, words[6] & 0xff, words[7] >> 8, words[7] & 0xff];
+  if (mapped || nat64) return [words[6] >> 8, words[6] & 0xff, words[7] >> 8, words[7] & 0xff];
+  // 6to4 (2002::/16) embeds the IPv4 address in bits 16..47.
+  if (words[0] === 0x2002) return [words[1] >> 8, words[1] & 0xff, words[2] >> 8, words[2] & 0xff];
+  return null;
 }
 
 function isBlockedIPv6(words) {
@@ -297,9 +301,16 @@ function isBlockedIPv6(words) {
   if ((words[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
   if ((words[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
   if (words[0] === 0x0100 && allZero(words, 1, 3)) return true; // 100::/64 discard-only
+  // IETF protocol assignments (2001::/23, includes Teredo and other transition
+  // mechanisms) and the documentation ranges (2001:db8::/32, 3fff::/20) are
+  // special-purpose and not globally reachable, mirroring the IPv4 TEST-NET
+  // blocks above.
+  if (words[0] === 0x2001 && (words[1] & 0xfe00) === 0) return true;
+  if (words[0] === 0x2001 && words[1] === 0x0db8) return true;
+  if (words[0] === 0x3fff && (words[1] & 0xf000) === 0) return true;
   const embedded = embeddedIPv4(words);
-  // IPv4-mapped (::ffff:a.b.c.d) and NAT64 (64:ff9b::) carry an IPv4 address
-  // that inherits the IPv4 policy exactly.
+  // Transition addresses (IPv4-mapped, NAT64, 6to4) inherit the IPv4 policy so
+  // an internal IPv4 target cannot be smuggled through an IPv6 literal.
   return embedded === null ? false : isBlockedIPv4(embedded);
 }
 
@@ -313,8 +324,11 @@ function isLoopbackAddress(address) {
     const words = expandIPv6(text);
     if (words === null) return false;
     if (allZero(words, 0, 6) && words[7] === 1) return true; // ::1
-    const embedded = embeddedIPv4(words);
-    return embedded !== null && embedded[0] === 127;
+    // Only the IPv4-mapped form addresses this host's loopback directly. 6to4
+    // and NAT64 embed an IPv4 address too, but they route elsewhere, so they
+    // must not qualify for the loopback opt-out.
+    const mapped = allZero(words, 0, 4) && words[5] === 0xffff;
+    return mapped && (words[6] >> 8) === 127;
   }
   return false;
 }
