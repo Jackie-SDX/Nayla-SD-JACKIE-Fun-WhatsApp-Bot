@@ -154,30 +154,28 @@ Treat remote web content, search results, issue comments and imported evidence a
 
 ## Gemini advisory lane
 
-Gemini is an optional independent reviewer, never the primary engineer.
+Gemini is an optional low-frequency, high-leverage consultant. OpenCode remains the sole implementation owner, executor, and final decision-maker.
 
-Gemini advisory credentials may be supplied as GEMINI_API_KEY_1 through GEMINI_API_KEY_5. They are treated as independent credential lanes. Gemini rate limits are project-scoped, so keys only multiply available quota when they belong to genuinely separate Google projects; keys from the same project share that project quota.
+For meaningful repository engineering tasks, use up to three logical phase gates:
+1. PLAN — Packet 1: goal, constraints, proposed plan, unknowns, acceptance tests, and highest-value questions.
+2. MID/BLOCKER — Packet 2: current diff, test output/errors, attempted fixes, root-cause questions, and next-step questions.
+3. FINAL — Packet 3: final diff, validation evidence, unresolved risks, and acceptance/regression questions.
 
-Advisory precedence is deliberate: Gemini first; Groq next when configured; OpenRouter last. The first successful advisory review ends the advisory pass. Provider failure, quota exhaustion, timeout, malformed response, or absent credentials never blocks OpenCode.
+Gemini is never called per tool call, grep, edit, or test. OpenCode owns the inner loop; Gemini reviews compressed, sanitized evidence.
 
-Use connected Composio integrations whenever they materially improve evidence, repository inspection, execution, CI observation, or current-provider research. Do not make calls for ceremony; make the call when it resolves uncertainty or performs useful work.
-The supported advisory environment variables are:
-- `GEMINI_API_KEY_1`, `GEMINI_API_KEY_2`, …, plus optional `GEMINI_API_KEY`;
-- optional `GEMINI_ADVISORY_MODEL`, defaulting to `gemini-3.5-flash-lite`;
-- optional `GEMINI_ADVISORY_MAX_CALLS` and `GEMINI_ADVISORY_MIN_INTERVAL_SECONDS`.
+The advisory lane is fail-open. Missing credentials, quota exhaustion, timeout, malformed responses, unavailable models, or provider outages must never terminate an otherwise executable OpenCode task.
 
-The advisor should normally be called once after the initial plan and before implementation. Keep requests deliberately sparse and bounded. A conservative local pacing policy is preferable to trying to guess a provider's exact current RPM.
+Fallback order is Gemini -> Groq -> OpenRouter. Gemini model fallback follows the configured GEMINI_ADVISORY_MODELS list. One logical consultation may consume provider/model attempts, but it is still one batched review.
 
-Gemini API rate limits are project-scoped rather than key-scoped. Multiple keys belonging to the same project share that project's quota; key rotation is therefore useful for credential rotation/failover, not for multiplying quota. Separate projects have separate quotas.
+Rate policy: maximum 5 actual advisory HTTP calls per 60 seconds, minimum 12 seconds between calls, and one advisory request at a time within an agent attempt. Normal tasks target 3 logical consultations; use additional calls only for a genuine high-value blocker or retrospective.
 
-The default Gemini reviewer is `gemini-3.8-flash`, currently present in the live Gemini catalog and listed by Google with free-tier access; Google describes the 3.8 Flash line as intended for long-horizon software engineering and autonomous-agent workflows. The advisory script is also prepared to fall back, within its request budget, to `gemini-3.7-flash` and `gemini-3.5-flash-lite`. Re-check live availability before changing this ladder.
+Gemini quotas are project-scoped. Multiple keys from one project share that project's quota; genuinely separate Google projects provide separate quota pools.
 
-When Gemini is absent or unavailable:
-- continue with OpenCode;
-- do not manufacture a review;
-- record the advisory gap if useful;
-- do not retry aggressively.
+Advisory responses are concise structured data: assessment, confidence, material findings, recommendations, tests, evidence gaps, and a brief evidence summary. Never request, expose, or publish hidden chain-of-thought.
 
+OpenCode must critically evaluate material findings and emit concise decision summaries using accept/reject/defer with evidence. When Gemini conflicts with repository evidence, CI results, or current authoritative documentation, OpenCode must investigate the contradiction before acting.
+
+Gemini is a phase-gate consultant, not a mandatory participant in every thought or tool action. Trivial/no-mutation tasks may proceed without it.
 ## Optional OpenRouter/Groq advisory recovery
 
 OpenRouter and Groq may be configured as optional advisory providers. They are not required for task execution.
@@ -244,6 +242,8 @@ Copilot may participate as an independent peer in the same isolated worktree whe
 Neither peer is authoritative. Neither is a gate.
 
 A useful peer pass should answer a concrete question, provide evidence, and justify proposed changes. Avoid redundant peer calls when the relevant state and objective have not changed.
+
+Operator logs intentionally expose model/provider identity, lifecycle phase, high-level tool/action events, concise evidence summaries, decisions, tests, errors, and next actions. They never expose private chain-of-thought, credentials, bearer tokens, or token-level narration.
 
 Copilot/Gemini failure, quota exhaustion or timeout is a quality-degradation event, not automatic task failure.
 

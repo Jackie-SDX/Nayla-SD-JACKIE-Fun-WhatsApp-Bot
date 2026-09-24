@@ -92,7 +92,7 @@ jobs:
       GEMINI_ADVISORY_MODEL: ${{ vars.GEMINI_ADVISORY_MODEL || 'gemini-3.8-flash' }}
       GEMINI_ADVISORY_MODELS: ${{ vars.GEMINI_ADVISORY_MODELS || 'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite' }}
       GEMINI_ADVISORY_MAX_CALLS: "5"
-      GEMINI_ADVISORY_MIN_INTERVAL_SECONDS: "15"
+      GEMINI_ADVISORY_MIN_INTERVAL_SECONDS: "12"
       GEMINI_ADVISORY_PROVIDER_ORDER: "gemini,groq,openrouter"
       GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
       GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}

@@ -12,6 +12,10 @@ Useful finding: verify the Composio MCP URL against actual documentation.
 [19:01:22.137] INFO (#8936): touching file {
   file: "/home/runner/work/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/.github/workflows/opencode.yml"
 }
+[OC][PHASE 1/4] PLAN
+[GEMINI][phase=plan] evidence summary: verify the live repository.
+[OC][DECISION SUMMARY] accept: repository evidence confirms the finding.
+[COPILOT] hypothesis: inspect validation contract.
 Running deterministic checks.
 |  Shell {"command":"git log --oneline -25"}
 [19:01:54.183] INFO (#8293): process {
@@ -54,6 +58,10 @@ grep -Fq "Reading file..." "$TMP/output"
 grep -Fq '|  Read {"filePath":"/home/runner/work/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/.github/workflows/opencode.yml"}' "$TMP/output"
 grep -Fq "Making changes / editing file..." "$TMP/output"
 grep -Fq 'touching file "/home/runner/work/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/Nayla-SD-JACKIE-Fun-WhatsApp-Bot/.github/workflows/opencode.yml"' "$TMP/output"
+grep -Fq "[OC][PHASE 1/4] PLAN" "$TMP/output"
+grep -Fq "  -> [GEMINI][phase=plan] evidence summary: verify the live repository." "$TMP/output"
+grep -Fq "  >> [OC][DECISION SUMMARY] accept: repository evidence confirms the finding." "$TMP/output"
+grep -Fq "  -> [COPILOT] hypothesis: inspect validation contract." "$TMP/output"
 grep -Fq "Running deterministic checks." "$TMP/output"
 grep -Fq "Running shell command" "$TMP/output"
 grep -Fq '|  Shell {"command":"git log --oneline -25"}' "$TMP/output"

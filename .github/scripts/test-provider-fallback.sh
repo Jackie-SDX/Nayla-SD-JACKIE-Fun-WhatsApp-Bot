@@ -97,6 +97,12 @@ grep -Fq "OPENCODE_EXCLUDED_PROVIDERS=opencode" "$pipe_env"
 
 echo "[6/8] Gemini advisory is optional and fail-open"
 bash -n "$script_dir/gemini-advisory-peer.sh"
+grep -Fq '|| min_interval=12' "$script_dir/gemini-advisory-peer.sh"
+grep -Fq 'phase="$(printenv GEMINI_ADVISORY_PHASE' "$script_dir/gemini-advisory-peer.sh"
+grep -Fq 'GEMINI_ADVISORY_PHASE="plan"' "$script_dir/run-opencode-attempt.sh"
+grep -Fq 'GEMINI_ADVISORY_PHASE="mid"' "$script_dir/run-opencode-attempt.sh"
+grep -Fq 'GEMINI_ADVISORY_PHASE="final"' "$script_dir/run-opencode-attempt.sh"
+grep -Fq '--continue --model' "$script_dir/run-opencode-attempt.sh"
 advisory_out="$tmp/advisory-out"
 GITHUB_OUTPUT="$advisory_out" RUNNER_TEMP="$tmp" \
   GEMINI_API_KEY="" GEMINI_API_KEY_1="" GEMINI_API_KEY_2="" \
