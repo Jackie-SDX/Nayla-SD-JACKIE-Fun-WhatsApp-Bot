@@ -123,14 +123,16 @@ OpenCode remains the sole engineer. Treat this review as advisory evidence, not 
 
 Return concise JSON with:
 {
-  "assessment": "proceed|revise|blocked",
-  "confidence": 0.0,
-  "critical_issues": ["..."],
-  "important_suggestions": ["..."],
+  "assessment": "proceed|revise|concern",
+  "confidence": "low|medium|high",
+  "critical_findings": ["..."],
+  "recommended_changes": ["..."],
   "tests": ["..."],
-  "reasoning_summary": "brief evidence-based explanation; no hidden chain-of-thought"
+  "questions_for_opencode": ["..."],
+  "evidence_gaps": ["..."],
+  "evidence_summary": "brief evidence-based summary of the observed evidence and recommendation; never private chain-of-thought"
 }
-Do not invent facts.
+Do not invent facts. Keep every field concise and grounded in observable evidence.
 PROMPT
 {
   echo
@@ -184,7 +186,7 @@ save_review() {
   echo "[GEMINI][phase=$phase][priority=$priority] review completed by $provider/$used_model"
   assessment="$(jq -r '.assessment // "unknown"' "$review_file" 2>/dev/null || printf unknown)"
   confidence="$(jq -r '.confidence // "unknown"' "$review_file" 2>/dev/null || printf unknown)"
-  summary="$(jq -r '.reasoning_summary // .evidence_summary // empty' "$review_file" 2>/dev/null || true)"
+  summary="$(jq -r '.evidence_summary // .reasoning_summary // empty' "$review_file" 2>/dev/null || true)"
   echo "[GEMINI][phase=$phase] assessment=$assessment confidence=$confidence"
   [ -n "$summary" ] && echo "[GEMINI][phase=$phase] evidence summary: $summary"
   jq -r '.critical_issues[]? // .critical_findings[]? // empty' "$review_file" 2>/dev/null | while IFS= read -r item; do echo "[GEMINI][phase=$phase] finding: $item"; done
@@ -207,7 +209,13 @@ gemini_call() {
     -X POST "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent" \
     --data-binary "@$payload" -o "$response" -w '%{http_code}' 2>/dev/null || true)"
   if [ "$code" != "200" ]; then
-    echo "[OC][advisory] Gemini HTTP $code"
+    echo "[GEMINI][phase=$phase][priority=$priority] HTTP $code"
+    case "$code" in
+      429|500|502|503|504)
+        jitter=$((RANDOM % 5))
+        sleep $((2 + jitter))
+        ;;
+    esac
     return 1
   fi
   text="$(jq -r '[.candidates[0].content.parts[]?.text] | join("")' "$response" 2>/dev/null || true)"
@@ -230,7 +238,11 @@ openrouter_call() {
     -H "Content-Type: application/json" \
     -X POST "https://openrouter.ai/api/v1/chat/completions" \
     --data-binary "@$payload" -o "$response" -w '%{http_code}' 2>/dev/null || true)"
-  [ "$code" = "200" ] || return 1
+  if [ "$code" != "200" ]; then
+    echo "[OPENROUTER][phase=$phase][priority=$priority] HTTP $code"
+    case "$code" in 429|500|502|503|504) jitter=$((RANDOM % 5)); sleep $((2 + jitter));; esac
+    return 1
+  fi
   text="$(jq -r '.choices[0].message.content // empty' "$response" 2>/dev/null || true)"
   [ -n "$text" ] || return 2
   save_review openrouter "openrouter/free" "$text"
@@ -253,7 +265,11 @@ groq_call() {
     -H "Content-Type: application/json" \
     -X POST "https://api.groq.com/openai/v1/chat/completions" \
     --data-binary "@$payload" -o "$response" -w '%{http_code}' 2>/dev/null || true)"
-  [ "$code" = "200" ] || return 1
+  if [ "$code" != "200" ]; then
+    echo "[GROQ][phase=$phase][priority=$priority] HTTP $code"
+    case "$code" in 429|500|502|503|504) jitter=$((RANDOM % 5)); sleep $((2 + jitter));; esac
+    return 1
+  fi
   text="$(jq -r '.choices[0].message.content // empty' "$response" 2>/dev/null || true)"
   [ -n "$text" ] || return 2
   save_review groq "$model_id" "$text"
