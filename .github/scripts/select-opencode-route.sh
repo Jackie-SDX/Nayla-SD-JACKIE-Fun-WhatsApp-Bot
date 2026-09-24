@@ -32,6 +32,29 @@ recovery_model="${OPENCODE_RECOVERY_MODEL:-}"
 route_hint="${OPENCODE_ROUTE_HINT:-}"
 IFS=',' read -r -a models <<< "$models_csv"
 
+# Keep the requested primary/secondary stable even when the workflow's historical
+# CSV default is older. Additional discovered/configured free models remain in
+# their existing order after the preferred pair.
+preferred_models=("mimo-v2.6-flash-free" "big-pickle")
+ordered_models=()
+for preferred in "${preferred_models[@]}"; do
+  for candidate in "${models[@]}"; do
+    if [[ "$candidate" == "$preferred" ]]; then
+      ordered_models+=( "$candidate" )
+      break
+    fi
+  done
+done
+for candidate in "${models[@]}"; do
+  [[ -n "$candidate" ]] || continue
+  seen=false
+  for existing in "${ordered_models[@]}"; do
+    [[ "$candidate" == "$existing" ]] && { seen=true; break; }
+  done
+  [[ "$seen" == "true" ]] || ordered_models+=( "$candidate" )
+done
+models=( "${ordered_models[@]}" )
+
 refresh_free_models() {
   local catalog line model base found_any=false
   command -v opencode >/dev/null 2>&1 || return 0
