@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -u
+umask 077
 
 attempt="$(printenv GEMINI_ADVISORY_ATTEMPT 2>/dev/null || true)"
 [ -n "$attempt" ] || attempt="advisory"
@@ -19,11 +20,11 @@ worktree="$(printenv GEMINI_WORKTREE 2>/dev/null || true)"
 model="$(printenv GEMINI_ADVISORY_MODEL 2>/dev/null || true)"
 [ -n "$model" ] || model="gemini-3.8-flash"
 models_csv="$(printenv GEMINI_ADVISORY_MODELS 2>/dev/null || true)"
-[ -n "$models_csv" ] || models_csv="$model,gemini-3.7-flash,gemini-3.5-flash-lite"
+[ -n "$models_csv" ] || models_csv="$model,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
 providers_csv="$(printenv GEMINI_ADVISORY_PROVIDER_ORDER 2>/dev/null || true)"
 [ -n "$providers_csv" ] || providers_csv="gemini,openrouter,groq"
 max_calls="$(printenv GEMINI_ADVISORY_MAX_CALLS 2>/dev/null || true)"
-[ "$max_calls" -eq "$max_calls" ] 2>/dev/null || max_calls=3
+[ "$max_calls" -eq "$max_calls" ] 2>/dev/null || max_calls=5
 [ "$max_calls" -gt 0 ] 2>/dev/null || max_calls=5
 min_interval="$(printenv GEMINI_ADVISORY_MIN_INTERVAL_SECONDS 2>/dev/null || true)"
 [ "$min_interval" -eq "$min_interval" ] 2>/dev/null || min_interval=15
