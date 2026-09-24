@@ -346,6 +346,18 @@ function cancelBody(response) {
 }
 
 async function assertDestinationAllowed(target, signal, allowLoopback) {
+  // Destination policy for the initial URL and for every redirect hop.
+  //
+  // Residual risk (documented deliberately): name resolution is validated
+  // before the request, but Node's global fetch re-resolves on its own, so a
+  // hostile authoritative DNS server could still rebind between the check and
+  // the connection (TOCTOU). Closing that gap needs a custom undici dispatcher
+  // bound to a pinned address; undici is not a public Node module
+  // (ERR_MODULE_NOT_FOUND), so that would mean a new runtime dependency. This
+  // pre-check therefore mitigates the common SSRF cases (direct private/metadata
+  // targets and hostnames such as localtest.me that resolve internally) without
+  // adding supply-chain surface; the residual rebinding window is a known,
+  // stated limitation rather than an unnoticed one.
   if (!/^https?:$/.test(target.protocol)) {
     throw new Error(`unsupported protocol: ${target.protocol}`);
   }
