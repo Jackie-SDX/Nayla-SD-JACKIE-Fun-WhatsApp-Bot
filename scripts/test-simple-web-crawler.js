@@ -8,6 +8,7 @@ const {
   MAX_REDIRECTS,
   MAX_TIMEOUT_MS,
   isBlockedAddress,
+  isLoopbackAddress,
   normalizeTimeout,
   redactUrl,
 } = require("./simple-web-crawler");
@@ -264,6 +265,27 @@ async function main() {
       assert.strictEqual(isBlockedAddress(address), blocked, `isBlockedAddress(${address}) must be ${blocked}`);
     }
     console.log(`PASS ssrf policy: ${policyCases.length} address classifications incl. IPv4-mapped/NAT64`);
+
+    // The narrow loopback opt-out must classify identically to the blocklist,
+    // including IPv4-mapped forms, so the fixture escape hatch and the guard
+    // can never disagree about the same address.
+    const loopbackCases = [
+      ["127.0.0.1", true], ["127.0.0.53", true], ["::1", true],
+      ["::ffff:127.0.0.1", true], ["::ffff:7f00:1", true],
+      ["10.0.0.1", false], ["::ffff:10.0.0.1", false], ["fd00::1", false],
+      ["fe80::1", false], ["8.8.8.8", false], ["2606:4700:10::ac42:93f3", false],
+    ];
+    for (const [address, loopback] of loopbackCases) {
+      assert.strictEqual(
+        isLoopbackAddress(address),
+        loopback,
+        `isLoopbackAddress(${address}) must be ${loopback}`,
+      );
+      if (loopback) {
+        assert.strictEqual(isBlockedAddress(address), true, `${address} is blocked but also loopback`);
+      }
+    }
+    console.log(`PASS ssrf policy: loopback opt-out agrees with the blocklist on ${loopbackCases.length} addresses`);
 
     // --- SSRF: per-hop redirect validation ---
     await expectRejects(

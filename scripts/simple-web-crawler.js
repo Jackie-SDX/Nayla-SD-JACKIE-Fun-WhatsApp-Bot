@@ -278,38 +278,45 @@ function expandIPv6(address) {
   return words.length === 8 ? words : null;
 }
 
+function allZero(words, from, to) {
+  for (let i = from; i <= to; i += 1) if (words[i] !== 0) return false;
+  return true;
+}
+
+function embeddedIPv4(words) {
+  const mapped = allZero(words, 0, 4) && words[5] === 0xffff;
+  const nat64 = words[0] === 0x0064 && words[1] === 0xff9b && allZero(words, 2, 5);
+  if (!mapped && !nat64) return null;
+  return [words[6] >> 8, words[6] & 0xff, words[7] >> 8, words[7] & 0xff];
+}
+
 function isBlockedIPv6(words) {
-  const allZero = (from, to) => {
-    for (let i = from; i <= to; i += 1) if (words[i] !== 0) return false;
-    return true;
-  };
-  if (allZero(0, 6) && words[7] === 1) return true; // ::1 loopback
-  if (allZero(0, 7)) return true; // :: unspecified
+  if (allZero(words, 0, 6) && words[7] === 1) return true; // ::1 loopback
+  if (allZero(words, 0, 7)) return true; // :: unspecified
   if ((words[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
   if ((words[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
   if ((words[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
-  if (words[0] === 0x0100 && allZero(1, 3)) return true; // 100::/64 discard-only
-  const ipv4Mapped = allZero(0, 4) && words[5] === 0xffff;
-  const nat64 = words[0] === 0x0064 && words[1] === 0xff9b && allZero(2, 5);
-  if (ipv4Mapped || nat64) {
-    return isBlockedIPv4([words[6] >> 8, words[6] & 0xff, words[7] >> 8, words[7] & 0xff]);
-  }
-  return false;
+  if (words[0] === 0x0100 && allZero(words, 1, 3)) return true; // 100::/64 discard-only
+  const embedded = embeddedIPv4(words);
+  // IPv4-mapped (::ffff:a.b.c.d) and NAT64 (64:ff9b::) carry an IPv4 address
+  // that inherits the IPv4 policy exactly.
+  return embedded === null ? false : isBlockedIPv4(embedded);
 }
 
 function isLoopbackAddress(address) {
-  const text = address.split("%")[0];
-  if (net.isIPv4(text)) return parseIPv4(text)[0] === 127;
+  const text = String(address).split("%")[0];
+  if (net.isIPv4(text)) {
+    const bytes = parseIPv4(text);
+    return bytes !== null && bytes[0] === 127;
+  }
   if (net.isIPv6(text)) {
     const words = expandIPv6(text);
-    return words !== null && words[0] === 0 && allButLastZero(words) && words[7] === 1;
+    if (words === null) return false;
+    if (allZero(words, 0, 6) && words[7] === 1) return true; // ::1
+    const embedded = embeddedIPv4(words);
+    return embedded !== null && embedded[0] === 127;
   }
   return false;
-}
-
-function allButLastZero(words) {
-  for (let i = 0; i < 7; i += 1) if (words[i] !== 0) return false;
-  return true;
 }
 
 function isBlockedAddress(address) {
@@ -539,6 +546,7 @@ module.exports = {
   MAX_REDIRECTS,
   MAX_TIMEOUT_MS,
   isBlockedAddress,
+  isLoopbackAddress,
   normalizeTimeout,
   redactUrl,
 };
