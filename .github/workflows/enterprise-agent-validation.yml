@@ -489,7 +489,13 @@ jobs:
             env=dict(os.environ)
             env.pop("COPILOT_GITHUB_TOKEN",None)
             env.pop("OPENCODE_EXCLUDED_PROVIDERS",None)
-            env["PATH"]=mock_bin+os.pathsep+env["PATH"]
+            env.pop("OPENCODE_BAD_MODELS",None)
+            env.pop("OPENCODE_RECOVERY_MODEL",None)
+            env.pop("OPENCODE_ROUTE_HINT",None)
+            env.pop("OPENCODE_RETRY_CURRENT_ROUTE",None)
+            env.pop("OPENCODE_ADVANCE_ROUTE",None)
+            env.pop("OC_MERGE_REQUESTED",None)
+            env["PATH"]="/usr/bin:/bin"
             env.update(OPENCODE_API_KEY="x", OPENROUTER_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                      OPENCODE_ROUTE_INDEX=route_index, GITHUB_ENV=os.path.join(d,"env"),
                      GITHUB_OUTPUT=os.path.join(d,"out"))
