@@ -1,7 +1,17 @@
+const net = require("node:net");
+const dns = require("node:dns");
+
 const DEFAULT_URL = "https://opencode.ai/docs/cli";
 const DEFAULT_TIMEOUT_MS = 10000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const MAX_LINKS_REPORTED = 20;
+// Node's setTimeout() stores delays in a signed 32-bit int: anything larger
+// fires after 1ms (TimeoutOverflowWarning), so a huge requested deadline would
+// silently become an immediate abort. This is the largest delay that survives.
+const MAX_TIMEOUT_MS = 2147483647;
+// Match the redirect chain length Node's fetch already enforced (probe: the
+// server observed 21 requests for a redirect loop, i.e. 20 hops followed).
+const MAX_REDIRECTS = 20;
 const UA = "nayla-simple-web-crawler/1.0 (+https://github.com/Jackie-SDX/Nayla-SD-JACKIE-Fun-WhatsApp-Bot)";
 
 function parseArgs(argv) {
