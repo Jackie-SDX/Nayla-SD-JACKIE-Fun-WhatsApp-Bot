@@ -481,9 +481,15 @@ jobs:
           assert "OpenCode V2" not in wf
           def pick(route_index, copilot):
             d=tempfile.mkdtemp()
+            mock_bin=os.path.join(d,"bin")
+            os.mkdir(mock_bin)
+            mock_opencode=os.path.join(mock_bin,"opencode")
+            Path(mock_opencode).write_text("#!/usr/bin/env bash\\nexit 127\\n")
+            os.chmod(mock_opencode,0o755)
             env=dict(os.environ)
             env.pop("COPILOT_GITHUB_TOKEN",None)
             env.pop("OPENCODE_EXCLUDED_PROVIDERS",None)
+            env["PATH"]=mock_bin+os.pathsep+env["PATH"]
             env.update(OPENCODE_API_KEY="x", OPENROUTER_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                      OPENCODE_ROUTE_INDEX=route_index, GITHUB_ENV=os.path.join(d,"env"),
                      GITHUB_OUTPUT=os.path.join(d,"out"))
