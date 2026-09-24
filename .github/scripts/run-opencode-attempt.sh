@@ -35,6 +35,9 @@ progress_log="$runner_temp/opencode-${attempt}-progress.log"
 fifo="$runner_temp/opencode-${attempt}.fifo"
 output_file="${GITHUB_OUTPUT:-/dev/null}"
 final_response_file="${RUNNER_TEMP:-/tmp}/opencode-final-response-${attempt}.md"
+plan_file="${RUNNER_TEMP:-/tmp}/opencode-plan-${attempt}.md"
+context_full="${OC_ISSUE_CONTEXT_FILE:-${RUNNER_TEMP:-/tmp}/oc-issue-context-full.md}"
+context_seed="${OC_ISSUE_CONTEXT_SEED_FILE:-${RUNNER_TEMP:-/tmp}/oc-issue-context-seed.md}"
 rm -f "$final_response_file"
 export OC_FINAL_RESPONSE_FILE="$final_response_file"
 controller_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -403,14 +406,21 @@ done < "$fifo" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "
 wait "$agent_pid"
 exit_code=$?
 
+if [[ "$exit_code" -eq 0 ]] && grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$safe_log"; then
+  provider_failure_kind="free-tier-context"
+  exit_code=75
+  echo "::warning title=OpenCode provider unavailable::A Zen free-tier context rejection was observed; skipping advisory gates and allowing the route classifier to advance."
+fi
+
 if [[ "$task_mode" == "code" && -n "$agent_cwd" ]]; then
   if [[ "$exit_code" -eq 0 || -n "$(git -C "$agent_cwd" status --porcelain 2>/dev/null)" ]]; then
+    review_request="${request:-${task_prompt:-${OC_COMMAND_TEXT:-}}}"
     mid_advisory="$runner_temp/gemini-advisory-$attempt-mid.md"
     phase_banner "GEMINI/MID" "Gemini reviews accumulated implementation evidence"
     GEMINI_ADVISORY_ATTEMPT="$attempt" \
       GEMINI_ADVISORY_PHASE="mid" \
       GEMINI_ADVISORY_PRIORITY="blocker" \
-      GEMINI_ADVISORY_REQUEST="$request" \
+      GEMINI_ADVISORY_REQUEST="$review_request" \
       GEMINI_PLAN_FILE="$plan_file" \
       GEMINI_CONTEXT_FILE="${context_full:-}" \
       GEMINI_WORKTREE="$agent_cwd" \
@@ -431,7 +441,7 @@ if [[ "$task_mode" == "code" && -n "$agent_cwd" ]]; then
       GEMINI_ADVISORY_ATTEMPT="$attempt" \
         GEMINI_ADVISORY_PHASE="final" \
         GEMINI_ADVISORY_PRIORITY="final" \
-        GEMINI_ADVISORY_REQUEST="$request" \
+        GEMINI_ADVISORY_REQUEST="$review_request" \
         GEMINI_PLAN_FILE="$plan_file" \
         GEMINI_CONTEXT_FILE="${context_full:-}" \
         GEMINI_WORKTREE="$agent_cwd" \
