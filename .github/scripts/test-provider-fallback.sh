@@ -49,7 +49,19 @@ env_primary="$tmp/env-primary"
 GITHUB_ENV="$env_primary" GITHUB_OUTPUT="$out_primary" OPENCODE_API_KEY=x OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free" bash "$script_dir/select-opencode-route.sh"
 grep -Fq "route=opencode/mimo-v2.6-flash-free" "$out_primary"
 
-echo "[model] MiMo 2.6 is first, Big Pickle remains second"
+echo "[model] MiMo 2.6 is first, Big Pickle is second"
+
+out_or="$tmp/out-or"
+env_or="$tmp/env-or"
+GITHUB_ENV="$env_or" GITHUB_OUTPUT="$out_or" OPENCODE_API_KEY=x OPENROUTER_API_KEY=test-router OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free" OPENCODE_ROUTE_INDEX=2 bash "$script_dir/select-opencode-route.sh"
+grep -Fq "route=openrouter/openrouter/free" "$out_or"
+
+out_cp="$tmp/out-cp"
+env_cp="$tmp/env-cp"
+GITHUB_ENV="$env_cp" GITHUB_OUTPUT="$out_cp" COPILOT_GITHUB_TOKEN=test-token OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free" OPENCODE_ROUTE_INDEX=3 bash "$script_dir/select-opencode-route.sh"
+grep -Fq "route=github-copilot/auto" "$out_cp"
+
+echo "[routing] MiMo -> Big Pickle -> OpenRouter -> Copilot"
 
 
 echo "[3/8] Zen context failure requests OpenRouter"
