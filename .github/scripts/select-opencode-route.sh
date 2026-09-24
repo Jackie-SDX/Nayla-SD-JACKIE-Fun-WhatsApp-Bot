@@ -185,15 +185,16 @@ if [[ -n "$recovery_model" && "$start" -gt 0 && "$recovery_model" == *"-free" &&
   exit 0
 fi
 
-if [[ "$route_hint" == "openrouter" && "$start" -gt 0 && "$start" -lt "$index" && -n "${OPENROUTER_API_KEY:-}" && ",$excluded," != *,openrouter,* ]]; then
-  select_route "$start" openrouter "openrouter/openrouter/free" "openrouter/openrouter/free"
+if (( start <= openrouter_index )) && [[ -n "${OPENROUTER_API_KEY:-}" && ",$excluded," != *,openrouter,* ]] && [[ "$route_hint" == "openrouter" || ",$excluded," == *,opencode,* || -z "${OPENCODE_API_KEY:-}" || "$start" == "$openrouter_index" ]]; then
+  select_route "$openrouter_index" openrouter "openrouter/openrouter/free" "openrouter/openrouter/free"
   if [[ -n "$GITHUB_ENV" ]]; then
     echo "OPENCODE_ROUTE_HINT=" >> "$GITHUB_ENV"
   fi
   exit 0
 fi
 
-copilot_index="$index"
+openrouter_index="$index"
+copilot_index="$((index + 1))"
 if (( start <= copilot_index )) && [[ ",$excluded," != *,github-copilot,* ]] && [[ -n "${COPILOT_GITHUB_TOKEN:-}" ]]; then
   select_route "$copilot_index" github-copilot auto github-copilot/auto
   exit 0
