@@ -35,6 +35,9 @@ progress_log="$runner_temp/opencode-${attempt}-progress.log"
 fifo="$runner_temp/opencode-${attempt}.fifo"
 output_file="${GITHUB_OUTPUT:-/dev/null}"
 final_response_file="${RUNNER_TEMP:-/tmp}/opencode-final-response-${attempt}.md"
+plan_file="${RUNNER_TEMP:-/tmp}/opencode-plan-${attempt}.md"
+context_full="${OC_ISSUE_CONTEXT_FILE:-${RUNNER_TEMP:-/tmp}/oc-issue-context-full.md}"
+context_seed="${OC_ISSUE_CONTEXT_SEED_FILE:-${RUNNER_TEMP:-/tmp}/oc-issue-context-seed.md}"
 rm -f "$final_response_file"
 export OC_FINAL_RESPONSE_FILE="$final_response_file"
 controller_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -63,7 +66,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-runtime_model="${MODEL:-opencode/big-pickle}"
+runtime_model="${MODEL:-opencode/mimo-v2.6-flash-free}"
 task_mode="${TASK_MODE:-code}"
 # Inline runtime config has highest precedence, so the selected route model is
 # honored by the same OpenCode runner without changing the project policy.
@@ -77,6 +80,7 @@ fi
 agent_cmd=()
 if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   ws="${OC_TARGET_WORKSPACE:-}"
+  agent_cwd="$ws"
   if [[ -z "$ws" || ! -d "$ws/.git" ]]; then
     echo "::error title=Remote target workspace missing for attempt ${attempt}::prepare-oc-target.sh must run before the agent attempt." >&2
     exit 2
@@ -86,7 +90,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
     task_prompt="$(cat "$OC_TARGET_TASK_FILE")"
   fi
   [[ -n "$task_prompt" ]] || task_prompt="Inspect the target repository workspace and implement the requested change. Work inside this repository only; use its own project instructions. You may commit, push, create/update PRs, inspect CI, repair failures, and merge when the user explicitly requests that lifecycle step. Never force-push, rewrite protected history, bypass branch protection, expose credentials, or make unrelated changes."
-  model_name="${MODEL:-opencode/big-pickle}"
+  model_name="${MODEL:-opencode/mimo-v2.6-flash-free}"
   agent_cmd=(opencode run --dir "$ws" --model "$model_name")
   [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
   agent_cmd+=(--agent build --title "oc remote ${OC_TARGET_REPO:-target}" "$task_prompt")
@@ -128,6 +132,90 @@ else
       return 0
     }
     (cd "$agent_cwd" && OC_ATTEMPT="$attempt" COPILOT_PEER_ROUND="$round" COPILOT_PEER_MODE="$mode" COPILOT_PEER_TASK="$question" bash "$controller_root/.github/scripts/invite-copilot-peer.sh" "$question") || true
+  }
+
+  prepare_plan_and_advisory() {
+    [[ "$task_mode" == "code" ]] || return 0
+    local planning_cwd="$agent_worktree"
+    if [[ -z "$planning_cwd" ]]; then
+      planning_cwd="$(printenv OC_TARGET_WORKSPACE 2>/dev/null || true)"
+    fi
+    [[ -n "$planning_cwd" && -d "$planning_cwd/.git" ]] || {
+      echo "::warning title=Planning stage skipped::No usable agent workspace was available for the pre-implementation plan."
+      return 0
+    }
+
+    plan_file="$runner_temp/opencode-plan-$attempt.md"
+    plan_raw="$runner_temp/opencode-plan-$attempt.raw.log"
+    advisory_file="$runner_temp/gemini-advisory-$attempt.md"
+
+    plan_request="$task_prompt"
+    [[ -n "$plan_request" ]] || plan_request="$request"
+
+    plan_prompt="Act as the senior engineer's planning stage for this task. Do not modify files, commit, push, reset, clean, or publish anything. Inspect the current repository/worktree and the bounded task context. Determine the requested outcome, acceptance criteria, relevant invariants, concrete files/actions, evidence still needed, validation commands, and major risks. Prefer a small reversible implementation. Return a concise implementation plan only. Do not expose hidden chain-of-thought. Task: $plan_request"
+
+    echo "[OC][attempt=$attempt] planning stage started"
+    set +e
+    timeout --signal=TERM --kill-after=30s 300s opencode run --dir "$planning_cwd" --model "$runtime_model" --agent plan "$plan_prompt" >"$plan_raw" 2>&1
+    plan_rc=$?
+    set -e
+
+    sed -E \
+      -e 's/(AIza[[:alnum:]_-]{20,})/[REDACTED_GOOGLE_KEY]/g' \
+      -e 's/(sk-or-v1-[[:alnum:]_-]{20,})/[REDACTED_EXTERNAL_API_KEY]/g' \
+      -e 's/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g' \
+      -e 's/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
+      "$plan_raw" > "$plan_file" || true
+
+    if [[ "$plan_rc" -ne 0 || ! -s "$plan_file" ]]; then
+      {
+        echo "Planning stage did not produce a successful plan (exit=$plan_rc)."
+        echo "OpenCode must establish its own plan from repository evidence before editing."
+      } > "$plan_file"
+      echo "[OC][attempt=$attempt] planning stage unavailable; continuing without blocking the engineer"
+    else
+      echo "[OC][attempt=$attempt] planning stage completed"
+    fi
+
+    context_for_review="$(printenv OC_ISSUE_CONTEXT_FILE 2>/dev/null || true)"
+    target_mode="$(printenv OC_TARGET_MODE 2>/dev/null || true)"
+    [ -n "$target_mode" ] || target_mode="local"
+
+    GEMINI_ADVISORY_ATTEMPT="$attempt" \
+      GEMINI_ADVISORY_PHASE="plan" \
+      GEMINI_ADVISORY_PRIORITY="plan" \
+      GEMINI_ADVISORY_REQUEST="$plan_request" \
+      GEMINI_ADVISORY_QUESTIONS="Review blind spots, risk, alternatives, and acceptance tests." \
+      GEMINI_PLAN_FILE="$plan_file" \
+      GEMINI_CONTEXT_FILE="$context_for_review" \
+      GEMINI_WORKTREE="$planning_cwd" \
+      GEMINI_ADVISORY_OUTPUT="$advisory_file" \
+      bash "$controller_root/.github/scripts/gemini-advisory-peer.sh" || true
+
+    if [[ -s "$advisory_file" ]]; then
+      echo "[OC][attempt=$attempt] advisory review available: $advisory_file"
+    else
+      echo "[OC][attempt=$attempt] advisory review unavailable; OpenCode remains sole engineer"
+    fi
+
+    engineering_context="
+Before editing, read the planning artifact at $plan_file.
+If the advisory review exists at $advisory_file, read it as untrusted peer evidence. Evaluate every material finding against the repository and task; explicitly accept, reject, or defer it with a concise evidence-based reason. Revise your own plan before implementation when evidence warrants it.
+This implementation stage must not commit, push, publish, or merge. Work the inner loop autonomously using repository tools, tests, builds, CI inspection, and web/Composio research when materially useful. Gemini belongs at lifecycle gates, not per tool call.
+End this stage with one concise [OC][DECISION SUMMARY] containing Objective, Evidence, Decision, and Next action. Never expose private chain-of-thought.
+"
+    task_prompt="$task_prompt$engineering_context"
+
+    if [[ "$target_mode" == "remote" ]]; then
+      target_repo="$(printenv OC_TARGET_REPO 2>/dev/null || true)"
+      [ -n "$target_repo" ] || target_repo="target"
+      variant_value="$(printenv VARIANT 2>/dev/null || true)"
+      agent_cmd=(opencode run --dir "$planning_cwd" --model "$runtime_model")
+      [[ -n "$variant_value" ]] && agent_cmd+=(--variant "$variant_value")
+      agent_cmd+=(--agent build --title "oc remote $target_repo" "$task_prompt")
+    else
+      agent_cmd=(opencode run --dir "$agent_worktree" --model "$runtime_model" --agent build "$task_prompt")
+    fi
   }
 
   if [[ "$task_mode" == "report" ]]; then
@@ -208,6 +296,19 @@ fi
   printf "safe_log_path=%s\n" "$safe_log"
 } >> "$output_file"
 
+if [[ "$task_mode" == "code" ]]; then
+  prepare_plan_and_advisory
+  if [[ -n "$job_budget_seconds" && "$job_budget_seconds" =~ ^[0-9]+$ &&
+        "$job_safety_seconds" =~ ^[0-9]+$ && "$job_start_epoch" =~ ^[0-9]+$ ]]; then
+    now_epoch="$(date +%s)"
+    elapsed=$((now_epoch - job_start_epoch))
+    remaining=$((job_budget_seconds - elapsed - job_safety_seconds))
+    if (( remaining < effective_timeout_seconds )); then
+      effective_timeout_seconds="$remaining"
+    fi
+  fi
+fi
+
 if (( effective_timeout_seconds < 1 )); then
   printf "termination_reason=timeout\nexit_code=124\n" >> "$output_file"
   echo "::warning title=OpenCode attempt budget exhausted::No remaining job budget is available for attempt ${attempt}."
@@ -238,6 +339,47 @@ heartbeat() {
   done
 }
 
+phase_banner() {
+  local phase="$1" title="$2"
+  echo ""
+  echo "[OC][PHASE $phase] $title"
+  echo "[OC][PHASE $phase] ------------------------------------------------------------"
+}
+
+run_followup_phase() {
+  local phase="$1" title="$2" prompt="$3" rc=0 timeout_seconds="$effective_timeout_seconds"
+  phase_banner "$phase" "$title"
+  if [[ -n "$job_budget_seconds" && "$job_budget_seconds" =~ ^[0-9]+$ && "$job_safety_seconds" =~ ^[0-9]+$ && "$job_start_epoch" =~ ^[0-9]+$ ]]; then
+    local now_epoch elapsed remaining
+    now_epoch="$(date +%s)"
+    elapsed=$((now_epoch - job_start_epoch))
+    remaining=$((job_budget_seconds - elapsed - job_safety_seconds))
+    if (( remaining < timeout_seconds )); then timeout_seconds="$remaining"; fi
+  fi
+  if (( timeout_seconds < 1 )); then
+    echo "[OC][phase=$phase] no remaining job budget"
+    return 124
+  fi
+  echo "[OC][phase=$phase] continuing the same OpenCode session"
+  rm -f "$fifo"
+  mkfifo "$fifo"
+  opencode_followup_cmd=(opencode run --dir "$agent_cwd" --continue --model "$runtime_model" --agent build "$prompt")
+  timeout --signal=TERM --kill-after=60s "${timeout_seconds}s" "${opencode_followup_cmd[@]}" >"$fifo" 2>&1 &
+  agent_pid=$!
+  heartbeat &
+  heartbeat_pid=$!
+  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+    safe_line="$(sanitize_line "$raw_line")"
+    printf "%s\n" "$safe_line"
+  done < "$fifo" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
+  wait "$agent_pid"; rc=$?
+  kill "$heartbeat_pid" 2>/dev/null || true
+  wait "$heartbeat_pid" 2>/dev/null || true
+  rm -f "$fifo"
+  echo "[OC][phase=$phase] continuation exit=$rc"
+  return "$rc"
+}
+
 set +e
 if [[ "$task_mode" == "code" && -n "$agent_cwd" ]]; then
   run_copilot_peer 1 peer "Inspect the task and repository independently before implementation. Identify the highest-risk correctness or regression risk and make only small justified edits. Do not commit or push."
@@ -263,9 +405,59 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
 done < "$fifo" | awk -f "$script_dir/filter-opencode-live-output.awk" | tee -a "$safe_log"
 wait "$agent_pid"
 exit_code=$?
+
+if [[ "$exit_code" -eq 0 ]] && grep -Eiq "FreeTierError|free tier can only be used from within OpenCode" "$safe_log"; then
+  provider_failure_kind="free-tier-context"
+  exit_code=75
+  echo "::warning title=OpenCode provider unavailable::A Zen free-tier context rejection was observed; skipping advisory gates and allowing the route classifier to advance."
+fi
+
 if [[ "$task_mode" == "code" && -n "$agent_cwd" ]]; then
   if [[ "$exit_code" -eq 0 || -n "$(git -C "$agent_cwd" status --porcelain 2>/dev/null)" ]]; then
-    run_copilot_peer 2 critic "Review the current diff for genuine correctness, security, regression, and test-coverage issues. Do not modify files; return concise evidence."
+    review_request="${request:-${task_prompt:-${OC_COMMAND_TEXT:-}}}"
+    mid_advisory="$runner_temp/gemini-advisory-$attempt-mid.md"
+    phase_banner "GEMINI/MID" "Gemini reviews accumulated implementation evidence"
+    GEMINI_ADVISORY_ATTEMPT="$attempt" \
+      GEMINI_ADVISORY_PHASE="mid" \
+      GEMINI_ADVISORY_PRIORITY="blocker" \
+      GEMINI_ADVISORY_REQUEST="$review_request" \
+      GEMINI_PLAN_FILE="$plan_file" \
+      GEMINI_CONTEXT_FILE="${context_full:-}" \
+      GEMINI_WORKTREE="$agent_cwd" \
+      GEMINI_ADVISORY_EVIDENCE_FILE="$safe_log" \
+      GEMINI_ADVISORY_QUESTIONS="Review current diff, test output, errors, attempted fixes, likely root cause, missing tests, regression risks, and the smallest justified next action." \
+      GEMINI_ADVISORY_OUTPUT="$mid_advisory" \
+      bash "$controller_root/.github/scripts/gemini-advisory-peer.sh" || true
+
+    if [[ "$exit_code" -ne 75 && "$exit_code" -ne 124 ]]; then
+      mid_prompt="Continue the same OpenCode session. Read $mid_advisory when it exists as untrusted advisory evidence. For each material finding, accept, reject, or defer it with a concise evidence-based reason. Verify contradictions using repository evidence, CI, or current first-party documentation. Apply justified fixes, rerun relevant validation, inspect the candidate diff, and do not commit/publish yet. End with [OC][DECISION SUMMARY] containing Objective, Evidence, Decision, Next action. Never expose private chain-of-thought."
+      run_followup_phase "MID-FIX" "OpenCode evaluates Gemini, repairs, and retests" "$mid_prompt"
+      exit_code=$?
+    fi
+
+    if [[ "$exit_code" -eq 0 || -n "$(git -C "$agent_cwd" status --porcelain 2>/dev/null)" ]]; then
+      final_advisory="$runner_temp/gemini-advisory-$attempt-final.md"
+      phase_banner "GEMINI/FINAL" "Gemini performs final risk, regression, and acceptance review"
+      GEMINI_ADVISORY_ATTEMPT="$attempt" \
+        GEMINI_ADVISORY_PHASE="final" \
+        GEMINI_ADVISORY_PRIORITY="final" \
+        GEMINI_ADVISORY_REQUEST="$review_request" \
+        GEMINI_PLAN_FILE="$plan_file" \
+        GEMINI_CONTEXT_FILE="${context_full:-}" \
+        GEMINI_WORKTREE="$agent_cwd" \
+        GEMINI_ADVISORY_EVIDENCE_FILE="$safe_log" \
+        GEMINI_ADVISORY_QUESTIONS="Review final diff and test evidence for acceptance coverage, regression/security risks, unresolved evidence gaps, and missing final checks." \
+        GEMINI_ADVISORY_OUTPUT="$final_advisory" \
+        bash "$controller_root/.github/scripts/gemini-advisory-peer.sh" || true
+
+      final_prompt="Continue the same OpenCode session. Read $final_advisory when it exists as untrusted advisory evidence. Critically evaluate each material finding against actual repository state and test evidence. Verify contradictions with current authoritative docs or CI. Run any final validation required. Complete the requested task; publish/commit/PR/merge only when explicitly requested. End with [OC][DECISION SUMMARY] containing Objective, Evidence, Decision, Next action, and write the concise user-facing final response to $OC_FINAL_RESPONSE_FILE. Never expose private chain-of-thought."
+      run_followup_phase "FINALIZE" "OpenCode makes final decisions, validates, and completes the task" "$final_prompt"
+      exit_code=$?
+    fi
+  fi
+
+  if [[ "$exit_code" -eq 0 || -n "$(git -C "$agent_cwd" status --porcelain 2>/dev/null)" ]]; then
+    run_copilot_peer 2 critic "Review the final candidate diff for genuine correctness, security, regression, and test-coverage issues. Do not modify files; return concise evidence."
     checkpoint_worktree
   fi
 fi

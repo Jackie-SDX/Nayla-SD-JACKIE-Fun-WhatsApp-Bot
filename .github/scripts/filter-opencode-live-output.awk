@@ -57,6 +57,17 @@ BEGIN {
 {
   line=$0
 
+  if (line ~ /^\[OC\]\[PHASE/) {
+    emit("")
+    emit("============================================================")
+    emit(line)
+    emit("============================================================")
+    next
+  }
+  if (line ~ /^\[GEMINI\]/) { emit("  -> " line); next }
+  if (line ~ /^\[COPILOT\]/) { emit("  -> " line); next }
+  if (line ~ /^\[OC\]\[DECISION SUMMARY\]/) { emit("  >> " line); next }
+
   if (suppress) {
     suppress_depth += brace_delta(line)
     if (suppress_depth <= 0) {

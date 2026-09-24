@@ -84,6 +84,22 @@ jobs:
       OPENCODE_AGENT_TIMEOUT_MINUTES: "350"
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+      GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
+      GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
+      GEMINI_ADVISORY_MODEL: ${{ vars.GEMINI_ADVISORY_MODEL || 'gemini-3.8-flash' }}
+      GEMINI_ADVISORY_MODELS: ${{ vars.GEMINI_ADVISORY_MODELS || 'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite' }}
+      GEMINI_ADVISORY_MAX_CALLS: "5"
+      GEMINI_ADVISORY_MIN_INTERVAL_SECONDS: "12"
+      GEMINI_ADVISORY_PROVIDER_ORDER: "gemini,groq,openrouter"
+      GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
+      GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
+      GROQ_API_KEY_3: ${{ secrets.GROQ_API_KEY_3 }}
+      GROQ_API_KEY_4: ${{ secrets.GROQ_API_KEY_4 }}
+      GROQ_API_KEY_5: ${{ secrets.GROQ_API_KEY_5 }}
+      GROQ_ADVISORY_MODEL: ${{ vars.GROQ_ADVISORY_MODEL || 'openai/gpt-oss-20b' }}
       OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.6-flash-free' }}
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}

@@ -437,12 +437,17 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import json
+          wf=Path(".github/workflows/opencode.yml").read_text()
           cfg=json.loads(Path("opencode.json").read_text())
           bash=cfg["permission"]["bash"]
-          assert cfg["model"]=="opencode/big-pickle"
+          assert cfg["model"]=="opencode/mimo-v2.6-flash-free"
           assert cfg["share"]=="disabled"
           assert cfg["permission"]["external_directory"]=="allow"
           assert cfg["permission"]["doom_loop"]=="allow"
+          assert "GEMINI_API_KEY_1:" in wf and "GEMINI_API_KEY_5:" in wf
+          assert "GROQ_API_KEY_1:" in wf and "GROQ_API_KEY_5:" in wf
+          assert "GEMINI_ADVISORY_MODEL:" in wf and "GEMINI_ADVISORY_MAX_CALLS:" in wf
+          assert "GEMINI_ADVISORY_PROVIDER_ORDER:" in wf
           assert "git commit *" not in bash
           assert "git commit" not in bash
           assert "git push *" not in bash
@@ -476,39 +481,51 @@ jobs:
           assert "OpenCode V2" not in wf
           def pick(route_index, copilot):
             d=tempfile.mkdtemp()
+            mock_bin=os.path.join(d,"bin")
+            os.mkdir(mock_bin)
+            mock_opencode=os.path.join(mock_bin,"opencode")
+            Path(mock_opencode).write_text("#!/usr/bin/env bash\\nexit 127\\n")
+            os.chmod(mock_opencode,0o755)
             env=dict(os.environ)
             env.pop("COPILOT_GITHUB_TOKEN",None)
             env.pop("OPENCODE_EXCLUDED_PROVIDERS",None)
-            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
+            env.pop("OPENCODE_BAD_MODELS",None)
+            env.pop("OPENCODE_RECOVERY_MODEL",None)
+            env.pop("OPENCODE_ROUTE_HINT",None)
+            env.pop("OPENCODE_RETRY_CURRENT_ROUTE",None)
+            env.pop("OPENCODE_ADVANCE_ROUTE",None)
+            env.pop("OC_MERGE_REQUESTED",None)
+            env["PATH"]="/usr/bin:/bin"
+            env.update(OPENCODE_API_KEY="x", OPENROUTER_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                      OPENCODE_ROUTE_INDEX=route_index, GITHUB_ENV=os.path.join(d,"env"),
                      GITHUB_OUTPUT=os.path.join(d,"out"))
             if copilot:
               env["COPILOT_GITHUB_TOKEN"]=copilot
             subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
             return Path(os.path.join(d,"out")).read_text()
-          assert "route=opencode/big-pickle" in pick("",None)
-          assert "route=opencode/mimo-v2.6-flash-free" in pick("1",None)
-          assert "route=github-copilot/auto" in pick("2","y")
-          assert "route=none" in pick("2",None)
-          assert "route=none" in pick("3","y")
+          assert "route=opencode/mimo-v2.6-flash-free" in pick("",None)
+          assert "route=opencode/big-pickle" in pick("1",None)
+          assert "route=openrouter/openrouter/free" in pick("2",None)
+          assert "route=github-copilot/auto" in pick("3","y")
+          assert "route=none" in pick("4",None)
           # Legacy retry and the explicit advance flag must both move forward;
           # neither is allowed to restart the same model route.
           d=tempfile.mkdtemp()
           env=dict(os.environ)
           env.pop("COPILOT_GITHUB_TOKEN",None)
           env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
-                     OPENCODE_ROUTE_INDEX="0", OPENCODE_RETRY_CURRENT_ROUTE="1",
+                     OPENROUTER_API_KEY="x", OPENCODE_ROUTE_INDEX="0", OPENCODE_RETRY_CURRENT_ROUTE="1",
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
-          assert "route=opencode/mimo-v2.6-flash-free" in Path(os.path.join(d,"out")).read_text()
+          assert "route=opencode/big-pickle" in Path(os.path.join(d,"out")).read_text()
           d=tempfile.mkdtemp()
           env=dict(os.environ)
           env.pop("COPILOT_GITHUB_TOKEN",None)
           env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
-                     OPENCODE_ROUTE_INDEX="0", OPENCODE_ADVANCE_ROUTE="1",
+                     OPENROUTER_API_KEY="x", OPENCODE_ROUTE_INDEX="0", OPENCODE_ADVANCE_ROUTE="1",
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
-          assert "route=opencode/mimo-v2.6-flash-free" in Path(os.path.join(d,"out")).read_text()
+          assert "route=opencode/big-pickle" in Path(os.path.join(d,"out")).read_text()
           # Bad-model memory (audit item 6): a freshly recorded failed model is
           # skipped at index 0 so the next lane is selected; an expired entry
           # is ignored and the recorded model stays first. Only a fresh record
@@ -524,14 +541,14 @@ jobs:
                        GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
             subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
             return Path(os.path.join(d,"out")).read_text(), Path(os.path.join(d,"env")).read_text()
-          out_txt, env_txt = pick_bad("big-pickle=%d" % now)
-          assert "route=opencode/mimo-v2.6-flash-free" in out_txt, "fresh bad-model must be skipped"
-          assert "OPENCODE_ROUTE_INDEX=1" in env_txt, "ladder index must advance past a fresh bad-model"
-          out_txt, env_txt = pick_bad("big-pickle=%d" % (now - 25*3600))
-          assert "route=opencode/big-pickle" in out_txt, "expired bad-model must be ignored"
+          out_txt, env_txt = pick_bad("mimo-v2.6-flash-free=%d" % now)
+          assert "route=opencode/big-pickle" in out_txt, "fresh primary bad-model must be skipped"
+          assert "OPENCODE_ROUTE_INDEX=1" in env_txt, "ladder index must advance past a fresh primary bad-model"
+          out_txt, env_txt = pick_bad("mimo-v2.6-flash-free=%d" % (now - 25*3600))
+          assert "route=opencode/mimo-v2.6-flash-free" in out_txt, "expired bad-model must be ignored"
           assert "OPENCODE_ROUTE_INDEX=0" in env_txt, "expired bad-model must not move the ladder"
           print("routing/cache contract: OK")
-          print("model ladder (big-pickle->mimo->copilot->none): OK")
+          print("model ladder (mimo->big-pickle->openrouter->copilot->none): OK")
           PY
 
       - name: Validate enterprise recovery controls

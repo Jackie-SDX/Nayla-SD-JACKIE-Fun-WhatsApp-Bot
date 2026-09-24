@@ -32,6 +32,29 @@ recovery_model="${OPENCODE_RECOVERY_MODEL:-}"
 route_hint="${OPENCODE_ROUTE_HINT:-}"
 IFS=',' read -r -a models <<< "$models_csv"
 
+# Keep the requested primary/secondary stable even when the workflow's historical
+# CSV default is older. Additional discovered/configured free models remain in
+# their existing order after the preferred pair.
+preferred_models=("mimo-v2.6-flash-free" "big-pickle")
+ordered_models=()
+for preferred in "${preferred_models[@]}"; do
+  for candidate in "${models[@]}"; do
+    if [[ "$candidate" == "$preferred" ]]; then
+      ordered_models+=( "$candidate" )
+      break
+    fi
+  done
+done
+for candidate in "${models[@]}"; do
+  [[ -n "$candidate" ]] || continue
+  seen=false
+  for existing in "${ordered_models[@]}"; do
+    [[ "$candidate" == "$existing" ]] && { seen=true; break; }
+  done
+  [[ "$seen" == "true" ]] || ordered_models+=( "$candidate" )
+done
+models=( "${ordered_models[@]}" )
+
 refresh_free_models() {
   local catalog line model base found_any=false
   command -v opencode >/dev/null 2>&1 || return 0
@@ -162,15 +185,16 @@ if [[ -n "$recovery_model" && "$start" -gt 0 && "$recovery_model" == *"-free" &&
   exit 0
 fi
 
-if [[ "$route_hint" == "openrouter" && "$start" -gt 0 && "$start" -lt "$index" && -n "${OPENROUTER_API_KEY:-}" && ",$excluded," != *,openrouter,* ]]; then
-  select_route "$start" openrouter "openrouter/openrouter/free" "openrouter/openrouter/free"
+openrouter_index="$index"
+if (( start <= openrouter_index )) && [[ -n "${OPENROUTER_API_KEY:-}" && ",$excluded," != *,openrouter,* ]] && [[ "$route_hint" == "openrouter" || ",$excluded," == *,opencode,* || -z "${OPENCODE_API_KEY:-}" || "$start" == "$openrouter_index" ]]; then
+  select_route "$openrouter_index" openrouter "openrouter/openrouter/free" "openrouter/openrouter/free"
   if [[ -n "$GITHUB_ENV" ]]; then
     echo "OPENCODE_ROUTE_HINT=" >> "$GITHUB_ENV"
   fi
   exit 0
 fi
 
-copilot_index="$index"
+copilot_index="$((index + 1))"
 if (( start <= copilot_index )) && [[ ",$excluded," != *,github-copilot,* ]] && [[ -n "${COPILOT_GITHUB_TOKEN:-}" ]]; then
   select_route "$copilot_index" github-copilot auto github-copilot/auto
   exit 0
