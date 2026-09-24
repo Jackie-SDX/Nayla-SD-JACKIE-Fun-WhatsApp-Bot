@@ -276,4 +276,4 @@ Stable contract names retained for validators and operators:
 - The **Ultimate agentic operating standard** is the governing control-plane model: autonomous execution with evidence, bounded budgets, reversible recovery and truthful reporting.
 - A zero process exit, model narrative, generated PR, or intermediate green state is not itself proof of completion.
 - Keep an evidence ledger for consequential claims: claim, exact command/tool/source, observed result, and verification state.
-- Do not reintroduce historical three-strike or other arbitrary retry ideology; diagnose failures and use the actual time/safety budgets plus evidence-backed bounded recovery controls.
+- Do not reintroduce historical fixed retry-count or other arbitrary retry ideology; diagnose failures and use the actual time/safety budgets plus evidence-backed bounded recovery controls.
