@@ -193,6 +193,184 @@ function resolveBase(html, url) {
   return url;
 }
 
+function redactUrl(value) {
+  // Any URL echoed in a message or in the report must never carry userinfo:
+  // undici itself leaks it ("Request cannot be constructed from a URL that
+  // includes credentials: http://user:pass@host"), so we pre-empt that path.
+  try {
+    const parsed = value instanceof URL ? value : new URL(String(value));
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.toString();
+  } catch {
+    return String(value).replace(/\/\/[^/@\s]*@/g, "//");
+  }
+}
+
+function normalizeTimeout(timeoutMs) {
+  const value = Number(timeoutMs);
+  if (Number.isNaN(value)) throw new Error(`invalid timeout: ${timeoutMs}`);
+  if (value <= 0) throw new Error(`invalid timeout: ${timeoutMs}`);
+  if (!Number.isFinite(value)) return MAX_TIMEOUT_MS;
+  return Math.min(Math.floor(value), MAX_TIMEOUT_MS);
+}
+
+function parseIPv4(address) {
+  const parts = address.split(".");
+  if (parts.length !== 4) return null;
+  const bytes = [];
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return null;
+    const octet = Number(part);
+    if (octet > 255) return null;
+    bytes.push(octet);
+  }
+  return bytes;
+}
+
+function isBlockedIPv4(bytes) {
+  const [a, b, c] = bytes;
+  if (a === 0) return true; // 0.0.0.0/8 this-network
+  if (a === 10) return true; // 10.0.0.0/8 private
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+  if (a === 127) return true; // 127.0.0.0/8 loopback
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local + cloud metadata
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
+  if (a === 192 && b === 0 && c === 0) return true; // 192.0.0.0/24 IETF assignments
+  if (a === 192 && b === 0 && c === 2) return true; // TEST-NET-1
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
+  if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmarking
+  if (a === 198 && b === 51 && c === 100) return true; // TEST-NET-2
+  if (a === 203 && b === 0 && c === 113) return true; // TEST-NET-3
+  if (a >= 224) return true; // 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, broadcast
+  return false;
+}
+
+function expandIPv6(address) {
+  let text = address;
+  const zone = text.indexOf("%");
+  if (zone !== -1) text = text.slice(0, zone);
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const toWords = (part) => {
+    if (!part) return [];
+    const words = [];
+    for (const segment of part.split(":")) {
+      if (segment.includes(".")) {
+        const bytes = parseIPv4(segment);
+        if (!bytes) return null;
+        words.push((bytes[0] << 8) | bytes[1], (bytes[2] << 8) | bytes[3]);
+        continue;
+      }
+      if (!/^[0-9a-f]{1,4}$/i.test(segment)) return null;
+      words.push(parseInt(segment, 16));
+    }
+    return words;
+  };
+  const head = toWords(halves[0]);
+  if (head === null) return null;
+  if (halves.length === 1) return head.length === 8 ? head : null;
+  const tail = toWords(halves[1]);
+  if (tail === null) return null;
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0) return null;
+  const words = head.concat(new Array(missing).fill(0), tail);
+  return words.length === 8 ? words : null;
+}
+
+function isBlockedIPv6(words) {
+  const allZero = (from, to) => {
+    for (let i = from; i <= to; i += 1) if (words[i] !== 0) return false;
+    return true;
+  };
+  if (allZero(0, 6) && words[7] === 1) return true; // ::1 loopback
+  if (allZero(0, 7)) return true; // :: unspecified
+  if ((words[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+  if ((words[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((words[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  if (words[0] === 0x0100 && allZero(1, 3)) return true; // 100::/64 discard-only
+  const ipv4Mapped = allZero(0, 4) && words[5] === 0xffff;
+  const nat64 = words[0] === 0x0064 && words[1] === 0xff9b && allZero(2, 5);
+  if (ipv4Mapped || nat64) {
+    return isBlockedIPv4([words[6] >> 8, words[6] & 0xff, words[7] >> 8, words[7] & 0xff]);
+  }
+  return false;
+}
+
+function isLoopbackAddress(address) {
+  const text = address.split("%")[0];
+  if (net.isIPv4(text)) return parseIPv4(text)[0] === 127;
+  if (net.isIPv6(text)) {
+    const words = expandIPv6(text);
+    return words !== null && words[0] === 0 && allButLastZero(words) && words[7] === 1;
+  }
+  return false;
+}
+
+function allButLastZero(words) {
+  for (let i = 0; i < 7; i += 1) if (words[i] !== 0) return false;
+  return true;
+}
+
+function isBlockedAddress(address) {
+  // Fail closed: anything we cannot positively classify as a public unicast
+  // address is treated as a blocked destination.
+  const text = String(address).split("%")[0];
+  if (net.isIPv4(text)) {
+    const bytes = parseIPv4(text);
+    return bytes === null ? true : isBlockedIPv4(bytes);
+  }
+  if (net.isIPv6(text)) {
+    const words = expandIPv6(text);
+    return words === null ? true : isBlockedIPv6(words);
+  }
+  return true;
+}
+
+function isRedirectStatus(status) {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+function cancelBody(response) {
+  // Redirect responses are never read; cancel them so a redirect chain cannot
+  // pin sockets or accumulate unread bodies across hops.
+  if (!response.body) return Promise.resolve();
+  return response.body.cancel().catch(() => {});
+}
+
+async function assertDestinationAllowed(target, signal, allowLoopback) {
+  if (!/^https?:$/.test(target.protocol)) {
+    throw new Error(`unsupported protocol: ${target.protocol}`);
+  }
+  if (target.username || target.password) {
+    throw new Error(`URLs with embedded credentials are not supported: ${redactUrl(target)}`);
+  }
+  const hostname = target.hostname.replace(/^\[|\]$/g, "");
+  const addresses = [];
+  if (net.isIP(hostname)) {
+    addresses.push(hostname);
+  } else {
+    let resolved;
+    try {
+      resolved = await dns.promises.lookup(hostname, { all: true });
+    } catch (error) {
+      throw new Error(`could not resolve host ${hostname}: ${error.code || error.message}`);
+    }
+    if (!Array.isArray(resolved) || resolved.length === 0) {
+      throw new Error(`could not resolve host ${hostname}`);
+    }
+    addresses.push(...resolved.map((entry) => entry.address));
+  }
+  for (const address of addresses) {
+    if (!isBlockedAddress(address)) continue;
+    if (allowLoopback && isLoopbackAddress(address)) continue;
+    throw new Error(
+      `blocked destination ${address} for ${redactUrl(target)}: non-public address`,
+    );
+  }
+  if (signal.aborted) throw new Error("aborted");
+}
+
 async function readBodyWithLimit(response, maxBytes) {
   // Streams the response so the caller can bound memory usage; Node's global
   // fetch (undici) enforces no response size limit by default.
@@ -217,35 +395,100 @@ async function readBodyWithLimit(response, maxBytes) {
   return { text, bytes: total };
 }
 
-async function crawl(urlString, timeoutMs, maxBytes = MAX_RESPONSE_BYTES) {
-  let url;
+// The deadline signal cannot interrupt name resolution (dns.lookup takes no
+// AbortSignal), so race the destination check against it: a stalled resolver
+// must still honour the caller's deadline instead of hanging forever.
+function raceDeadline(promise, signal, makeError) {
+  if (signal.aborted) return Promise.reject(makeError());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(makeError());
+    signal.addEventListener("abort", onAbort, { once: true });
+    const settle = (fn) => (value) => {
+      signal.removeEventListener("abort", onAbort);
+      fn(value);
+    };
+    promise.then(settle(resolve), settle(reject));
+  });
+}
+
+async function crawl(urlString, timeoutMs, maxBytes = MAX_RESPONSE_BYTES, options = {}) {
+  // Narrow opt-out for deterministic local fixtures (every fixture binds
+  // 127.0.0.1). It only ever relaxes the loopback rule: RFC1918, link-local
+  // and cloud-metadata destinations stay blocked unconditionally.
+  const allowLoopback = options.allowLoopback === true;
+  let initialUrl;
   try {
-    url = new URL(urlString);
+    initialUrl = new URL(urlString);
   } catch {
-    throw new Error(`invalid URL: ${urlString}`);
+    throw new Error(`invalid URL: ${redactUrl(urlString)}`);
   }
-  if (!/^https?:$/.test(url.protocol)) {
-    throw new Error(`unsupported protocol: ${url.protocol}`);
+  if (!/^https?:$/.test(initialUrl.protocol)) {
+    throw new Error(`unsupported protocol: ${initialUrl.protocol}`);
   }
+  const budget = normalizeTimeout(timeoutMs);
+
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), budget);
   const startedAt = Date.now();
+  const deadlineError = () => new Error(`timed out after ${budget}ms fetching ${redactUrl(initialUrl)}`);
+  let url = initialUrl;
   let response;
   let body;
   let bytes;
   try {
-    response = await fetch(url.toString(), {
-      headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
-      redirect: "follow",
-      signal: controller.signal,
-    });
+    await raceDeadline(
+      assertDestinationAllowed(url, controller.signal, allowLoopback),
+      controller.signal,
+      deadlineError,
+    );
+    let hops = 0;
+    for (;;) {
+      response = await fetch(url.toString(), {
+        headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      if (!isRedirectStatus(response.status)) break;
+      const location = response.headers.get("location");
+      let next = null;
+      if (location) {
+        try {
+          next = new URL(location, url);
+        } catch {
+          next = null;
+        }
+      }
+      // A redirect with no usable Location is returned as-is so the existing
+      // !response.ok path reports "HTTP 302 ..." exactly as before.
+      if (!next) {
+        await cancelBody(response);
+        break;
+      }
+      await cancelBody(response);
+      if (hops >= MAX_REDIRECTS) {
+        throw new Error(
+          `too many redirects (maximum ${MAX_REDIRECTS}) fetching ${redactUrl(initialUrl)}`,
+        );
+      }
+      if (!/^https?:$/.test(next.protocol)) {
+        throw new Error(`unsupported redirect protocol: ${next.protocol}`);
+      }
+      // Re-validate every hop: a public URL may redirect onto an internal one.
+      await raceDeadline(
+        assertDestinationAllowed(next, controller.signal, allowLoopback),
+        controller.signal,
+        deadlineError,
+      );
+      url = next;
+      hops += 1;
+    }
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText} for ${url}`);
+      throw new Error(`HTTP ${response.status} ${response.statusText} for ${redactUrl(initialUrl)}`);
     }
     ({ text: body, bytes } = await readBodyWithLimit(response, maxBytes));
   } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error(`timed out after ${timeoutMs}ms fetching ${url}`);
+    if (error.name === "AbortError" || controller.signal.aborted) {
+      throw deadlineError();
     }
     throw error;
   } finally {
@@ -257,8 +500,8 @@ async function crawl(urlString, timeoutMs, maxBytes = MAX_RESPONSE_BYTES) {
   const meta = extractMeta(body);
   return {
     fetchedAt: new Date().toISOString(),
-    fetchedFrom: url.toString(),
-    finalUrl: response.url || url.toString(),
+    fetchedFrom: redactUrl(initialUrl),
+    finalUrl: redactUrl(response.url || url.toString()),
     status: response.status,
     contentType: response.headers.get("content-type") || "",
     bytes,
@@ -288,4 +531,14 @@ if (typeof module !== "undefined" && require.main === module) {
   });
 }
 
-module.exports = { crawl, DEFAULT_URL, DEFAULT_TIMEOUT_MS, MAX_RESPONSE_BYTES };
+module.exports = {
+  crawl,
+  DEFAULT_URL,
+  DEFAULT_TIMEOUT_MS,
+  MAX_RESPONSE_BYTES,
+  MAX_REDIRECTS,
+  MAX_TIMEOUT_MS,
+  isBlockedAddress,
+  normalizeTimeout,
+  redactUrl,
+};
