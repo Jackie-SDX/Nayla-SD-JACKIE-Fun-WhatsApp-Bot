@@ -541,11 +541,11 @@ jobs:
                        GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
             subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
             return Path(os.path.join(d,"out")).read_text(), Path(os.path.join(d,"env")).read_text()
-          out_txt, env_txt = pick_bad("big-pickle=%d" % now)
-          assert "route=opencode/mimo-v2.6-flash-free" in out_txt, "fresh bad-model must be skipped"
-          assert "OPENCODE_ROUTE_INDEX=1" in env_txt, "ladder index must advance past a fresh bad-model"
-          out_txt, env_txt = pick_bad("big-pickle=%d" % (now - 25*3600))
-          assert "route=opencode/big-pickle" in out_txt, "expired bad-model must be ignored"
+          out_txt, env_txt = pick_bad("mimo-v2.6-flash-free=%d" % now)
+          assert "route=opencode/big-pickle" in out_txt, "fresh primary bad-model must be skipped"
+          assert "OPENCODE_ROUTE_INDEX=1" in env_txt, "ladder index must advance past a fresh primary bad-model"
+          out_txt, env_txt = pick_bad("mimo-v2.6-flash-free=%d" % (now - 25*3600))
+          assert "route=opencode/mimo-v2.6-flash-free" in out_txt, "expired bad-model must be ignored"
           assert "OPENCODE_ROUTE_INDEX=0" in env_txt, "expired bad-model must not move the ladder"
           print("routing/cache contract: OK")
           print("model ladder (mimo->big-pickle->openrouter->copilot->none): OK")
