@@ -439,10 +439,14 @@ jobs:
           import json
           cfg=json.loads(Path("opencode.json").read_text())
           bash=cfg["permission"]["bash"]
-          assert cfg["model"]=="opencode/big-pickle"
+          assert cfg["model"]=="opencode/mimo-v2.6-flash-free"
           assert cfg["share"]=="disabled"
           assert cfg["permission"]["external_directory"]=="allow"
           assert cfg["permission"]["doom_loop"]=="allow"
+          assert "GEMINI_API_KEY_1:" in wf and "GEMINI_API_KEY_5:" in wf
+          assert "GROQ_API_KEY_1:" in wf and "GROQ_API_KEY_5:" in wf
+          assert "GEMINI_ADVISORY_MODEL:" in wf and "GEMINI_ADVISORY_MAX_CALLS:" in wf
+          assert "GEMINI_ADVISORY_PROVIDER_ORDER:" in wf
           assert "git commit *" not in bash
           assert "git commit" not in bash
           assert "git push *" not in bash
@@ -479,25 +483,25 @@ jobs:
             env=dict(os.environ)
             env.pop("COPILOT_GITHUB_TOKEN",None)
             env.pop("OPENCODE_EXCLUDED_PROVIDERS",None)
-            env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
+            env.update(OPENCODE_API_KEY="x", OPENROUTER_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
                      OPENCODE_ROUTE_INDEX=route_index, GITHUB_ENV=os.path.join(d,"env"),
                      GITHUB_OUTPUT=os.path.join(d,"out"))
             if copilot:
               env["COPILOT_GITHUB_TOKEN"]=copilot
             subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
             return Path(os.path.join(d,"out")).read_text()
-          assert "route=opencode/big-pickle" in pick("",None)
-          assert "route=opencode/mimo-v2.6-flash-free" in pick("1",None)
-          assert "route=github-copilot/auto" in pick("2","y")
-          assert "route=none" in pick("2",None)
-          assert "route=none" in pick("3","y")
+          assert "route=opencode/mimo-v2.6-flash-free" in pick("",None)
+          assert "route=opencode/big-pickle" in pick("1",None)
+          assert "route=openrouter/openrouter/free" in pick("2",None)
+          assert "route=github-copilot/auto" in pick("3","y")
+          assert "route=none" in pick("4",None)
           # Legacy retry and the explicit advance flag must both move forward;
           # neither is allowed to restart the same model route.
           d=tempfile.mkdtemp()
           env=dict(os.environ)
           env.pop("COPILOT_GITHUB_TOKEN",None)
           env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
-                     OPENCODE_ROUTE_INDEX="0", OPENCODE_RETRY_CURRENT_ROUTE="1",
+                     OPENROUTER_API_KEY="x", OPENCODE_ROUTE_INDEX="0", OPENCODE_RETRY_CURRENT_ROUTE="1",
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
           assert "route=opencode/mimo-v2.6-flash-free" in Path(os.path.join(d,"out")).read_text()
@@ -505,7 +509,7 @@ jobs:
           env=dict(os.environ)
           env.pop("COPILOT_GITHUB_TOKEN",None)
           env.update(OPENCODE_API_KEY="x", OPENCODE_ZEN_FREE_MODELS="big-pickle,mimo-v2.6-flash-free",
-                     OPENCODE_ROUTE_INDEX="0", OPENCODE_ADVANCE_ROUTE="1",
+                     OPENROUTER_API_KEY="x", OPENCODE_ROUTE_INDEX="0", OPENCODE_ADVANCE_ROUTE="1",
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
           assert "route=opencode/mimo-v2.6-flash-free" in Path(os.path.join(d,"out")).read_text()
@@ -531,7 +535,7 @@ jobs:
           assert "route=opencode/big-pickle" in out_txt, "expired bad-model must be ignored"
           assert "OPENCODE_ROUTE_INDEX=0" in env_txt, "expired bad-model must not move the ladder"
           print("routing/cache contract: OK")
-          print("model ladder (big-pickle->mimo->copilot->none): OK")
+          print("model ladder (mimo->big-pickle->openrouter->copilot->none): OK")
           PY
 
       - name: Validate enterprise recovery controls
