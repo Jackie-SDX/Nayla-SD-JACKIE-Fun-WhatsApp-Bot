@@ -437,6 +437,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import json
+          wf=Path(".github/workflows/opencode.yml").read_text()
           cfg=json.loads(Path("opencode.json").read_text())
           bash=cfg["permission"]["bash"]
           assert cfg["model"]=="opencode/mimo-v2.6-flash-free"
@@ -504,7 +505,7 @@ jobs:
                      OPENROUTER_API_KEY="x", OPENCODE_ROUTE_INDEX="0", OPENCODE_RETRY_CURRENT_ROUTE="1",
                      GITHUB_ENV=os.path.join(d,"env"), GITHUB_OUTPUT=os.path.join(d,"out"))
           subprocess.run(["bash",".github/scripts/select-opencode-route.sh"],env=env,check=True,capture_output=True,text=True)
-          assert "route=opencode/mimo-v2.6-flash-free" in Path(os.path.join(d,"out")).read_text()
+          assert "route=opencode/big-pickle" in Path(os.path.join(d,"out")).read_text()
           d=tempfile.mkdtemp()
           env=dict(os.environ)
           env.pop("COPILOT_GITHUB_TOKEN",None)
