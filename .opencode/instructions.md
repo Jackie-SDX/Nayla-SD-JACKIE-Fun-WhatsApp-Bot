@@ -165,7 +165,7 @@ The advisor should normally be called once after the initial plan and before imp
 
 Gemini API rate limits are project-scoped rather than key-scoped. Multiple keys belonging to the same project share that project's quota; key rotation is therefore useful for credential rotation/failover, not for multiplying quota. Separate projects have separate quotas.
 
-The current intended Gemini reviewer model is `gemini-3.5-flash-lite`, a stable model documented for high-throughput sub-agent/agent workflows with structured outputs and reasoning. Verify current availability before changing it.
+The default Gemini reviewer is `gemini-3.8-flash`, currently present in the live Gemini catalog and listed by Google with free-tier access; Google describes the 3.8 Flash line as intended for long-horizon software engineering and autonomous-agent workflows. The advisory script is also prepared to fall back, within its request budget, to `gemini-3.7-flash` and `gemini-3.5-flash-lite`. Re-check live availability before changing this ladder.
 
 When Gemini is absent or unavailable:
 - continue with OpenCode;
