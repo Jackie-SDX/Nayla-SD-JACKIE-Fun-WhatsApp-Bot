@@ -17,7 +17,9 @@ context_file="$(printenv GEMINI_CONTEXT_FILE 2>/dev/null || true)"
 worktree="$(printenv GEMINI_WORKTREE 2>/dev/null || true)"
 [ -n "$worktree" ] || worktree="$PWD"
 model="$(printenv GEMINI_ADVISORY_MODEL 2>/dev/null || true)"
-[ -n "$model" ] || model="gemini-3.5-flash-lite"
+[ -n "$model" ] || model="gemini-3.8-flash"
+models_csv="$(printenv GEMINI_ADVISORY_MODELS 2>/dev/null || true)"
+[ -n "$models_csv" ] || models_csv="$model,gemini-3.7-flash,gemini-3.5-flash-lite"
 providers_csv="$(printenv GEMINI_ADVISORY_PROVIDER_ORDER 2>/dev/null || true)"
 [ -n "$providers_csv" ] || providers_csv="gemini,openrouter,groq"
 max_calls="$(printenv GEMINI_ADVISORY_MAX_CALLS 2>/dev/null || true)"
@@ -65,7 +67,12 @@ fi
 request="$(printenv GEMINI_ADVISORY_REQUEST 2>/dev/null || true)"
 [ -n "$request" ] || request="$(printenv OC_COMMAND_TEXT 2>/dev/null || true)"
 
+sanitize_packet_file() {
+  sed -E     -e 's/(AIza[[:alnum:]_-]{20,})/[REDACTED_GOOGLE_KEY]/g'     -e 's/(sk-or-v1-[[:alnum:]_-]{20,})/[REDACTED_EXTERNAL_API_KEY]/g'     -e 's/(gh[ps]_[[:alnum:]_]{20,}|github_pat_[[:alnum:]_]{20,})/[REDACTED_GITHUB_TOKEN]/g'     -e 's/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g'     "$1" > "$2"
+}
+
 packet="$runner_temp/gemini-review-packet-$attempt.md"
+safe_packet="$runner_temp/gemini-review-packet-$attempt.safe.md"
 {
   printf '%s\n' "# Advisory request" "$request" ""
   printf '%s\n' "# OpenCode proposed plan"
@@ -81,6 +88,7 @@ packet="$runner_temp/gemini-review-packet-$attempt.md"
     tail -c 90000 "$context_file" 2>/dev/null || true
   fi
 } > "$packet"
+sanitize_packet_file "$packet" "$safe_packet"
 
 prompt_file="$runner_temp/gemini-review-prompt-$attempt.md"
 cat > "$prompt_file" <<'PROMPT'
@@ -106,7 +114,7 @@ PROMPT
 {
   echo
   echo "--- REVIEW PACKET ---"
-  tail -c 120000 "$packet"
+  tail -c 120000 "$safe_packet"
   echo
   echo "--- END REVIEW PACKET ---"
 } >> "$prompt_file"
@@ -222,12 +230,17 @@ groq_call() {
   save_review groq "$model_id" "$text"
 }
 
+IFS=',' read -r -a gemini_models <<< "$models_csv"
 for provider in $(printf "%s" "$providers_csv" | tr "," " "); do
   case "$provider" in
     gemini)
-      while IFS= read -r key; do
-        [ -n "$key" ] && gemini_call "$key" && exit 0
-      done < "$gemini_keys"
+      for candidate_model in "${gemini_models[@]}"; do
+        [ -n "$candidate_model" ] || continue
+        model="$candidate_model"
+        while IFS= read -r key; do
+          [ -n "$key" ] && gemini_call "$key" && exit 0
+        done < "$gemini_keys"
+      done
       ;;
     openrouter)
       [ -n "$openrouter_key" ] && openrouter_call "$openrouter_key" && exit 0
