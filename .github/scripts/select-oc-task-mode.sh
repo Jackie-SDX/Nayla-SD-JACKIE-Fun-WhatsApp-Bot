@@ -46,7 +46,7 @@ else
       copilot_collab_requested=true
     fi
   elif printf '%s' "$lower" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
-    mode=code; intent=code; session_required=true
+    mode=code; intent=code; session_required=true; publish_requested=true
   elif [[ "$publish_requested" == true ]]; then
     mode=code; intent=publish; session_required=true
   else
