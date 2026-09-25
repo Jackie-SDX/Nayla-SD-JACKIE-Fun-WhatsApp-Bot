@@ -311,7 +311,7 @@ jobs:
           verify_wait_minutes: "20"
           verify_poll_seconds: "20"
 
-      - name: Select route 2
+      # Route-2 fallback remains gated by durable_work != 'true': checkpointed work is resumed, not duplicated.\n      - name: Select route 2
         id: route_2
         if: |
           env.OC_TASK_MODE == 'code' &&
