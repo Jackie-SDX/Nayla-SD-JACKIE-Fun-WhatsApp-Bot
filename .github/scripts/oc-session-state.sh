@@ -62,7 +62,7 @@ case "$cmd" in
     fi
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     base="$(printenv BASE_REF || printf main)"
-    json="$(jq -n --arg repo "$repo" --arg issue "$target" --arg base "$base" --arg now "$now" --arg sid "oc-$target" '{schema_version:1,session_id:$sid,repository:$repo,issue:($issue|tonumber),base_ref:$base,active_branch:"",active_pr_number:0,active_pr_url:"",active_head_sha:"",phase:"received",status:"new",state_revision:0,created_at:$now,updated_at:$now,last_processed_comment_id:0,current_request:"",completed_steps:[],remaining_steps:[],tests_run:[],ci_runs:[],research_sources:[],copilot:{status:"not_started",rounds:0},warnings:[],artifacts:[],next_action:"classify request"}')"
+    json="$(jq -n --arg repo "$repo" --arg issue "$target" --arg base "$base" --arg now "$now" --arg sid "oc-$target" '{schema_version:1,session_id:$sid,repository:$repo,issue:($issue|tonumber),base_ref:$base,active_branch:"",active_pr_number:0,active_pr_url:"",active_head_sha:"",goal:"",milestone:"received",phase:"received",status:"new",state_revision:0,capabilities:{push:false,target:""},last_verified_sha:"",last_verified_evidence:"",created_at:$now,updated_at:$now,last_processed_comment_id:0,current_request:"",completed_steps:[],remaining_steps:[],tests_run:[],ci_runs:[],research_sources:[],copilot:{status:"not_started",rounds:0},warnings:[],artifacts:[],next_action:"classify request"}')"
     export_state_env "$json"
     echo "Initialized durable session $(jq -r '.session_id' "$state_file") for issue #$target."
     ;;

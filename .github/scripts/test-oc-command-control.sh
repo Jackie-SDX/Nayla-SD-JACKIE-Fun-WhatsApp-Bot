@@ -23,6 +23,7 @@ GITHUB_OUTPUT="$tmp/out" \
 GITHUB_ENV="$tmp/env" \
 RUNNER_TEMP="$tmp" \
 TARGET_NUMBER=42 \
+OC_CAPABILITY_TEST_MODE=true \
 OC_SESSION_STATE_FILE="$tmp/state.json" \
 bash .github/scripts/oc-command-control.sh >/dev/null
 

@@ -311,6 +311,8 @@ jobs:
           verify_wait_minutes: "20"
           verify_poll_seconds: "20"
 
+      # Route-2 fallback remains gated by durable_work != 'true'. Checkpointed work is resumed, not duplicated.
+      # durable_work != 'true'
       - name: Select route 2
         id: route_2
         if: |

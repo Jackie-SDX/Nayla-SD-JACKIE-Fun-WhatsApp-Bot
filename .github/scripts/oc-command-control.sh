@@ -24,6 +24,21 @@ task_mode="$(read_back_output OC_TASK_MODE)"
 merge_requested="$(read_back_output OC_MERGE_REQUESTED)"
 
 if [[ "${session_required:-false}" == "true" && "${task_mode:-report}" == "code" ]]; then
+  if [[ "${OC_CAPABILITY_TEST_MODE:-false}" != "true" ]]; then
+    target_repo="${OC_TARGET_REPO:-${GITHUB_REPOSITORY:-}}"
+    cap_json="$(gh api "/repos/${target_repo}" 2>/dev/null)" || {
+      echo "::error title=Capability probe failed::Could not observe GitHub permissions for ${target_repo}; do not launch the agent with an unknown write boundary." >&2
+      exit 2
+    }
+    cap_push="$(jq -r '.permissions.push // false' <<<"$cap_json")"
+    cap_archived="$(jq -r '.archived // false' <<<"$cap_json")"
+    printf 'OC_CAPABILITY_TARGET=%s\n' "$target_repo" >> "${GITHUB_ENV:-/dev/null}"
+    printf 'OC_CAPABILITY_PUSH=%s\n' "$cap_push" >> "${GITHUB_ENV:-/dev/null}"
+    [[ "$cap_archived" != "true" ]] || { echo "::error title=Target repository is archived::${target_repo} cannot accept normal engineering changes." >&2; exit 3; }
+    [[ "$cap_push" == "true" ]] || { echo "::error title=Write capability unavailable::The resolved credentials cannot push to ${target_repo}. Report the capability boundary immediately instead of starting the agent." >&2; exit 4; }
+  fi
+fi
+if [[ "${session_required:-false}" == "true" && "${task_mode:-report}" == "code" ]]; then
   TARGET_NUMBER="${TARGET_NUMBER:-0}" BASE_REF="${BASE_REF:-main}" bash .github/scripts/prepare-oc-session.sh
   OC_SESSION_PHASE=ready OC_SESSION_STATUS=active OC_SESSION_NEXT_ACTION="inspect durable session and continue" OC_DURABLE_WORK=false bash .github/scripts/record-oc-session-progress.sh || true
 fi

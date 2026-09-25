@@ -18,7 +18,7 @@ copilot_collab_requested=false
 
 if [[ "$lower" =~ ^continue([[:space:]]|$) ]] &&
    ! printf '%s' "$lower" | grep -Eiq '\b(story|stories|chapter|fiction|poem|poetry|essay|prose|dialogue|joke|caption|lyrics?|creative|co-?author|part[[:space:]-]*[0-9]+)\b'; then
-  resume_requested=true; session_required=true; mode=code; intent=continue
+  resume_requested=true; session_required=true; mode=code; intent=continue; publish_requested=true
   request="$(printf '%s' "$request" | sed -E 's#^continue[[:space:]]*##')"
   printf '%s\n' "$request" > "$request_file"
 elif [[ "$lower" =~ ^merge([[:space:]]|$) ]]; then
@@ -46,7 +46,7 @@ else
       copilot_collab_requested=true
     fi
   elif printf '%s' "$lower" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
-    mode=code; intent=code; session_required=true
+    mode=code; intent=code; session_required=true; publish_requested=true
   elif [[ "$publish_requested" == true ]]; then
     mode=code; intent=publish; session_required=true
   else

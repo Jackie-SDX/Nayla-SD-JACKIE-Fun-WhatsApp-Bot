@@ -16,6 +16,7 @@ git -C "$dir" diff --check >/dev/null 2>&1 || {
   exit 0
 }
 oc_guard_repo_publication "$dir" || exit 0
+git -C "$dir" add -A
 if git -C "$dir" diff --cached --quiet; then
   git -C "$dir" reset -q >/dev/null 2>&1 || true
   exit 0
@@ -25,8 +26,11 @@ git -C "$dir" commit -m "checkpoint(oc): preserve session progress (attempt $att
   git -C "$dir" reset -q >/dev/null 2>&1 || true
   exit 0
 }
+checkpoint_sha="$(git -C "$dir" rev-parse HEAD)"
 if oc_git_push -C "$dir" origin "HEAD:refs/heads/$branch" >/dev/null 2>&1; then
-  echo "Durable checkpoint pushed: $branch @ $(git -C "$dir" rev-parse HEAD)"
+  printf "OC_CHECKPOINT_SHA=%s\n" "$checkpoint_sha" >> "${GITHUB_ENV:-/dev/null}"
+  printf "checkpoint_sha=%s\n" "$checkpoint_sha" >> "${GITHUB_OUTPUT:-/dev/null}"
+  echo "Durable checkpoint pushed: $branch @ $checkpoint_sha"
 else
   echo "::warning title=Checkpoint push degraded::Checkpoint commit exists locally but could not be pushed."
 fi

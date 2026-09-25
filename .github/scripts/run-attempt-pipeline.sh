@@ -115,6 +115,10 @@ fi
 if [[ "$durable_work" == "true" && -n "$agent_branch" && "$mode" == "local" ]]; then
   OC_SESSION_BRANCH="$agent_branch" OC_ATTEMPT="$attempt" bash .github/scripts/checkpoint-oc-working-tree.sh . || true
 fi
+if [[ -n "$agent_branch" ]]; then
+  session_head_sha="$(git rev-parse "$agent_branch" 2>/dev/null || true)"
+  if [[ -n "$initial_sha" && "$session_head_sha" != "$initial_sha" && "$session_head_sha" =~ ^[0-9a-f]{40}$ ]]; then durable_work="true"; fi
+fi
 safe_log_path="$(read_back_output safe_log_path)"
 copilot_peer_result="$(read_back_output copilot_peer_result)"
 copilot_peer_elapsed_seconds="$(read_back_output copilot_peer_elapsed_seconds)"
