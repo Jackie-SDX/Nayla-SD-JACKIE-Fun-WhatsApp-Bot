@@ -19,6 +19,6 @@ run_case '/oc inspect why this fails' report false false
 run_case '/oc fix the parser' code true false
 run_case '/oc create a pull request for this' code true false
 run_case '/oc continue' code true true
-run_case '/oc continue fix the parser' code false true
+run_case '/oc continue fix the parser' code true true
 run_case '/oc merge PR #123' merge false false
 echo 'intent classification contract: OK'
