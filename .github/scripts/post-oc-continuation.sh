@@ -14,10 +14,15 @@ else
   OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES=350
 fi
 
-branch="$(git branch --show-current 2>/dev/null || printf '%s' 'unknown')"
-sha="$(git rev-parse HEAD 2>/dev/null || printf '%s' 'unknown')"
+state_file="${OC_SESSION_STATE_FILE:-${RUNNER_TEMP:-/tmp}/oc-session-state.json}"
+branch="$(jq -r '.active_branch // empty' "$state_file" 2>/dev/null || true)"
+[[ -n "$branch" ]] || branch="$(git branch --show-current 2>/dev/null || printf "%s" "unknown")"
+sha="$(jq -r '.active_head_sha // empty' "$state_file" 2>/dev/null || true)"
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || sha="$(git rev-parse "$branch" 2>/dev/null || git rev-parse HEAD 2>/dev/null || printf "%s" "unknown")"
+phase="$(jq -r '.phase // empty' "$state_file" 2>/dev/null || true)"
+next_action="$(jq -r '.next_action // empty' "$state_file" 2>/dev/null || true)"
 status="$(git status --short 2>/dev/null || true)"
-last_commit="$(git log -1 --oneline 2>/dev/null || printf '%s' 'unknown')"
+last_commit="$(git log -1 --oneline "$branch" 2>/dev/null || git log -1 --oneline 2>/dev/null || printf "%s" "unknown")"
 run_id="$GITHUB_RUN_ID"
 run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$run_id"
 
@@ -46,7 +51,10 @@ $target_marker
 
 The autonomous agent reached its controlled long-running execution budget (${OPENCODE_AGENT_TIMEOUT_MINUTES:-${OC_CONTROL_PLANE_AGENT_TIMEOUT_MINUTES:-350}}) without claiming task completion.
 
-This is a recoverable timeout, not a success claim.
+This is a recoverable budget boundary, not a success claim.
+
+Session phase: ${phase:-checkpointed}
+Next action: ${next_action:-resume from the durable branch}.
 
 Resume with /oc continue. For a completed run with failed CI jobs, use /oc retry failed jobs instead; timed-out work should resume from this checkpoint rather than blindly rerun.
 
