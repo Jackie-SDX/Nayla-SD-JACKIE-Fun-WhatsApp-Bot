@@ -67,6 +67,6 @@ filtered="$(awk -f .github/scripts/filter-opencode-live-output.awk "$fixture")"
 printf '%s\n' "$filtered" | grep -Fq '→ ls -la'
 ! printf '%s\n' "$filtered" | grep -Fq 'total 40'
 printf '%s\n' "$filtered" | grep -Fq 'Thinking: inspecting repository'
-printf '%s\n' "$filtered" | grep -Fq 'Tool: composio COMPOSIO SEARCH TOOLS'
+printf '%s\n' "$filtered" | grep -Fq 'Tool: COMPOSIO SEARCH TOOLS'
 printf '%s\n' "$filtered" | grep -Fq '⚠ WARNING: cache stale'
 printf '%s\n' "$filtered" | grep -Fq '✗ ERROR: command failed'
