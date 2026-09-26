@@ -160,10 +160,12 @@ grep -Fq 'result_state=awaiting-input' "$pipeline_root/clarify.out"
 
 echo 'attempt pipeline output contract: OK'
 
-# Credential separation: controller secrets are not inherited by the primary agent.
-grep -Fq 'env -u GITHUB_TOKEN -u GH_TOKEN -u UNIVERSAL_TOKEN -u COMPOSIO_API_KEY' .github/scripts/run-attempt-pipeline.sh
-grep -Fq 'OC_CONTROLLER_GH_TOKEN' .github/workflows/opencode.yml
-grep -Fq 'OC_CONTROLLER_UNIVERSAL_TOKEN' .github/workflows/opencode.yml
+# The owner explicitly authorizes unrestricted task-relevant capability access.
+absent 'env -u GITHUB_TOKEN -u GH_TOKEN -u UNIVERSAL_TOKEN -u COMPOSIO_API_KEY' .github/scripts/run-attempt-pipeline.sh
+grep -Fq 'COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}' .github/workflows/opencode.yml
+absent 'COMPOSIO_API_KEY: ""' .github/workflows/opencode.yml
+grep -Fq 'Bootstrap Composio session MCP (all non-merge tasks)' .github/workflows/opencode.yml
+grep -Fq 'if: env.OC_TASK_MODE != '\''merge'\''' .github/workflows/opencode.yml
 
 # Capability discovery is agent-owned via the native OpenCode skill, not controller preflight.
 if grep -Fq 'capability-discovery.sh' .github/scripts/run-opencode-attempt.sh; then echo 'FAIL: controller still invokes capability discovery'; exit 1; fi
