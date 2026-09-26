@@ -764,7 +764,7 @@ if [[ "$1" == "issue" && "$2" == "comment" ]]; then
   exit 0
 fi
 if [[ "$1" == "pr" && "$2" == "list" ]]; then
-  printf '%s\n' '[{"number":9,"url":"https://github.com/fixture/controller/pull/9","headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main"},{"number":99,"url":"https://github.com/fixture/controller/pull/99","headRefName":"oc/copilot-7-abc","headRefOid":"cccccccccccccccccccccccccccccccccccccccc","baseRefName":"main"},{"number":10,"url":"https://github.com/fixture/controller/pull/10","headRefName":"opencode/issue8-other","headRefOid":"dddddddddddddddddddddddddddddddddddddddd","baseRefName":"main"}]'
+  printf '%s\n' '[{"number":9,"url":"https://github.com/fixture/controller/pull/9","headRefName":"opencode/issue7-fake-ts","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main"},{"number":10,"url":"https://github.com/fixture/controller/pull/10","headRefName":"opencode/issue8-other","headRefOid":"dddddddddddddddddddddddddddddddddddddddd","baseRefName":"main"}]'
   exit 0
 fi
 exit 0
