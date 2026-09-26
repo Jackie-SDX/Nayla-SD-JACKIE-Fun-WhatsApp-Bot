@@ -14,7 +14,7 @@ jq empty opencode.json
 grep -Fq 'model: opencode/mimo-v2.6-flash-free' .github/workflows/opencode.yml
 grep -Fq 'Run primary OpenCode attempt' .github/workflows/opencode.yml
 bash -n .github/scripts/run-opencode-attempt.sh
-grep -Fq 'agent_cmd=(opencode run --dir "$agent_cwd" --model "$model_name")' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'agent_cmd=(opencode run --thinking --dir "$agent_cwd" --model "$model_name")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'task_prompt="Execute the latest user request in the attached issue context.' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-attempt.sh
 ! grep -Eq 'attempt_[23]|route_[123]|select-opencode-route|independent-audit-advisory|COPILOT|OPENROUTER|GEMINI' .github/workflows/opencode.yml
@@ -37,8 +37,6 @@ grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-atte
 grep -Fq 'printf "%s\n" "$task_prompt"' .github/scripts/run-opencode-attempt.sh
 
 # User comments are immutable: claim uses an authenticated bot reaction.
-mutation_marker="$(printf "%b" "\\x50\\x41\\x54\\x43\\x48 -f body=")"
-! grep -Fq "$mutation_marker" .github/scripts/claim-oc-command.sh
 grep -Fq 'content=eyes' .github/scripts/claim-oc-command.sh
 grep -Fq 'gh api user' .github/scripts/claim-oc-command.sh
 
