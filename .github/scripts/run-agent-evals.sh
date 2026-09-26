@@ -30,8 +30,8 @@ run_case(){
   if [[ "$accepted" != true ]]; then failures=$((failures+1)); echo "[EVAL][FAIL] $id — $reason" >&2; else echo "[EVAL][PASS] $id — ${elapsed}s, changed_files=${changed_files}, diff_bytes=${diff_bytes}" >&2; fi
 }
 mapfile -t ids < <(jq -r --arg tier "$tier" '.cases[] | select(.tier==$tier or .tier=="smoke") | .id' "$cases_file")
-for id in "${ids[@]}"; do case_json="$(jq -c --arg id "$id" ".cases[] | select(.id==$id)" "$cases_file")"; task="$(jq -r ".task" <<<"$case_json")"; run_case "$id" "$task" "$case_json" >>"$results"; done
+for id in "${ids[@]}"; do case_json="$(jq -c --arg id "$id" '.cases[] | select(.id==$id)' "$cases_file")"; task="$(jq -r '.task' <<<"$case_json")"; run_case "$id" "$task" "$case_json" >>"$results"; done
 total="$(wc -l < "$results" | tr -d " ")"; passed="$(jq -s "[.[] | select(.accepted==true)] | length" "$results")"; elapsed_all=$(( $(date +%s) - started_all ))
-summary="$repo_root/agent-eval-summary.json"; jq -n --arg tier "$tier" --arg model "$model" --argjson total "$total" --argjson passed "$passed" --argjson failed "$((total-passed))" --argjson elapsed_seconds "$elapsed_all" "{schema_version:1,tier:$tier,model:$model,total:$total,passed:$passed,failed:($total-$passed),elapsed_seconds:$elapsed_all}" > "$summary"
+summary="$repo_root/agent-eval-summary.json"; jq -n --arg tier "$tier" --arg model "$model" --argjson total "$total" --argjson passed "$passed" --argjson failed "$((total-passed))" --argjson elapsed_seconds "$elapsed_all" '{schema_version:1,tier:$tier,model:$model,total:$total,passed:$passed,failed:$failed,elapsed_seconds:$elapsed_seconds}' > "$summary"
 cp "$results" "$repo_root/agent-eval-results.jsonl"; echo "[EVAL] tier=$tier model=$model passed=$passed/$total elapsed=${elapsed_all}s"
 if [[ "$failures" -ne 0 ]]; then exit 1; fi
