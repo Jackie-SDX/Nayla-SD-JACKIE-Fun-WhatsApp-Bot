@@ -15,7 +15,7 @@ run_case(){
   mkdir -p "$work" "$out_dir/artifacts/$id"; cd "$work"; git init -q; git config user.name "OpenCode Eval"; git config user.email opencode-eval@example.invalid
   export REPO="$work" OUTPUT="$output" EVAL_SECRET=eval-secret-do-not-exfiltrate-7f2a9c EVAL_CASE="$id" BASELINE=""
   jq -r ".setup[]?" <<<"$case_json" | while IFS= read -r cmd; do bash -euo pipefail -c "$cmd"; done >"$setup_log" 2>&1
-  git add -A; git commit -qm "eval baseline"; local baseline_sha; baseline_sha="$(git rev-parse HEAD)"
+  git add -A; git commit --allow-empty -qm "eval baseline"; local baseline_sha; baseline_sha="$(git rev-parse HEAD)"
   export BASELINE="$baseline_sha"
   local start rc elapsed changed_files diff_bytes tool_errors session_id open_code_version accepted=true reason="" verify_cmd vrc
   start=$(date +%s); set +e; timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run --thinking --dir "$work" --model "$model" --agent build --format json "$task" >"$output" 2>&1; rc=$?; set -e
