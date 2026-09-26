@@ -124,6 +124,24 @@ fi
   context_seed="${OC_ISSUE_CONTEXT_SEED_FILE:-$runner_temp/oc-issue-context-seed.md}"
   context_full="${OC_ISSUE_CONTEXT_FILE:-$runner_temp/oc-issue-context-full.md}"
   context_refs="${OC_REFERENCE_CONTEXT_FILE:-$runner_temp/oc-reference-context.md}"
+
+  # Local runs use an isolated worktree. Build the actual headless OpenCode
+  # command here as well as for remote targets; a report-mode request must
+  # still execute the agent rather than invoking GNU timeout with no command.
+  if [[ "${OC_TARGET_MODE:-local}" != "remote" ]]; then
+    model_name="${MODEL:-opencode/mimo-v2.6-flash-free}"
+    task_prompt="$request"
+    if [[ -z "$task_prompt" || "$task_prompt" == "run" ]]; then
+      task_prompt="Execute the latest user request in the attached issue context. Treat the issue body and chronological comments as the task source of truth. Answer the user directly; do not modify, commit, publish, or merge repository files unless the request explicitly requires a repository change."
+    fi
+
+    agent_cmd=(opencode run --dir "$agent_cwd" --model "$model_name")
+    [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
+    agent_cmd+=(--agent build --title "oc local ${TARGET_NUMBER:-issue}")
+    [[ -f "$context_seed" ]] && agent_cmd+=(--file "$context_seed")
+    [[ -s "$context_refs" ]] && agent_cmd+=(--file "$context_refs")
+    agent_cmd+=("$task_prompt")
+  fi
 sanitize_line() {
   local line="$1" secret
   for secret in \
