@@ -32,7 +32,6 @@ bash "$root/.github/scripts/oc-running-reaction.sh" remove >"$tmp/remove"
 [[ ! -e "$tmp/oc-running-reaction.state" ]]
 bash -n "$root/.github/scripts/oc-running-reaction.sh"
 bash -n "$root/.github/scripts/post-oc-result.sh"
-bash -n "$root/.github/scripts/invite-copilot-peer.sh"
 node --check "$root/.opencode/plugins/agentic-observability.js"
 printf '%s\n' 'clean final answer' > "$tmp/opencode-final-response-1.md"
 export A1=success P1=report-only V1=false PR1= SHA1= TASK_MODE=report
