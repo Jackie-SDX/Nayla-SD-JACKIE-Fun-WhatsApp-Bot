@@ -20,7 +20,7 @@ date. Run evidence is listed in section 5.
 
 | File | Trigger | Purpose (proof-backed) |
 | --- | --- | --- |
-| `opencode.yml` (464 lines) | `issue_comment` + `pull_request_review_comment` | The single `/oc` and `/opencode` listener. Two jobs: the agent lane and `retry-failed-jobs` (control lane). Owns checkout, run marker, target resolution, release verification, cache restore/install, preflight, Composio session bootstrap, up to 3 route attempts, reconciliation, timeout continuation, human-handoff, routing summary, final status, observability record, and cleanup. |
+| `opencode.yml` (464 lines) | `issue_comment` + `pull_request_review_comment` | The single `/oc` and `/opencode` listener. Two jobs: the agent lane and `retry-failed-jobs` (control lane). Owns checkout, run marker, target resolution, release verification, cache restore/install, Composio session bootstrap, up to 3 route attempts, reconciliation, timeout continuation, human-handoff, routing summary, final status, observability record, and cleanup. |
 | `enterprise-agent-validation.yml` (531 lines) | `pull_request`, `workflow_dispatch` | The **gate** every PR must pass. 12 validation steps assert file presence, syntax (JSON/YAML/`bash -n`), `npm test`, `npm run lint`, `npm run test:invariants`, and dozens of contract assertions (concurrency, dual-surface verification, evidence ingestion, attempt pipeline, remote target, config parity, route selector behavior, live-stream smoke test). |
 | `opencode-cache.yml` | push to main, `workflow_dispatch`, schedule | Trusted cache creation for the pinned OpenCode binary. The interactive `/oc` path only restores and continues on a miss — it never writes the cache (supply-chain + cache-hygiene invariant). |
 
@@ -84,7 +84,7 @@ Config / tests:
 1. Owner comments `/oc <task>` on an issue. `opencode.yml` filter: `user.type == 'User'` and author == repository owner, exact `/oc ` / `/opencode` prefix, not a retry command. Concurrency group `oc-agent-<issue>-true`, `cancel-in-progress: false`.
 2. Initial state captured (`OC_INITIAL_SHA`, run-start ISO, job-start epoch); idempotent run marker comment posted (`<!-- oc-run-id … -->`).
 3. Target resolved (local vs remote); OpenCode release resolved from pinned version and SHA-256 verified; cache restored, else installed from the verified release artifact.
-4. Preflight credentials (Zen API key required for the opencode lane; Copilot optional; Composio optional; UNIVERSAL_TOKEN preferred).
+4. No credential or capability preflight: the lane starts directly from the workflow environment. Capability discovery, installation, and every tool choice belong to the agent (`.opencode/instructions.md` and `.opencode/skills/capability-discovery`).
 5. Composio session bootstrapped (`COMPOSIO_MCP_ENABLED` truthy only on success).
 6. Route 1 selected (big-pickle) → `oc-attempt` runs: isolated worktree → agent with live filtered output + heartbeat + budget clamp → sanitized log.
 7. On success and opencode/local: publication is self-owned by `opencode github run`; CI verification runs but **never** controls the route (advisory for local opencode; authoritative for remote).

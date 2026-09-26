@@ -56,7 +56,7 @@
     {
       "id": "05-ci-debug",
       "tier": "smoke",
-      "task": "Treat ci/check.sh as a failing CI job. Diagnose why it fails, make the smallest repository fix, and rerun the exact CI command until it succeeds.",
+      "task": "Treat ci/check.sh as a failing CI job. Diagnose why it fails on a clean checkout (the build/ directory does not exist yet), repair ci/check.sh itself so the command creates the directory it writes into, and rerun the exact CI command until it succeeds. Do not rely on a pre-existing build/ directory.",
       "setup": [
         "mkdir -p ci src",
         "printf '%s\\n' 'printf \"version=1\\\\n\" > build/version.txt' > ci/check.sh",

@@ -72,22 +72,30 @@ absent 'name: Mark triggering /oc comment as running' .github/workflows/opencode
 grep -Fq 'opencode run --thinking --dir "$agent_cwd" --model "$model_name"' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'Research mode: keep OpenCode thinking blocks enabled' .github/scripts/run-opencode-attempt.sh
 
-# Autonomous self-modification and research guidance must remain durable.
-grep -Fq '## Autonomous self-modification protocol' .opencode/instructions.md
-grep -Fq 'This is engineering judgment, not a blanket restriction.' .opencode/instructions.md
-grep -Fq 'running process does not automatically reload an edited file' .opencode/instructions.md
-grep -Fq '## Research-first / web-first' .opencode/instructions.md
-grep -Fq 'web/search tools are available through Composio' .opencode/instructions.md
-grep -Fq 'official product documentation, GitHub/GitHub Actions documentation' .opencode/instructions.md
+# Autonomous self-modification and research guidance must remain durable in the
+# agent-owned instruction contract, not in a controller gate.
+grep -Fq '# OpenCode autonomous operator contract' .opencode/instructions.md
+grep -Fq 'The controller is a launcher/transport layer, not a capability gate' .opencode/instructions.md
+grep -Fq '## Autonomy' .opencode/instructions.md
+grep -Fq '## Complete environment access' .opencode/instructions.md
+grep -Fq 'Do not self-restrict because a controller flag, task label, report/content classification' .opencode/instructions.md
+grep -Fq '## Self-modification' .opencode/instructions.md
+grep -Fq 'A running process will not automatically reload an edited file' .opencode/instructions.md
+grep -Fq 'Do not treat controller files as off-limits' .opencode/instructions.md
+grep -Fq '## Verification and recovery' .opencode/instructions.md
+grep -Fq 'Do not invent results, versions, commits, links, or CI state.' .opencode/instructions.md
+# The same guidance must reach every attempt through the streamed prompt.
+grep -Fq 'This is engineering judgment, not a hard restriction.' .github/scripts/run-opencode-attempt.sh
+grep -Fq '## Tools, skills, and research' .opencode/instructions.md
+grep -Fq 'Search authoritative live sources when facts are current' .opencode/instructions.md
+grep -Fq 'Research accelerates execution; it is not an approval gate.' .opencode/instructions.md
 
 # Capability discovery: the agent must reason from outcomes and compose reachable primitives,
 # rather than treating direct tools or user-supplied mechanisms as the ceiling.
-grep -Fq '## Capability discovery / outside-the-box execution' .opencode/instructions.md
-grep -Fq "Treat the user's requested outcome as the specification" .opencode/instructions.md
-grep -Fq 'compose available primitives into a working path' .opencode/instructions.md
-grep -Fq 'Do not claim impossibility until reachable alternatives have been investigated' .opencode/instructions.md
-grep -Fq 'Capability discovery / outside-the-box execution:' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'When a direct tool is absent, compose reachable primitives.' .opencode/instructions.md
+grep -Fq 'compose available primitives into a working path' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'Do not claim impossibility until viable reachable alternatives have been investigated' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'Capability discovery / outside-the-box execution:' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'last_failure_signature' .github/scripts/recover-opencode-ci.sh
 grep -Fq 'identical actionable failure signature repeated' .github/scripts/recover-opencode-ci.sh
 if grep -Fq 'OC_MAX_RECOVERY_ROUNDS' .github/workflows/opencode.yml; then echo 'FAIL: dead recovery round ceiling remains in workflow'; exit 1; fi
@@ -180,3 +188,54 @@ grep -Fq 'name: capability-discovery' .opencode/skills/capability-discovery/SKIL
 # Capability acquisition is agent-owned through the OpenCode skill.
 grep -Fq 'OC_CAPABILITY_AUTO_INSTALL=true' .opencode/skills/capability-discovery/SKILL.md
 grep -Fq 'The controller intentionally does not run this preflight' .opencode/skills/capability-discovery/SKILL.md
+
+# ---------------------------------------------------------------------------
+# Autonomous control-plane contract: the controller handles mechanical
+# lifecycle only (durable-session setup and explicit merge). It must not probe
+# capabilities, write permissions, or credentials to decide whether to launch.
+# ---------------------------------------------------------------------------
+grep -Fq 'it never probes' .github/scripts/oc-command-control.sh
+absent 'Capability probe failed' .github/scripts/oc-command-control.sh
+absent 'Write capability unavailable' .github/scripts/oc-command-control.sh
+absent 'Target repository is archived' .github/scripts/oc-command-control.sh
+absent 'permissions.push' .github/scripts/oc-command-control.sh
+absent 'OC_CAPABILITY_PUSH' .github/scripts/oc-command-control.sh
+absent 'OC_CAPABILITY_TARGET' .github/scripts/oc-command-control.sh
+absent 'OC_CAPABILITY_TEST_MODE' .github/scripts/oc-command-control.sh .github/scripts/test-oc-command-control.sh
+grep -Fq 'bash .github/scripts/prepare-oc-session.sh' .github/scripts/oc-command-control.sh
+grep -Fq 'bash .github/scripts/merge-oc-request.sh' .github/scripts/oc-command-control.sh
+
+# No legacy credential preflight gate may block the autonomous task environment.
+absent 'name: Preflight credentials' .github/workflows/opencode.yml
+absent 'OpenCode credential missing' .github/workflows/opencode.yml
+
+# No report/content/repository classification remains to influence capability
+# availability: every non-merge request launches the agent directly.
+absent 'OC_CONTENT_TASK' .github/scripts/select-oc-task-mode.sh
+absent 'content_signal' .github/scripts/select-oc-task-mode.sh
+absent 'repo_signal' .github/scripts/select-oc-task-mode.sh
+absent 'report' .github/scripts/select-oc-task-mode.sh
+grep -Fq 'mode=code' .github/scripts/select-oc-task-mode.sh
+
+# Regression: a capability-heavy non-repository request such as "send an email"
+# must launch the agent with the full task environment, not be downgraded into
+# a capability-starved report/content path.
+scratch="$(mktemp -d)"
+trap 'rm -f "$fixture"; rm -rf "$pipeline_root" "$scratch"' EXIT
+while IFS='=' read -r leaked _; do
+  case "$leaked" in OC_*|SESSION_*) unset "$leaked" 2>/dev/null || true ;; esac
+done < <(env)
+jq -n --arg body '/oc send an email to snapdragon0313@gmail.com telling him the workflow is fixed' \
+  '{comment:{body:$body}}' > "$scratch/event-email.json"
+: > "$scratch/env-email"; : > "$scratch/out-email"
+GITHUB_EVENT_PATH="$scratch/event-email.json" GITHUB_ENV="$scratch/env-email" \
+  GITHUB_OUTPUT="$scratch/out-email" bash .github/scripts/select-oc-task-mode.sh >/dev/null
+grep -Fq 'OC_TASK_MODE=code' "$scratch/out-email"
+grep -Fq 'OC_SESSION_REQUIRED=false' "$scratch/out-email"
+absent 'OC_TASK_MODE=report' "$scratch/out-email" "$scratch/env-email"
+absent 'OC_CONTENT_TASK' "$scratch/out-email" "$scratch/env-email"
+# The capability provisions that back that request are unconditional for
+# non-merge tasks: Composio bootstrap + key on the attempt step itself.
+grep -Fq "if: env.OC_TASK_MODE != 'merge'" .github/workflows/opencode.yml
+absent "if: env.OC_TASK_MODE == 'report'" .github/workflows/opencode.yml
+echo 'autonomous capability contract: OK'

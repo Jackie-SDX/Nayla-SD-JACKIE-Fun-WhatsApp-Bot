@@ -183,15 +183,6 @@ jobs:
         shell: bash
         run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
-      - name: Preflight credentials
-        if: env.OC_TASK_MODE != 'merge'
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ -n "$OPENCODE_API_KEY" ]] || { echo "::error title=OpenCode credential missing::Configure OPENCODE_API_KEY."; exit 1; }
-          [[ -n "${COMPOSIO_API_KEY:-}" ]] && echo "Composio MCP: configured" || echo "Composio MCP: unavailable; continuing without it."
-          [[ -n "${UNIVERSAL_TOKEN:-}" ]] && echo "Universal GitHub credential: configured" || echo "Universal GitHub credential: not configured; using workflow token."
-
       - name: Prepare remote target workspace
         if: env.OC_TASK_MODE != 'merge' && steps.target.outputs.mode == 'remote'
         shell: bash

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Single command-control entrypoint: classify the request, load issue-scoped
-# session state, prepare durable code sessions, and handle explicit merge.
+# Single command-control entrypoint: select the lifecycle, load issue-scoped
+# session state, prepare the durable session when the request requires it, and
+# handle explicit merge. The controller is a launcher only — it never probes
+# capabilities, write permissions, or credentials, and never decides which
+# tools the agent may use (.opencode/instructions.md owns that contract).
 bash .github/scripts/select-oc-task-mode.sh
 bash .github/scripts/oc-session-state.sh load
 
@@ -13,7 +16,11 @@ read_back_output() {
   local key="$1" val=""
   if [[ -n "${GITHUB_OUTPUT:-}" && -f "$GITHUB_OUTPUT" ]]; then
     val="$(sed -nE "s/^${key}=//p" "$GITHUB_OUTPUT" | tail -n 1)"
-  else
+  fi
+  if [[ -z "$val" && -n "${GITHUB_ENV:-}" && -f "$GITHUB_ENV" ]]; then
+    val="$(sed -nE "s/^${key}=//p" "$GITHUB_ENV" | tail -n 1)"
+  fi
+  if [[ -z "$val" ]]; then
     val="$(printenv "$key" 2>/dev/null || true)"
   fi
   printf '%s' "$val"
@@ -22,25 +29,20 @@ read_back_output() {
 session_required="$(read_back_output OC_SESSION_REQUIRED)"
 task_mode="$(read_back_output OC_TASK_MODE)"
 merge_requested="$(read_back_output OC_MERGE_REQUESTED)"
+session_branch="$(read_back_output OC_SESSION_BRANCH)"
 
-if [[ "${session_required:-false}" == "true" && "${task_mode:-report}" == "code" ]]; then
-  if [[ "${OC_CAPABILITY_TEST_MODE:-false}" != "true" ]]; then
-    target_repo="${OC_TARGET_REPO:-${GITHUB_REPOSITORY:-}}"
-    cap_json="$(gh api "/repos/${target_repo}" 2>/dev/null)" || {
-      echo "::error title=Capability probe failed::Could not observe GitHub permissions for ${target_repo}; do not launch the agent with an unknown write boundary." >&2
-      exit 2
-    }
-    cap_push="$(jq -r '.permissions.push // false' <<<"$cap_json")"
-    cap_archived="$(jq -r '.archived // false' <<<"$cap_json")"
-    printf 'OC_CAPABILITY_TARGET=%s\n' "$target_repo" >> "${GITHUB_ENV:-/dev/null}"
-    printf 'OC_CAPABILITY_PUSH=%s\n' "$cap_push" >> "${GITHUB_ENV:-/dev/null}"
-    [[ "$cap_archived" != "true" ]] || { echo "::error title=Target repository is archived::${target_repo} cannot accept normal engineering changes." >&2; exit 3; }
-    [[ "$cap_push" == "true" ]] || { echo "::error title=Write capability unavailable::The resolved credentials cannot push to ${target_repo}. Report the capability boundary immediately instead of starting the agent." >&2; exit 4; }
-  fi
-fi
-if [[ "${session_required:-false}" == "true" && "${task_mode:-report}" == "code" ]]; then
+if [[ "${session_required:-false}" == "true" && "${task_mode:-}" == "code" ]]; then
+  # Mechanical lifecycle only: materialize the durable session branch for this
+  # repository request. No capability, permission, or credential decision is
+  # made here — the attempt always runs with the full task environment.
   TARGET_NUMBER="${TARGET_NUMBER:-0}" BASE_REF="${BASE_REF:-main}" bash .github/scripts/prepare-oc-session.sh
   OC_SESSION_PHASE=ready OC_SESSION_STATUS=active OC_SESSION_NEXT_ACTION="inspect durable session and continue" OC_DURABLE_WORK=false bash .github/scripts/record-oc-session-progress.sh || true
+elif [[ "${session_required:-false}" != "true" && -n "${session_branch}" ]]; then
+  # Mechanical lifecycle only: an ordinary request does not enter the durable
+  # session of an earlier task. Clear it for the later steps so the attempt
+  # runs against the current checkout instead of a stale session branch.
+  echo "Durable session ${session_branch} not required by this request; running against the current checkout."
+  printf 'OC_SESSION_BRANCH=\n' >> "${GITHUB_ENV:-/dev/null}"
 fi
 
 if [[ "${merge_requested:-false}" == "true" ]]; then

@@ -112,9 +112,10 @@ JSON
 : > "$tmp/out-code"
 GITHUB_EVENT_PATH="$tmp/event-code.json" GITHUB_ENV="$tmp/env-code" GITHUB_OUTPUT="$tmp/out-code" bash "$root/.github/scripts/select-oc-task-mode.sh"
 grep -Fq 'OC_TASK_MODE=code' "$tmp/env-code"
-grep -Fq 'OC_CONTENT_TASK=false' "$tmp/env-code"
 grep -Fq 'mode=code' "$tmp/out-code"
 grep -Fq 'intent=code' "$tmp/out-code"
+# Classification no longer emits a report/content downgrade signal at all.
+absent 'OC_CONTENT_TASK' "$tmp/env-code" "$tmp/out-code"
 
 cat > "$tmp/event-content2.json" <<'JSON'
 {"comment":{"id":12,"body":"/oc Answer this question in two lines.\nSecond line of the question body."},"issue":{"number":12}}
@@ -122,8 +123,13 @@ JSON
 : > "$tmp/env-content2"
 : > "$tmp/out-content2"
 GITHUB_EVENT_PATH="$tmp/event-content2.json" GITHUB_ENV="$tmp/env-content2" GITHUB_OUTPUT="$tmp/out-content2" bash "$root/.github/scripts/select-oc-task-mode.sh"
-grep -Fq 'mode=report' "$tmp/out-content2"
-grep -Fq 'intent=answer' "$tmp/out-content2"
+# An ordinary conversational request launches the agent directly; it is not
+# rerouted into a capability-starved report/content path.
+grep -Fq 'mode=code' "$tmp/out-content2"
+grep -Fq 'intent=execute' "$tmp/out-content2"
+grep -Fq 'OC_SESSION_REQUIRED=false' "$tmp/out-content2"
+absent 'OC_CONTENT_TASK' "$tmp/env-content2" "$tmp/out-content2"
+absent 'OC_TASK_MODE=report' "$tmp/env-content2" "$tmp/out-content2"
 
 cat > "$tmp/event-multiline.json" <<'JSON'
 {"comment":{"id":13,"body":"/oc Fix the GitHub workflow\nFirst action item for the agent to work on.\nSecond action item with more detail about the CI pipeline."},"issue":{"number":13}}
