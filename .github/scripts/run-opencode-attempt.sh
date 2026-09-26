@@ -29,7 +29,11 @@ command -v mkfifo >/dev/null 2>&1 || {
 }
 
 runner_temp="${RUNNER_TEMP:-/tmp}"
-activity_guidance='Research mode: keep OpenCode thinking blocks enabled and visible in the live Actions log. Do not replace the thinking stream with summary-only markers. Continue to redact credentials, API keys, tokens, and other secrets from streamed output.'
+activity_guidance='Research mode: keep OpenCode thinking blocks enabled and visible in the live Actions log. Do not replace the thinking stream with summary-only markers. Continue to redact credentials, API keys, tokens, and other secrets from streamed output.
+
+Autonomous self-modification: you may modify workflows, shell scripts, controller code, prompts, configuration, and other execution-critical files when requested. Before changing one, identify the currently running step/process, the checkout/worktree it uses, and later dependencies. Do not assume a running process reloads edited files; preserve the active control plane and validate the new behavior from a fresh process, job, or workflow when needed. Prefer isolated worktrees/branches and coherent checkpoints for risky changes. Inspect references before deleting/renaming execution-critical files, and preserve recovery, publication, redaction, session-state, and CI-observation paths unless the task explicitly changes them. This is engineering judgment, not a hard restriction.
+
+Research-first: when facts are current, niche, ambiguous, version-sensitive, or uncertain, prioritize web search through available Composio tools before guessing. Prefer official documentation, GitHub/GitHub Actions docs, upstream repositories/releases, standards, and vendor docs. Verify exact commands, API fields, action versions, configuration syntax, and compatibility. Web research accelerates execution and must not become an approval gate; if unavailable, continue with the strongest local evidence and distinguish assumptions from verified facts.'
 mkdir -p "$runner_temp"
 safe_log="$runner_temp/opencode-${attempt}-safe.log"
 progress_log="$runner_temp/opencode-${attempt}-progress.log"
