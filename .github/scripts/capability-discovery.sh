@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Lean capability discovery/acquisition helper for OpenCode runs.
-# This is an accelerator, not a hard tool allowlist.
+# Accelerator only; unknown capabilities remain the agent's responsibility.
 set -u
 
 workspace=""
@@ -19,19 +19,19 @@ mkdir -p "$(dirname "$output")"
 
 task_text="$(cat "$task_file" 2>/dev/null || true)"
 lower_task="$(printf "%s" "$task_text" | tr "[:upper:]" "[:lower:]")"
-caps_file="${RUNNER_TEMP:-/tmp}/oc-capabilities.$$.txt"
-installs=""
-notes=""
+caps_file="${RUNNER_TEMP:-/tmp}/oc-capabilities.$$.tsv"
+install_list=""
+notes=()
 cleanup() { rm -f "$caps_file"; }
 trap cleanup EXIT
 
 cap() { printf "%s\t%s\t%s\t%s\n" "$1" "$2" "$3" "$4" >> "$caps_file"; }
 need() {
   local p="$1"
-  case " $installs " in
-    *" $p "*) ;;
-    *) installs="${installs:+$installs }$p" ;;
+  case " $install_list " in
+    *" $p "*) return 0 ;;
   esac
+  install_list="${install_list:+$install_list }$p"
 }
 
 cap git git git "repository lifecycle"
@@ -51,8 +51,8 @@ if find "$workspace" -maxdepth 2 \( -name pyproject.toml -o -name requirements.t
   cap pip pip3 python3-pip "Python dependency management"
   cap venv python3 python3-venv "isolated Python tooling"
 fi
-[[ -e "$workspace/Cargo.toml" ]] && cap rust cargo cargo "Rust project detected"
-[[ -e "$workspace/go.mod" ]] && cap go go golang "Go project detected"
+if [[ -e "$workspace/Cargo.toml" ]]; then cap rust cargo cargo "Rust project detected"; fi
+if [[ -e "$workspace/go.mod" ]]; then cap go go golang "Go project detected"; fi
 if [[ -e "$workspace/CMakeLists.txt" ]]; then
   cap cmake cmake cmake "CMake project detected"
   cap ninja ninja ninja-build "native build accelerator"
@@ -80,27 +80,27 @@ if printf "%s" "$lower_task" | grep -qiE "diagram|graphviz|dot generation"; then
 if printf "%s" "$lower_task" | grep -qiE "image|png|jpeg|jpg|svg|ocr"; then cap image-tools convert imagemagick "image processing"; fi
 if printf "%s" "$lower_task" | grep -qiE "ffmpeg|audio|video|media"; then cap ffmpeg ffmpeg ffmpeg "media processing"; fi
 if printf "%s" "$lower_task" | grep -qiE "security|vulnerability|sast|secret scan|dependency scan"; then
-  notes="${notes}\n- Security scanners such as Trivy, Semgrep, and Gitleaks are deliberately not bulk-installed. Acquire the required scanner from official current guidance and verify version/checksum/signature."
+  notes+=("Security scanners such as Trivy, Semgrep, and Gitleaks are not bulk-installed; acquire the required tool from official guidance and verify version/checksum/signature.")
 fi
 if command -v mise >/dev/null 2>&1; then
   cap mise mise "" "runtime/tool version manager"
 else
-  notes="${notes}\n- mise is not assumed globally installed. If an alternate runtime version is required, use the official current mise installation/release guidance and verify the selected version."
+  notes+=("mise is not assumed globally installed; acquire it only when an alternate runtime version is required, using current official guidance.")
 fi
 
-while IFS= read -r label cmd package reason; do
+while IFS=$'\t' read -r label cmd package reason; do
   [[ -n "$label" ]] || continue
   if ! command -v "$cmd" >/dev/null 2>&1 && [[ -n "$package" ]]; then need "$package"; fi
 done < "$caps_file"
 
-if [[ -n "$installs" ]]; then
+if [[ -n "$install_list" && "${OC_CAPABILITY_AUTO_INSTALL:-true}" == "true" ]]; then
   if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
-    echo "[CAP] acquiring missing capabilities: $installs"
-    if ! sudo apt-get update -y >/dev/null 2>&1 || ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $installs >/dev/null 2>&1; then
-      notes="${notes}\n- Automatic APT acquisition failed for: $installs. Continue with an official user-space/project-local installation path."
+    echo "[CAP] acquiring missing capabilities: $install_list"
+    if ! sudo apt-get update -y >/dev/null 2>&1 || ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $install_list >/dev/null 2>&1; then
+      notes+=("Automatic APT acquisition failed for: $install_list; research an official user-space/project-local installation path.")
     fi
   else
-    notes="${notes}\n- Insufficient privilege for APT acquisition: $installs. Continue with an official user-space/project-local installation path."
+    notes+=("Insufficient privilege for APT acquisition: $install_list; use an official user-space/project-local installation path.")
   fi
 fi
 
@@ -113,7 +113,7 @@ fi
   echo
   echo "## Required/detected capabilities"
   echo
-  while IFS=$"\t" read -r label cmd package reason; do
+  while IFS=$'\t' read -r label cmd package reason; do
     [[ -n "$label" ]] || continue
     if command -v "$cmd" >/dev/null 2>&1; then
       path="$(command -v "$cmd")"
@@ -135,105 +135,10 @@ fi
       echo "- [ ] $cmd — not installed"
     fi
   done
-  if [[ -n "$notes" ]]; then
+  if [[ ${#notes[@]} -gt 0 ]]; then
     echo
     echo "## Acquisition notes"
-    printf "%b\n" "$notes"
-  fi
-  echo
-  echo "## Policy"
-  echo
-  echo "This matrix is evidence for the primary OpenCode session, not a hard allowlist."
-  echo "Unknown capabilities may be acquired by the agent when required, using authoritative upstream instructions and verification."
-} > "$output"
-
-echo "[CAP] capability matrix: $output"
-exit 0\t' read -r label cmd package reason; do
-  [[ -n "$label" ]] || continue
-  if ! command -v "$cmd" >/dev/null 2>&1 && [[ -n "$package" ]]; then need "$package"; fi
-done < "$caps_file"
-
-if [[ -n "$installs" ]]; then
-  if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
-    echo "[CAP] acquiring missing capabilities: $installs"
-    if ! sudo apt-get update -y >/dev/null 2>&1 || ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $installs >/dev/null 2>&1; then
-      notes="${notes}\n- Automatic APT acquisition failed for: $installs. Continue with an official user-space/project-local installation path."
-    fi
-  else
-    notes="${notes}\n- Insufficient privilege for APT acquisition: $installs. Continue with an official user-space/project-local installation path."
-  fi
-fi
-
-{
-  echo "# OpenCode capability matrix"
-  echo
-  echo "- Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "- Workspace: $workspace"
-  echo "- Runner: $(uname -srm 2>/dev/null || true)"
-  echo
-  echo "## Required/detected capabilities"
-  echo
-  while IFS= read -r label cmd package reason; do
-    [[ -n "$label" ]] || continue
-    if command -v "$cmd" >/dev/null 2>&1; then
-      path="$(command -v "$cmd")"
-      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
-      [[ -n "$version" ]] || version="$("$cmd" -V 2>/dev/null | head -n 1 || true)"
-      echo "- [x] $label — $version — $path — $reason"
-    else
-      echo "- [ ] $label — missing — $reason"
-    fi
-  done < "$caps_file"
-  echo
-  echo "## Useful baseline capabilities"
-  echo
-  for cmd in python3 node npm cmake ninja clang clang-format clang-tidy docker kubectl helm gh jq yq rg shellcheck pandoc pdflatex pdfinfo pdftotext dot convert ffmpeg mise; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
-      echo "- [x] $cmd — $version"
-    else
-      echo "- [ ] $cmd — not installed"
-    fi
-  done
-  if [[ -n "$notes" ]]; then
-    echo
-    echo "## Acquisition notes"
-    printf "%b\n" "$notes"
-  fi
-  echo
-  echo "## Policy"
-  echo
-  echo "This matrix is evidence for the primary OpenCode session, not a hard allowlist."
-  echo "Unknown capabilities may be acquired by the agent when required, using authoritative upstream instructions and verification."
-} > "$output"
-
-echo "[CAP] capability matrix: $output"
-exit 0\t' read -r label cmd package reason; do
-    [[ -n "$label" ]] || continue
-    if command -v "$cmd" >/dev/null 2>&1; then
-      path="$(command -v "$cmd")"
-      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
-      [[ -n "$version" ]] || version="$("$cmd" -V 2>/dev/null | head -n 1 || true)"
-      echo "- [x] $label — $version — $path — $reason"
-    else
-      echo "- [ ] $label — missing — $reason"
-    fi
-  done < "$caps_file"
-  echo
-  echo "## Useful baseline capabilities"
-  echo
-  for cmd in python3 node npm cmake ninja clang clang-format clang-tidy docker kubectl helm gh jq yq rg shellcheck pandoc pdflatex pdfinfo pdftotext dot convert ffmpeg mise; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
-      echo "- [x] $cmd — $version"
-    else
-      echo "- [ ] $cmd — not installed"
-    fi
-  done
-  if [[ -n "$notes" ]]; then
-    echo
-    echo "## Acquisition notes"
-    printf "%b\n" "$notes"
+    for note in "${notes[@]}"; do echo "- $note"; done
   fi
   echo
   echo "## Policy"
