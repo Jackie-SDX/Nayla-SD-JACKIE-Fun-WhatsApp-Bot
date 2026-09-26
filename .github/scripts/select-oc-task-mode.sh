@@ -23,10 +23,10 @@ if [[ "$lower" =~ ^continue([[:space:]]|$) ]] &&
 elif [[ "$lower" =~ ^merge([[:space:]]|$) ]]; then
   merge_requested=true; session_required=true; mode=merge; intent=merge
 else
-  if printf '%s' "$lower" | grep -Eiq '\b(create|open|publish|submit)[[:space:]]+(a[[:space:]]+)?(pull[[:space:]-]*request|pr)\b'; then
+  positive_request="$(printf '%s' "$lower" | sed -E -e '/^[[:space:]]*(do not|dont|don'\''t|without)\b/d' -e 's/\b(do not|dont|don'\''t|without)\b.*$//g')"
+  if printf '%s' "$positive_request" | grep -Eiq '\b(create|open|publish|submit)[[:space:]]+(a[[:space:]]+)?(pull[[:space:]-]*request|pr)\b'; then
     publish_requested=true
   fi
-  positive_request="$(printf '%s' "$lower" | sed -E 's/\b(do not|dont|don'\''t|without)\b[^.!?;]*[.!?;]?//g')"
   content_signal=false
   repo_signal=false
   if printf '%s' "$positive_request" | grep -Eiq '\b(story|stories|chapter|fiction|poem|poetry|essay|prose|dialogue|joke|caption|lyrics?|sentences?|email|message|response|answer|creative|co-?author|part[[:space:]-]*[0-9]+)\b'; then
@@ -40,7 +40,7 @@ else
     mode=report
     intent=answer
     session_required=false
- elif printf '%s' "$lower" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
+ elif printf '%s' "$positive_request" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
     mode=code; intent=code; session_required=true; publish_requested=true
   elif [[ "$publish_requested" == true ]]; then
     mode=code; intent=publish; session_required=true
