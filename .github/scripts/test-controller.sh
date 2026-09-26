@@ -28,7 +28,7 @@ test -f Nayla/tools/pair.js
 test -f Nayla/scripts/test-agent-invariants.js
 test -f Nayla/docs/NAYLA_PROJECT_DOCUMENTATION.md
 jq empty opencode.json
-grep -Fq 'model: opencode/mimo-v2.6-flash-free' .github/workflows/opencode.yml
+grep -Fq "vars.OPENCODE_MODEL || 'opencode/mimo-v2.6-flash-free'" .github/workflows/opencode.yml
 grep -Fq 'Run primary OpenCode attempt' .github/workflows/opencode.yml
 bash -n .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd=(opencode run --thinking --dir "$agent_cwd" --model "$model_name")' .github/scripts/run-opencode-attempt.sh
