@@ -200,8 +200,8 @@ jobs:
           OC_CONTROLLER_ROOT: ${{ github.workspace }}
         run: bash .github/scripts/prepare-oc-target.sh
 
-      - name: Bootstrap Composio session MCP
-        if: env.OC_TASK_MODE == 'code' && env.OC_TASK_MODE != 'merge'
+      - name: Bootstrap Composio session MCP (all non-merge tasks)
+        if: env.OC_TASK_MODE != 'merge'
         continue-on-error: true
         id: composio_session
         shell: bash
@@ -212,9 +212,9 @@ jobs:
         if: env.OC_TASK_MODE != 'merge'
         continue-on-error: true
         env:
-          OC_CONTROLLER_UNIVERSAL_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || '' }}
-          OC_CONTROLLER_GH_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || github.token }}
-          COMPOSIO_API_KEY: ""
+          OC_CONTROLLER_UNIVERSAL_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          OC_CONTROLLER_GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         uses: ./.github/actions/oc-attempt
         with:
           attempt: '1'
