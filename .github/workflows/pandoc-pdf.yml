@@ -1,0 +1,68 @@
+name: Pandoc to PDF
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pandoc-pdf.yml"
+      - "docs/pandoc-demo/**"
+
+permissions:
+  contents: read
+
+jobs:
+  pandoc-to-pdf:
+    name: Markdown to PDF
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Pandoc
+        uses: pandoc/actions/setup@v1
+
+      - name: Install PDF engine (TeX Live LaTeX)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            lmodern
+
+      - name: Report toolchain versions
+        run: |
+          pandoc --version
+          pdflatex --version | head -n 2
+
+      - name: Convert Markdown to PDF
+        run: |
+          mkdir -p output
+          pandoc docs/pandoc-demo/snapdragon-pandoc-demo.md \
+            --pdf-engine=pdflatex \
+            --standalone \
+            --output output/snapdragon-pandoc-demo.pdf
+
+      - name: Verify the generated PDF
+        run: |
+          PDF=output/snapdragon-pandoc-demo.pdf
+          test -f "$PDF"
+          test -s "$PDF"
+          SIZE="$(stat -c %s "$PDF")"
+          MAGIC="$(head -c 5 "$PDF")"
+          echo "artifact path : $PDF"
+          echo "size bytes    : $SIZE"
+          echo "magic bytes   : $MAGIC"
+          test "$SIZE" -gt 1024
+          test "$MAGIC" = "%PDF-"
+          command -v file >/dev/null && file "$PDF" || true
+          ls -l output
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapdragon-pandoc-demo-pdf
+          path: output/snapdragon-pandoc-demo.pdf
+          if-no-files-found: error
