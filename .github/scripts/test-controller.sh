@@ -92,7 +92,11 @@ grep -Fq 'last_failure_signature' .github/scripts/recover-opencode-ci.sh
 grep -Fq 'identical actionable failure signature repeated' .github/scripts/recover-opencode-ci.sh
 if grep -Fq 'OC_MAX_RECOVERY_ROUNDS' .github/workflows/opencode.yml; then echo 'FAIL: dead recovery round ceiling remains in workflow'; exit 1; fi
 grep -Fq '1.18.32' .github/workflows/opencode.yml
-grep -Fq 'COMPOSIO_API_KEY: ""' .github/workflows/opencode.yml
+# The owner-authorized capability path must remain available to the primary agent.
+grep -Fq 'COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}' .github/workflows/opencode.yml
+if grep -Fq 'COMPOSIO_API_KEY: ""' .github/workflows/opencode.yml; then
+  fail 'primary OpenCode attempt must not blank the Composio capability credential'
+fi
 
 # Log cosmetics: summarize tool/command activity and keep comments free of live logs.
 grep -Fq 'suppress_command_output=0' .github/scripts/filter-opencode-live-output.awk
