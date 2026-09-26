@@ -56,6 +56,10 @@ Verify exact commands, API fields, action versions, configuration syntax, and co
 
 Research should accelerate execution, not become an approval gate. If web search is temporarily unavailable, continue with the strongest local evidence and clearly distinguish verified facts from assumptions.
 
+## Capability discovery / outside-the-box execution
+
+This heading is retained for controller compatibility. The rules below are the active capability-driven execution contract.
+
 ## Capability-driven execution
 
 Treat the user's requested outcome as the specification. Treat the implementation mechanism as an implementation detail unless the user explicitly requires a mechanism.
