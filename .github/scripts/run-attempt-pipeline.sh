@@ -20,11 +20,13 @@ set -e
 
 agent_outcome="failure"
 [[ "$agent_rc" -eq 0 ]] && agent_outcome="success"
-[[ "$clarification_required" == "true" ]] && agent_outcome="clarification"
 termination_reason="$(read_back termination_reason)"
 [[ -n "$termination_reason" ]] || termination_reason="failed"
+# Read before use: under `set -u`, referencing clarification_required before
+# this assignment aborts the whole attempt before a single output is written.
 clarification_required="$(read_back clarification_required)"
 [[ -n "$clarification_required" ]] || clarification_required="false"
+[[ "$clarification_required" == "true" ]] && agent_outcome="clarification"
 timed_out="false"
 [[ "$termination_reason" == "timeout" ]] && timed_out="true"
 safe_log_path="$(read_back safe_log_path)"

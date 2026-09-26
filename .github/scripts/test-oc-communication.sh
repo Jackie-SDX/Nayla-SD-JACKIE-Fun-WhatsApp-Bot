@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# bash ignores `set -e` for a pipeline that begins with `!`, so a bare
+# `! grep …` can never abort this suite. Route every negative assertion
+# through these helpers so an unexpected match is a hard failure.
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+absent() { # absent <fixed-string> <path...>
+  local needle="$1"; shift
+  if grep -Fq -- "$needle" "$@"; then fail "expected '$needle' to be absent from: $*"; fi
+}
+absent_in() { # absent_in <fixed-string>  (reads the text from stdin)
+  if grep -Fq -- "$1"; then fail "expected '$1' to be absent from the published text"; fi
+}
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -14,13 +27,15 @@ case "$*" in
   *"--method POST"*"/reactions"*) printf '%s\n' '123' ;;
   *"--method DELETE"*"/reactions/123"*) exit 0 ;;
   *"/issues/7/comments?per_page=100"*) printf '%s\n' '[[]]' ;;
-  "issue comment"*) printf '%s\n' "$*" > "$GH_COMMENT_FILE" ;;
+  *"api -X POST"*"/issues/"*"/comments"*) printf '%s\n' "$*" >> "${GH_PUBLISH_LOG:-/dev/null}" ;;
+  "issue comment"*) printf '%s\n' "$*" > "${GH_COMMENT_FILE:?GH_COMMENT_FILE test seam is unset}" ;;
   *) exit 0 ;;
 esac
 FAKEGH
 chmod +x "$bin/gh"
 export PATH="$bin:$PATH"
-export GITHUB_REPOSITORY=fixture/repo GITHUB_EVENT_NAME=issue_comment RUNNER_TEMP="$tmp" GH_COMMENT_FILE="$tmp/comment" RUN_ID=424242
+export GITHUB_REPOSITORY=fixture/repo GITHUB_EVENT_NAME=issue_comment RUNNER_TEMP="$tmp" GH_COMMENT_FILE="$tmp/comment" GH_PUBLISH_LOG="$tmp/api-publish" RUN_ID=424242
+: > "$GH_PUBLISH_LOG"
 cat > "$tmp/event.json" <<'JSON'
 {"comment":{"id":7},"issue":{"number":7}}
 JSON
@@ -38,22 +53,43 @@ export A1=success P1=report-only V1=false PR1= SHA1= TASK_MODE=report
 bash "$root/.github/scripts/post-oc-result.sh"
 body="$(cat "$tmp/comment")"
 grep -Fq 'clean final answer' <<<"$body"
-! grep -Fq '[object Object]' <<<"$body"
-! grep -Fq '[OPENCODE]' <<<"$body"
+absent_in '[object Object]' <<<"$body"
+absent_in '[OPENCODE]' <<<"$body"
 rm -f "$tmp/comment"
 printf '%s\n' 'story response without PR publication' > "$tmp/opencode-final-response-1.md"
 export A1=success P1=not-requested V1=false PR1= SHA1= TASK_MODE=code
 bash "$root/.github/scripts/post-oc-result.sh"
 body="$(cat "$tmp/comment")"
 grep -Fq 'story response without PR publication' <<<"$body"
-! grep -Fq 'Publication was not requested' <<<"$body"
-! grep -Fq 'tail -n 160 "$REPORT_LOG"' "$root/.github/workflows/opencode.yml"
-! grep -Fq 'safe_tail="$(gh run view' "$root/.github/scripts/verify-agent-result.sh"
-! grep -Fq 'Sanitized failure evidence:' "$root/.github/scripts/verify-agent-result.sh"
-grep -Fq 'Mark triggering /oc comment as running' "$root/.github/workflows/opencode.yml"
+absent_in 'Publication was not requested' <<<"$body"
+absent 'tail -n 160 "$REPORT_LOG"' "$root/.github/workflows/opencode.yml"
+absent 'safe_tail="$(gh run view' "$root/.github/scripts/verify-agent-result.sh"
+absent 'Sanitized failure evidence:' "$root/.github/scripts/verify-agent-result.sh"
+# Current communication contract: the triggering comment is claimed with an
+# authenticated eyes reaction and the running reaction is cleared when the run
+# finishes. The obsolete "Mark triggering /oc comment as running" workflow step
+# must not return; test-controller.sh enforces the same invariant.
+grep -Fq 'Claim unique /oc comment delivery' "$root/.github/workflows/opencode.yml"
+grep -Fq 'content=eyes' "$root/.github/scripts/claim-oc-command.sh"
+absent 'name: Mark triggering /oc comment as running' "$root/.github/workflows/opencode.yml"
 grep -Fq 'Clear /oc running reaction' "$root/.github/workflows/opencode.yml"
 grep -Fq 'message.part.updated' "$root/.opencode/plugins/agentic-observability.js"
-! grep -Fq 'OC_PUBLISH_REQUESTED:-' "$root/.github/scripts/run-attempt-pipeline.sh"
+# Publication is opt-in: the attempt pipeline falls back to false when the
+# caller does not provide OC_PUBLISH_REQUESTED.
+grep -Fq 'OC_PUBLISH_REQUESTED:-' "$root/.github/scripts/run-attempt-pipeline.sh"
+
+# Production publisher path: with the GH_COMMENT_FILE seam unset, the result
+# must go out through the authenticated API POST and never through
+# `gh issue comment` (the seam-only form asserted above).
+rm -f "$tmp/comment"
+: > "$GH_PUBLISH_LOG"
+unset GH_COMMENT_FILE
+export A1=success P1=not-requested V1=false PR1= SHA1= TASK_MODE=code
+bash "$root/.github/scripts/post-oc-result.sh"
+grep -Fq 'api -X POST' "$GH_PUBLISH_LOG"
+grep -Fq '/repos/fixture/repo/issues/7/comments' "$GH_PUBLISH_LOG"
+absent 'issue comment' "$GH_PUBLISH_LOG"
+[[ ! -e "$tmp/comment" ]]
 cat > "$tmp/event-code.json" <<'JSON'
 {"comment":{"id":10,"body":"/oc Fix the workflow bug and add a regression test. Do not create a PR yet."},"issue":{"number":10}}
 JSON
@@ -83,8 +119,8 @@ GITHUB_EVENT_PATH="$tmp/event-multiline.json" GITHUB_ENV="$tmp/env-multiline" GI
 grep -Fq 'OC_COMMAND_TEXT<<' "$tmp/env-multiline"
 grep -Fq 'OC_COMMAND_TEXT<<' "$tmp/out-multiline"
 grep -Fq 'OC_TASK_MODE=code' "$tmp/env-multiline"
-! grep -q 'OC_COMMAND_TEXT=Fix the parser' "$tmp/env-multiline"
-! grep -q 'OC_COMMAND_TEXT=Fix the parser' "$tmp/out-multiline"
+absent 'OC_COMMAND_TEXT=Fix the parser' "$tmp/env-multiline"
+absent 'OC_COMMAND_TEXT=Fix the parser' "$tmp/out-multiline"
 
 bash -n "$root/.github/scripts/claim-oc-command.sh"
 claim_tmp="$(mktemp -d)"

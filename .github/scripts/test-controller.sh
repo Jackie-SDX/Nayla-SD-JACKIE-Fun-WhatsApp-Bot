@@ -1,5 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# bash ignores `set -e` for a pipeline that begins with `!`, so a bare
+# `! grep …` can never abort this suite. Route every negative assertion
+# through these helpers so an unexpected match is a hard failure.
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+absent() { # absent <fixed-string> <path...>
+  local needle="$1"; shift
+  if grep -Fq -- "$needle" "$@"; then fail "expected '$needle' to be absent from: $*"; fi
+}
+absent_re() { # absent_re <extended-regex> <path...>
+  local pattern="$1"; shift
+  if grep -Eq -- "$pattern" "$@"; then fail "expected /$pattern/ to be absent from: $*"; fi
+}
+missing() { # missing <path>
+  if [[ -e "$1" ]]; then fail "expected '$1' not to exist"; fi
+}
+
 test ! -e index.js
 test ! -e package.json
 test ! -e package-lock.json
@@ -17,22 +34,28 @@ bash -n .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd=(opencode run --thinking --dir "$agent_cwd" --model "$model_name")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'task_prompt="Execute the latest user request in the attached issue context.' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-attempt.sh
-! grep -Eq 'attempt_[23]|route_[123]|select-opencode-route|independent-audit-advisory|COPILOT|OPENROUTER|GEMINI' .github/workflows/opencode.yml
-! grep -Eq 'github-copilot|openrouter|GEMINI|GROQ|CEREBRAS|MISTRAL|record-model-memory|classify-provider-failure' .github/scripts/run-attempt-pipeline.sh .github/scripts/run-opencode-attempt.sh .opencode/instructions.md opencode.json
-! grep -Fq 'subagent_depth' opencode.json
-! test -e .github/scripts/run-copilot-attempt.sh
-! test -e .github/scripts/select-opencode-route.sh
+absent_re 'attempt_[23]|route_[123]|select-opencode-route|independent-audit-advisory|COPILOT|OPENROUTER|GEMINI' .github/workflows/opencode.yml
+absent_re 'github-copilot|openrouter|GEMINI|GROQ|CEREBRAS|MISTRAL|record-model-memory|classify-provider-failure' .github/scripts/run-attempt-pipeline.sh .github/scripts/run-opencode-attempt.sh .opencode/instructions.md opencode.json
+absent 'subagent_depth' opencode.json
+missing .github/scripts/run-copilot-attempt.sh
+missing .github/scripts/select-opencode-route.sh
 echo 'controller invariants: PASS'
 
-# One /oc comment -> one workflow execution: controller responses edit, never create, comments.
+# One /oc comment -> one workflow execution: the triggering user comment is
+# immutable (claimed with a reaction, never edited) and exactly one controller
+# result comment is published per run.
 grep -Fq 'group: oc-claim-${{ github.event.comment.id || github.run_id }}' .github/workflows/opencode.yml
 grep -Fq 'group: oc-agent-${{ github.event.comment.id || github.run_id }}' .github/workflows/opencode.yml
-! grep -Fq 'Register /oc run marker' .github/workflows/opencode.yml
-! grep -Fq 'Human handoff when the primary agent stops without durable work' .github/workflows/opencode.yml
-! grep -Fq 'gh issue comment "$target" --body "$marker"' .github/scripts/claim-oc-command.sh
-! grep -Fq 'gh issue comment "$target" --body "$body"' .github/scripts/post-oc-result.sh
+absent 'Register /oc run marker' .github/workflows/opencode.yml
+absent 'Human handoff when the primary agent stops without durable work' .github/workflows/opencode.yml
+absent 'gh issue comment "$target" --body "$marker"' .github/scripts/claim-oc-command.sh
+# Result publication runs through the authenticated API POST asserted below.
+# The single `gh issue comment` call exists only behind the GH_COMMENT_FILE
+# test seam; test-oc-communication.sh behaviorally proves which path runs.
+grep -Fq 'if [[ -n "${GH_COMMENT_FILE:-}" ]]' .github/scripts/post-oc-result.sh
+[[ "$(grep -Fc 'gh issue comment "$target" --body "$body"' .github/scripts/post-oc-result.sh)" -eq 1 ]]
 # OpenCode prompt must be stdin so repeatable --file cannot consume it.
-! grep -Fq 'agent_cmd+=("$task_prompt")' .github/scripts/run-opencode-attempt.sh
+absent 'agent_cmd+=("$task_prompt")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-attempt.sh
 grep -Fq '< <(printf "%s' .github/scripts/run-opencode-attempt.sh
 
@@ -43,7 +66,7 @@ grep -Fq 'gh api user' .github/scripts/claim-oc-command.sh
 # Final result is a new top-level comment using GITHUB_TOKEN.
 grep -Fq 'gh api -X POST -f body="$body" "/repos/$repo/issues/$target/comments"' .github/scripts/post-oc-result.sh
 grep -Fq 'GH_TOKEN: ${{ github.token }}' .github/workflows/opencode.yml
-! grep -Fq 'name: Mark triggering /oc comment as running' .github/workflows/opencode.yml
+absent 'name: Mark triggering /oc comment as running' .github/workflows/opencode.yml
 
 # Research mode: stream OpenCode thinking blocks into Actions logs.
 grep -Fq 'opencode run --thinking --dir "$agent_cwd" --model "$model_name"' .github/scripts/run-opencode-attempt.sh
@@ -74,7 +97,7 @@ grep -Fq '38;5;141m' .github/scripts/filter-opencode-live-output.awk
 grep -Fq '38;5;214m' .github/scripts/filter-opencode-live-output.awk
 grep -Fq '91m' .github/scripts/filter-opencode-live-output.awk
 grep -Fq 'Tool:' .github/scripts/filter-opencode-live-output.awk
-! grep -Fq 'safe_log="$SAFE_LOG"' .github/scripts/post-oc-result.sh
+absent 'safe_log="$SAFE_LOG"' .github/scripts/post-oc-result.sh
 grep -Fq '/^[[:space:]]*Thinking:' .github/scripts/post-oc-result.sh
 
 fixture="$(mktemp)"
@@ -84,8 +107,10 @@ printf '%s
 filtered="$(awk -f .github/scripts/filter-opencode-live-output.awk "$fixture")"
 printf '%s
 ' "$filtered" | grep -Fq '→ ls -la'
-! printf '%s
-' "$filtered" | grep -Fq 'total 40'
+if printf '%s
+' "$filtered" | grep -Fq 'total 40'; then
+  fail "expected 'total 40' to be absent from the filtered live output"
+fi
 printf '%s
 ' "$filtered" | grep -Fq 'Thinking: inspecting repository'
 printf '%s
@@ -94,3 +119,39 @@ printf '%s
 ' "$filtered" | grep -Fq '⚠ WARNING: cache stale'
 printf '%s
 ' "$filtered" | grep -Fq '✗ ERROR: command failed'
+
+# The attempt pipeline must run to completion and emit its outputs. Reading
+# clarification_required before it is assigned aborts the attempt under `set -u`
+# before a single output is written, so drive it end to end with a stub agent.
+pipeline_root="$(mktemp -d)"
+trap 'rm -f "$fixture"; rm -rf "$pipeline_root"' EXIT
+mkdir -p "$pipeline_root/.github/scripts"
+cp .github/scripts/run-attempt-pipeline.sh "$pipeline_root/.github/scripts/"
+cat > "$pipeline_root/.github/scripts/run-opencode-attempt.sh" <<'STUB'
+#!/usr/bin/env bash
+printf 'termination_reason=completed\nsafe_log_path=/tmp/safe.log\nagent_branch=\nclarification_required=%s\npr_url=\n' "${STUB_CLARIFICATION:-false}" >> "${GITHUB_OUTPUT:-/dev/null}"
+exit 0
+STUB
+
+run_pipeline() { # run_pipeline <task-mode> <clarification> <output-file>
+  ( cd "$pipeline_root" && GITHUB_OUTPUT="$3" ATTEMPT=1 MODEL=test-model \
+    OC_TARGET_MODE=local TASK_MODE="$1" OC_PUBLISH_REQUESTED=false \
+    INITIAL_SHA=0000000000000000000000000000000000000000 \
+    STUB_CLARIFICATION="$2" bash .github/scripts/run-attempt-pipeline.sh ) >/dev/null
+}
+
+: > "$pipeline_root/report.out"
+run_pipeline report false "$pipeline_root/report.out"
+grep -Fq 'agent_outcome=success' "$pipeline_root/report.out"
+grep -Fq 'clarification_required=false' "$pipeline_root/report.out"
+grep -Fq 'publish_outcome=report-only' "$pipeline_root/report.out"
+grep -Fq 'result_state=completed' "$pipeline_root/report.out"
+
+: > "$pipeline_root/clarify.out"
+run_pipeline code true "$pipeline_root/clarify.out"
+grep -Fq 'agent_outcome=clarification' "$pipeline_root/clarify.out"
+grep -Fq 'clarification_required=true' "$pipeline_root/clarify.out"
+grep -Fq 'publish_outcome=waiting-for-input' "$pipeline_root/clarify.out"
+grep -Fq 'result_state=awaiting-input' "$pipeline_root/clarify.out"
+
+echo 'attempt pipeline output contract: OK'
