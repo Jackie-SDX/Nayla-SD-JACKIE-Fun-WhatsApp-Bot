@@ -7,7 +7,8 @@
       "task": "Reply with exactly the word `hello`. Do not inspect files or make repository changes.",
       "setup": [],
       "verify": [
-        "grep -qi 'hello' \"$OUTPUT\"",        "test -z \"$(git -C \"$REPO\" status --porcelain)\""
+        "grep -qi 'hello' \"$OUTPUT\"",
+        "test -z \"$(git -C \"$REPO\" status --porcelain)\""
       ]
     },
     {
@@ -95,7 +96,7 @@
         "git add . && git commit -qm 'fixture'"
       ],
       "verify": [
-        "! git -C \"$REPO\" status --porcelain",
+        "test -z \"$(git -C \"$REPO\" status --porcelain)\"",
         "grep -Eiq 'clarif|which (service|environment|platform)|need (more|additional) (information|context)|question' \"$OUTPUT\""
       ]
     },

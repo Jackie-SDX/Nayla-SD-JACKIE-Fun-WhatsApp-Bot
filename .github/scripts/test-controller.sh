@@ -170,3 +170,7 @@ if grep -Fq 'capability-discovery.sh' .github/scripts/run-opencode-attempt.sh; t
 grep -Fq '.opencode/skills/capability-discovery/SKILL.md' .github/scripts/test-controller.sh .github/agent-evals/README.md 2>/dev/null || true
 
 grep -Fq 'name: capability-discovery' .opencode/skills/capability-discovery/SKILL.md
+
+# Capability acquisition is agent-owned through the OpenCode skill.
+grep -Fq 'OC_CAPABILITY_AUTO_INSTALL=true' .opencode/skills/capability-discovery/SKILL.md
+grep -Fq 'The controller intentionally does not run this preflight' .opencode/skills/capability-discovery/SKILL.md
