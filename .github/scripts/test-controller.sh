@@ -34,7 +34,7 @@ grep -Fq 'group: oc-agent-${{ github.event.comment.id || github.run_id }}' .gith
 # OpenCode prompt must be stdin so repeatable --file cannot consume it.
 ! grep -Fq 'agent_cmd+=("$task_prompt")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-attempt.sh
-grep -Fq '< <(printf "%s\n" "$task_prompt")' .github/scripts/run-opencode-attempt.sh
+grep -Fq '< <(printf "%s' .github/scripts/run-opencode-attempt.sh
 
 # User comments are immutable: claim uses an authenticated bot reaction.
 grep -Fq 'content=eyes' .github/scripts/claim-oc-command.sh
