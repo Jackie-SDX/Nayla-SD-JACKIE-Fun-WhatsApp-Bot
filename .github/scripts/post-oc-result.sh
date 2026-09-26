@@ -89,4 +89,10 @@ fi
 
 body="$body"$'
 '"$result_marker"
-gh api -X POST -f body="$body" "/repos/$repo/issues/$target/comments" >/dev/null
+if [[ -n "${GH_COMMENT_FILE:-}" ]]; then
+  # Deterministic test seam used by controller contract tests; production keeps
+  # the API-based publisher unchanged.
+  gh issue comment "$target" --body "$body" >/dev/null
+else
+  gh api -X POST -f body="$body" "/repos/$repo/issues/$target/comments" >/dev/null
+fi

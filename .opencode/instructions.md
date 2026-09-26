@@ -87,6 +87,8 @@ Do not ask the user for information that can be discovered from the repository, 
 
 When a material ambiguity cannot be resolved safely from evidence, do not guess. Ask one focused clarification question, persist the session as waiting-for-input, and resume the same durable session after the user answers. In headless CI, record the clarification request for the controller to publish back to the issue/PR; do not silently fail or invent an assumption.
 
+In headless `/oc` CI specifically, write the exact question to `.opencode/NEEDS_CLARIFICATION.md` (one question, with only the context needed to answer it) and stop before making an unsafe irreversible choice. The controller publishes that file and resumes the durable session after the user answers.
+
 ## Information quality
 
 For current, niche, ambiguous, version-sensitive, security-sensitive, or externally documented facts, research authoritative live sources before acting. Prefer official product documentation, GitHub/GitHub Actions documentation, upstream repositories/releases, package registries, standards, advisories, and vendor documentation.
