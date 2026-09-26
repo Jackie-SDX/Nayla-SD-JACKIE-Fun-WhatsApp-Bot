@@ -20,7 +20,7 @@
       ],
       "verify": [
         "grep -q 'src/auth.js' \"$OUTPUT\"",
-        "! git -C \"$REPO\" status --porcelain"
+        "test -z \"$(git -C \"$REPO\" status --porcelain)\""
       ]
     },
     {
