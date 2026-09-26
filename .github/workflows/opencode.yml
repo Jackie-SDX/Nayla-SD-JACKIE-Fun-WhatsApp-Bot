@@ -212,9 +212,8 @@ jobs:
         if: env.OC_TASK_MODE != 'merge'
         continue-on-error: true
         env:
-          UNIVERSAL_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || '' }}
-          GITHUB_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || github.token }}
-          GH_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || github.token }}
+          OC_CONTROLLER_UNIVERSAL_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || '' }}
+          OC_CONTROLLER_GH_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || github.token }}
           COMPOSIO_API_KEY: ""
         uses: ./.github/actions/oc-attempt
         with:
