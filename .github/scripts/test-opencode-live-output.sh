@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# bash ignores `set -e` for a pipeline that begins with `!`, so a bare
+# `! grep …` can never abort this suite. Route every negative assertion
+# through this helper so an unexpected match is a hard failure.
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+absent() { # absent <fixed-string> <path...>
+  local needle="$1"; shift
+  if grep -Fq -- "$needle" "$@"; then fail "expected '$needle' to be absent from: $*"; fi
+}
+
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 FILTER="$ROOT_DIR/.github/scripts/filter-opencode-live-output.awk"
 TMP="$(mktemp -d "${RUNNER_TEMP:-/tmp}/oc-live-filter-XXXXXX")"
@@ -47,20 +56,20 @@ awk -f "$FILTER" "$TMP/input" | sed $'s/\033\[[0-9;]*m//g' > "$TMP/output"
 
 grep -Fq '▶ I now have the full picture; the remaining work is isolated to the controller logging layer.' "$TMP/output"
 grep -Fq '◆ I’ll update the presentation filter, then run the controller validation suite.' "$TMP/output"
-grep -Fq '• Reading file…' "$TMP/output"
-grep -Fq '• Editing "/home/runner/work/SnapDragon/SnapDragon/.github/workflows/opencode.yml"' "$TMP/output"
-grep -Fq '• Running command…' "$TMP/output"
+grep -Fq '• Reading file' "$TMP/output"
+grep -Fq '• Editing /home/runner/work/SnapDragon/SnapDragon/.github/workflows/opencode.yml' "$TMP/output"
+grep -Fq '→ Running command' "$TMP/output"
 grep -Fq 'Useful finding: the controller contract is intact.' "$TMP/output"
 grep -Fq '✓ The logging change is implemented and the validation checks are green.' "$TMP/output"
 
-! grep -Fq '|  Read ' "$TMP/output"
-! grep -Fq '|  Shell ' "$TMP/output"
-! grep -Fq 'session.id' "$TMP/output"
-! grep -Fq 'providerID: "opencode"' "$TMP/output"
-! grep -Fq 'permission: "read"' "$TMP/output"
-! grep -Fq 'llm.runtime' "$TMP/output"
-! grep -Fq 'tracking {' "$TMP/output"
-! grep -Fq 'GEMINI' "$TMP/output"
-! grep -Fq 'COPILOT' "$TMP/output"
+absent '|  Read ' "$TMP/output"
+absent '|  Shell ' "$TMP/output"
+absent 'session.id' "$TMP/output"
+absent 'providerID: "opencode"' "$TMP/output"
+absent 'permission: "read"' "$TMP/output"
+absent 'llm.runtime' "$TMP/output"
+absent 'tracking {' "$TMP/output"
+absent 'GEMINI' "$TMP/output"
+absent 'COPILOT' "$TMP/output"
 
 echo "human-oriented live OpenCode output filter: OK"

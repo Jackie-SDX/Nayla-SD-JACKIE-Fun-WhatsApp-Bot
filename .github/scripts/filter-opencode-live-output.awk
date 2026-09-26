@@ -13,6 +13,19 @@ function bright_orange(s) { return color("\033[38;5;214m",s) }
 function red(s) { return color("\033[91m",s) }
 
 function emit(s) { print s; fflush() }
+# Net brace delta outside of double-quoted strings; used to swallow a whole
+# structured INFO payload instead of leaking its member lines.
+function brace_delta(s,    i,ch,quoted,escaped,delta) {
+  quoted=0; escaped=0; delta=0
+  for (i=1; i<=length(s); i++) {
+    ch=substr(s,i,1)
+    if (escaped) { escaped=0; continue }
+    if (ch=="\\" && quoted) { escaped=1; continue }
+    if (ch=="\"") { quoted=!quoted; continue }
+    if (!quoted) { if (ch=="{") delta++; else if (ch=="}") delta-- }
+  }
+  return delta
+}
 function clean_line(line) { gsub(/\033\[[0-9;]*m/, "", line); sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line); return line }
 function status_text(line,prefix,out) { out=line; sub(prefix,"",out); sub(/^[[:space:]]+/,"",out); sub(/[[:space:]]+$/,"",out); return out }
 function extract_file(line,file) { file=line; sub(/^.*file:[[:space:]]*"/,"",file); sub(/".*$/,"",file); return file }
@@ -21,6 +34,8 @@ function tool_summary(line,out,fields,tool) { out=line; sub(/^.*⚙[[:space:]]*/
 
 BEGIN {
   suppress_command_output=0
+  suppress_info=0
+  info_depth=0
   touching=0
   touch_file=""
   tool_event["Read"]="Reading file"
@@ -48,6 +63,20 @@ BEGIN {
 
   if (line ~ /^\[OC\]\[heartbeat/ || line ~ /^\[OC\]\[attempt=.*\][[:space:]]heartbeat/) next
   if (line ~ /^\[OC\]\[attempt=.*\][[:space:]]+(started|finished|live stream complete)/ || line ~ /^\[OC\]\[LIVE\]/) next
+
+  # Structured INFO payloads (process/stream/llm runtime/…) are internals the
+  # operator never needs: swallow the whole brace-delimited body, not just its
+  # opening line.
+  if (suppress_info) {
+    info_depth += brace_delta(line)
+    if (info_depth <= 0) { suppress_info=0; info_depth=0 }
+    next
+  }
+  if (line ~ /^\[[^]]+\] INFO \(#[0-9]+\): (process|stream|llm runtime selected|evaluated|tracking|loop|snapshot|telemetry)[[:space:]]*\{/) {
+    info_depth = brace_delta(line)
+    if (info_depth > 0) suppress_info = 1
+    next
+  }
 
   if (line ~ /(ERROR|Error|error|FAILED|Failed|failure|Failure|exception|Exception|panic|denied|DENIED|fatal)/) { emit(red("✗ " line)); suppress_command_output=0; next }
   if (line ~ /(WARNING|Warning|warning|deprecated|DEPRECATED|timeout|timed out|rate limit)/) { emit(bright_orange("⚠ " line)); suppress_command_output=0; next }
