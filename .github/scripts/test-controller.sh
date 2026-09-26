@@ -49,6 +49,13 @@ grep -Fq 'GH_TOKEN: ${{ github.token }}' .github/workflows/opencode.yml
 grep -Fq 'opencode run --thinking --dir "$agent_cwd" --model "$model_name"' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'Research mode: keep OpenCode thinking blocks enabled' .github/scripts/run-opencode-attempt.sh
 
+# Autonomous self-modification and research guidance must remain durable.
+grep -Fq '## Autonomous self-modification protocol' .opencode/instructions.md
+grep -Fq 'This is engineering judgment, not a blanket restriction.' .opencode/instructions.md
+grep -Fq 'running process does not automatically reload an edited file' .opencode/instructions.md
+grep -Fq '## Research-first / web-first' .opencode/instructions.md
+grep -Fq 'web/search tools are available through Composio' .opencode/instructions.md
+grep -Fq 'official product documentation, GitHub/GitHub Actions documentation' .opencode/instructions.md
 
 # Log cosmetics: summarize tool/command activity and keep comments free of live logs.
 grep -Fq 'suppress_command_output=0' .github/scripts/filter-opencode-live-output.awk
@@ -62,11 +69,18 @@ grep -Fq '/^[[:space:]]*Thinking:' .github/scripts/post-oc-result.sh
 
 fixture="$(mktemp)"
 trap 'rm -f "$fixture"' EXIT
-printf '%s\n' '$ ls -la' 'total 40' 'Thinking: inspecting repository' '⚙ composio_COMPOSIO_SEARCH_TOOLS' 'WARNING: cache stale' 'ERROR: command failed' > "$fixture"
+printf '%s
+' '$ ls -la' 'total 40' 'Thinking: inspecting repository' '⚙ composio_COMPOSIO_SEARCH_TOOLS' 'WARNING: cache stale' 'ERROR: command failed' > "$fixture"
 filtered="$(awk -f .github/scripts/filter-opencode-live-output.awk "$fixture")"
-printf '%s\n' "$filtered" | grep -Fq '→ ls -la'
-! printf '%s\n' "$filtered" | grep -Fq 'total 40'
-printf '%s\n' "$filtered" | grep -Fq 'Thinking: inspecting repository'
-printf '%s\n' "$filtered" | grep -Fq 'Tool: COMPOSIO SEARCH TOOLS'
-printf '%s\n' "$filtered" | grep -Fq '⚠ WARNING: cache stale'
-printf '%s\n' "$filtered" | grep -Fq '✗ ERROR: command failed'
+printf '%s
+' "$filtered" | grep -Fq '→ ls -la'
+! printf '%s
+' "$filtered" | grep -Fq 'total 40'
+printf '%s
+' "$filtered" | grep -Fq 'Thinking: inspecting repository'
+printf '%s
+' "$filtered" | grep -Fq 'Tool: COMPOSIO SEARCH TOOLS'
+printf '%s
+' "$filtered" | grep -Fq '⚠ WARNING: cache stale'
+printf '%s
+' "$filtered" | grep -Fq '✗ ERROR: command failed'
