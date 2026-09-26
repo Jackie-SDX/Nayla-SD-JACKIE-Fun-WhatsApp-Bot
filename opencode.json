@@ -23,30 +23,5 @@
       "timeout": 20000
     }
   },
-  "permission": {
-    "read": {
-      "*": "allow",
-      "*.env": "deny",
-      "*.env.*": "deny",
-      ".env": "deny",
-      ".npmrc": "deny"
-    },
-    "bash": {
-      "*": "allow",
-      "git push --force *": "deny",
-      "git push -f *": "deny",
-      "git push --force-with-lease *": "deny",
-      "rm -rf /": "deny",
-      "rm -rf /*": "deny"
-    },
-    "external_directory": "allow",
-    "doom_loop": "allow",
-    "question": "allow",
-    "websearch": "allow",
-    "webfetch": "allow",
-    "skill": "allow",
-    "lsp": "allow",
-    "todowrite": "allow",
-    "todoread": "allow"
-  }
+  "permission": "allow"
 }
