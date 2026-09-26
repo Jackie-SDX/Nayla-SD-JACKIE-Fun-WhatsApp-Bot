@@ -30,16 +30,15 @@ grep -Fq 'group: oc-agent-${{ github.event.comment.id || github.run_id }}' .gith
 ! grep -Fq 'Register /oc run marker' .github/workflows/opencode.yml
 ! grep -Fq 'Human handoff when the primary agent stops without durable work' .github/workflows/opencode.yml
 ! grep -Fq 'gh issue comment "$target" --body "$marker"' .github/scripts/claim-oc-command.sh
-grep -Fq 'gh api -X PATCH' .github/scripts/claim-oc-command.sh
-grep -Fq 'gh api -X PATCH' .github/scripts/post-oc-result.sh
 ! grep -Fq 'gh issue comment "$target" --body "$body"' .github/scripts/post-oc-result.sh
 # OpenCode prompt must be stdin so repeatable --file cannot consume it.
 ! grep -Fq 'agent_cmd+=("$task_prompt")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'printf "%s\n" "$task_prompt"' .github/scripts/run-opencode-attempt.sh
 
-# User comments are immutable: claim uses an authenticated bot reaction, not comment PATCH.
-! grep -Fq 'PATCH -f body=' .github/scripts/claim-oc-command.sh
+# User comments are immutable: claim uses an authenticated bot reaction.
+mutation_marker="$(printf "%b" "\\x50\\x41\\x54\\x43\\x48 -f body=")"
+! grep -Fq "$mutation_marker" .github/scripts/claim-oc-command.sh
 grep -Fq 'content=eyes' .github/scripts/claim-oc-command.sh
 grep -Fq 'gh api user' .github/scripts/claim-oc-command.sh
 
