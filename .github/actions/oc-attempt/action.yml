@@ -1,128 +1,67 @@
-name: OpenCode attempt pipeline
-description: >-
-  Runs one route attempt of the hybrid OpenCode agent ladder as a single
-  composite step: copilot branch prep, agent run, publication, verification
-  with bounded exact-head CI recovery, failure classification, and model-memory
-  recording. All per-attempt inputs come in as action inputs so the parent
-  workflow never needs to replicate step copy-paste.
+name: OpenCode attempt
+description: Run one primary OpenCode execution and publish durable work when requested.
 inputs:
   attempt:
-    description: Ladder position (1, 2 or 3).
     required: true
-  provider:
-    description: Selected provider (opencode, github-copilot or none).
-    required: true
+    default: "1"
   model:
-    description: Selected OpenCode model id (or auto for Copilot).
     required: false
-    default: ""
+    default: opencode/mimo-v2.6-flash-free
   target_number:
-    description: Issue or PR number the /oc command addressed.
     required: false
     default: "0"
   base_ref:
-    description: Base branch the agent should publish against.
     required: false
-    default: ""
+    default: main
   initial_sha:
-    description: Controller checkout SHA captured at run start.
-    required: false
-    default: ""
+    required: true
   mode:
-    description: Execution mode (local or remote).
     required: false
     default: local
   task_mode:
-    description: Task mode (code or report).
     required: false
     default: code
-  verify_wait_minutes:
-    description: Verification wait window in minutes.
-    required: false
-    default: "20"
-  verify_poll_seconds:
-    description: Verification poll interval in seconds.
-    required: false
-    default: "20"
 outputs:
   agent_outcome:
-    description: success, failure or none.
     value: ${{ steps.run.outputs.agent_outcome }}
   termination_reason:
-    description: completed, timeout, signal or failed.
     value: ${{ steps.run.outputs.termination_reason }}
   verified:
-    description: true when an exact-SHA green PR was independently verified.
     value: ${{ steps.run.outputs.verified }}
-  retryable:
-    description: true when the verifier deemed the failure retryable.
-    value: ${{ steps.run.outputs.retryable }}
   timed_out:
-    description: true when verification timed out.
     value: ${{ steps.run.outputs.timed_out }}
   pr_url:
-    description: URL of the published/verified pull request.
     value: ${{ steps.run.outputs.pr_url }}
   verified_sha:
-    description: Exact SHA that was independently verified green.
     value: ${{ steps.run.outputs.verified_sha }}
   ci_surfaces:
-    description: Observable CI surfaces that produced the verdict.
     value: ${{ steps.run.outputs.ci_surfaces }}
   ci_run_id:
-    description: Identified validation workflow run id on CI failure.
     value: ${{ steps.run.outputs.ci_run_id }}
   publish_outcome:
-    description: published, failed or not-applicable.
     value: ${{ steps.run.outputs.publish_outcome }}
-  classify_outcome:
-    description: success, failure or not-applicable.
-    value: ${{ steps.run.outputs.classify_outcome }}
   safe_log_path:
-    description: Sanitized agent output log path.
     value: ${{ steps.run.outputs.safe_log_path }}
-  copilot_peer_result:
-    description: Copilot peer state for this attempt.
-    value: ${{ steps.run.outputs.copilot_peer_result }}
-  copilot_peer_elapsed_seconds:
-    description: Peer duration in seconds.
-    value: ${{ steps.run.outputs.copilot_peer_elapsed_seconds }}
-  copilot_peer_rounds_used:
-    description: Unique peer objectives attempted.
-    value: ${{ steps.run.outputs.copilot_peer_rounds_used }}
-  copilot_peer_log_path:
-    description: Sanitized peer log path.
-    value: ${{ steps.run.outputs.copilot_peer_log_path }}
   attempt_elapsed_seconds:
-    description: Wall-clock duration of the attempt.
     value: ${{ steps.run.outputs.attempt_elapsed_seconds }}
-  provider_warning:
-    description: true when an auxiliary provider warning occurred without overturning a successful primary attempt.
-    value: ${{ steps.run.outputs.provider_warning }}
   result_state:
-    description: Durable attempt result state used to prevent false fallback after publication.
     value: ${{ steps.run.outputs.result_state }}
   durable_work:
-    description: true when useful task work exists on the durable session branch.
     value: ${{ steps.run.outputs.durable_work }}
   session_head_sha:
-    description: Exact durable session branch head observed after the attempt.
     value: ${{ steps.run.outputs.session_head_sha }}
 runs:
   using: composite
   steps:
-    - name: Execute attempt pipeline
+    - name: Execute primary OpenCode lifecycle
       id: run
       shell: bash
       env:
         ATTEMPT: ${{ inputs.attempt }}
-        PROVIDER: ${{ inputs.provider }}
-        OC_SELECTED_MODEL: ${{ inputs.model }}
+        MODEL: ${{ inputs.model }}
         OC_TARGET_MODE: ${{ inputs.mode }}
         TASK_MODE: ${{ inputs.task_mode }}
         TARGET_NUMBER: ${{ inputs.target_number }}
         BASE_REF: ${{ inputs.base_ref }}
         INITIAL_SHA: ${{ inputs.initial_sha }}
-        OC_CI_VERIFY_WAIT_MINUTES: ${{ inputs.verify_wait_minutes }}
-        OC_CI_VERIFY_POLL_SECONDS: ${{ inputs.verify_poll_seconds }}
       run: bash .github/scripts/run-attempt-pipeline.sh
