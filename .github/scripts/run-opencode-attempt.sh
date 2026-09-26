@@ -156,25 +156,7 @@ fi
 
   # Report/answer tasks start immediately. OpenCode can inspect the actual task and acquire missing capabilities on demand.
   if [[ "$task_mode" == "code" ]]; then
-    capability_task_file="$runner_temp/oc-capability-task-$attempt.txt"
-    capability_matrix="$runner_temp/oc-capability-matrix-$attempt.md"
-    {
-      printf '%s\n\n' "$task_prompt"
-      [ -f "$context_seed" ] && cat "$context_seed"
-      [ -s "$context_refs" ] && cat "$context_refs"
-    } > "$capability_task_file"
-    if ! OC_CAPABILITY_AUTO_INSTALL=false bash "$script_dir/capability-discovery.sh" --workspace "$agent_cwd" --task-file "$capability_task_file" --output "$capability_matrix"; then
-      echo "::warning title=Capability discovery degraded::The helper could not complete cleanly; OpenCode will continue and can acquire additional capabilities itself."
-    fi
-    if [ -s "$capability_matrix" ]; then
-      agent_cmd+=(--file "$capability_matrix")
-      printf 'capability_matrix=%s\n' "$capability_matrix" >> "$output_file"
-      echo "[OC][attempt=$attempt] capability matrix ready: $capability_matrix"
-    fi
-  else
-    echo "[OC][attempt=$attempt] report task: skipping controller capability preflight; OpenCode will acquire only what it needs."
-  fi
-sanitize_line() {
+  sanitize_line() {
   local line="$1" secret
   for secret in \
     "${COMPOSIO_API_KEY:-}" \
