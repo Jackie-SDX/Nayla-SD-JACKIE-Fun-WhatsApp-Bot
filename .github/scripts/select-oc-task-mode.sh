@@ -26,7 +26,7 @@ else
   if printf '%s' "$lower" | grep -Eiq '\b(create|open|publish|submit)[[:space:]]+(a[[:space:]]+)?(pull[[:space:]-]*request|pr)\b'; then
     publish_requested=true
   fi
-  positive_request="$(printf '%s' "$lower" | sed -E 's/\b(do not|dont|don'\''t|without)\b[^.!?]*//g')"
+  positive_request="$(printf '%s' "$lower" | sed -E 's/\b(do not|dont|don'\''t|without)\b[^.!?;]*[.!?;]?//g')"
   content_signal=false
   repo_signal=false
   if printf '%s' "$positive_request" | grep -Eiq '\b(story|stories|chapter|fiction|poem|poetry|essay|prose|dialogue|joke|caption|lyrics?|sentences?|email|message|response|answer|creative|co-?author|part[[:space:]-]*[0-9]+)\b'; then
