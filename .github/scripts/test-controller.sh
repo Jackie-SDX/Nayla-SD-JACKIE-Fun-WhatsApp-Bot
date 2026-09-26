@@ -48,7 +48,6 @@ grep -Fq 'gh api -X POST -f body="$body" "/repos/$repo/issues/$target/comments"'
 grep -Fq 'GH_TOKEN: ${{ github.token }}' .github/workflows/opencode.yml
 ! grep -Fq 'name: Mark triggering /oc comment as running' .github/workflows/opencode.yml
 
-# Agent logs expose safe progress markers only.
-grep -Fq 'OC-PLAN/OC-STATUS/OC-DECISION markers' .github/scripts/run-opencode-attempt.sh
-grep -Fq 'streaming safe activity summaries and tool actions' .github/scripts/run-opencode-attempt.sh
-grep -Fq 'private chain-of-thought' .github/scripts/run-opencode-attempt.sh
+# Research mode: stream OpenCode thinking blocks into Actions logs.
+grep -Fq 'opencode run --thinking --dir "$agent_cwd" --model "$model_name"' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'Research mode: keep OpenCode thinking blocks enabled' .github/scripts/run-opencode-attempt.sh

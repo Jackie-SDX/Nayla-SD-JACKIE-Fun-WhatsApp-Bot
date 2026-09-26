@@ -29,7 +29,7 @@ command -v mkfifo >/dev/null 2>&1 || {
 }
 
 runner_temp="${RUNNER_TEMP:-/tmp}"
-activity_guidance='Operational log guidance: emit only brief high-level OC-PLAN/OC-STATUS/OC-DECISION markers for observable work (inspect repository, edit file, run tests, verify CI). Never emit private chain-of-thought, hidden reasoning, secrets, credentials, or raw sensitive context.'
+activity_guidance='Research mode: keep OpenCode thinking blocks enabled and visible in the live Actions log. Do not replace the thinking stream with summary-only markers. Continue to redact credentials, API keys, tokens, and other secrets from streamed output.'
 mkdir -p "$runner_temp"
 safe_log="$runner_temp/opencode-${attempt}-safe.log"
 progress_log="$runner_temp/opencode-${attempt}-progress.log"
@@ -92,7 +92,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   [[ -n "$task_prompt" ]] || task_prompt="Inspect the target repository workspace and implement the requested change. Work inside this repository only; use its own project instructions. You may commit, push, create/update PRs, inspect CI, repair failures, and merge when the user explicitly requests that lifecycle step. Never force-push, rewrite protected history, bypass branch protection, expose credentials, or make unrelated changes."
   model_name="${MODEL:-opencode/mimo-v2.6-flash-free}"
   task_prompt="$task_prompt"$'\n\n'"$activity_guidance"
-  agent_cmd=(opencode run --dir "$ws" --model "$model_name")
+  agent_cmd=(opencode run --thinking --dir "$ws" --model "$model_name")
   [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
   agent_cmd+=(--agent build --title "oc remote ${OC_TARGET_REPO:-target}")
 else
@@ -138,7 +138,7 @@ fi
     fi
 
     task_prompt="$task_prompt"$'\n\n'"$activity_guidance"
-    agent_cmd=(opencode run --dir "$agent_cwd" --model "$model_name")
+    agent_cmd=(opencode run --thinking --dir "$agent_cwd" --model "$model_name")
     [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
     agent_cmd+=(--agent build --title "oc local ${TARGET_NUMBER:-issue}")
     [[ -f "$context_seed" ]] && agent_cmd+=(--file "$context_seed")
