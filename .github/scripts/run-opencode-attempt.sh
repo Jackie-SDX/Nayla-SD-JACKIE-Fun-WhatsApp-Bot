@@ -92,7 +92,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   model_name="${MODEL:-opencode/mimo-v2.6-flash-free}"
   agent_cmd=(opencode run --dir "$ws" --model "$model_name")
   [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
-  agent_cmd+=(--agent build --title "oc remote ${OC_TARGET_REPO:-target}" "$task_prompt")
+  agent_cmd+=(--agent build --title "oc remote ${OC_TARGET_REPO:-target}")
 else
   initial_sha="${OC_INITIAL_SHA:-}"
   [[ -n "$initial_sha" ]] || initial_sha="$(git rev-parse HEAD)"
@@ -140,7 +140,6 @@ fi
     agent_cmd+=(--agent build --title "oc local ${TARGET_NUMBER:-issue}")
     [[ -f "$context_seed" ]] && agent_cmd+=(--file "$context_seed")
     [[ -s "$context_refs" ]] && agent_cmd+=(--file "$context_refs")
-    agent_cmd+=("$task_prompt")
   fi
 sanitize_line() {
   local line="$1" secret
@@ -235,7 +234,8 @@ if [[ -n "$agent_cwd" ]]; then
     echo "::error title=Agent worktree entry failed::Could not enter $agent_cwd." >&2
     exit 2
   }
-  timeout --signal=TERM --kill-after=60s "${effective_timeout_seconds}s" "${agent_cmd[@]}" >"$fifo" 2>&1 &
+  timeout --signal=TERM --kill-after=60s "${effective_timeout_seconds}s" "${agent_cmd[@]}" < <(printf "%s
+" "$task_prompt") >"$fifo" 2>&1 &
   agent_pid=$!
   popd >/dev/null
 else

@@ -23,3 +23,17 @@ grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-atte
 ! test -e .github/scripts/run-copilot-attempt.sh
 ! test -e .github/scripts/select-opencode-route.sh
 echo 'controller invariants: PASS'
+
+# One /oc comment -> one workflow execution: controller responses edit, never create, comments.
+grep -Fq 'group: oc-claim-${{ github.event.comment.id || github.run_id }}' .github/workflows/opencode.yml
+grep -Fq 'group: oc-agent-${{ github.event.comment.id || github.run_id }}' .github/workflows/opencode.yml
+! grep -Fq 'Register /oc run marker' .github/workflows/opencode.yml
+! grep -Fq 'Human handoff when the primary agent stops without durable work' .github/workflows/opencode.yml
+! grep -Fq 'gh issue comment "$target" --body "$marker"' .github/scripts/claim-oc-command.sh
+grep -Fq 'gh api -X PATCH' .github/scripts/claim-oc-command.sh
+grep -Fq 'gh api -X PATCH' .github/scripts/post-oc-result.sh
+! grep -Fq 'gh issue comment "$target" --body "$body"' .github/scripts/post-oc-result.sh
+# OpenCode prompt must be stdin so repeatable --file cannot consume it.
+! grep -Fq 'agent_cmd+=("$task_prompt")' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'printf "%s\n" "$task_prompt"' .github/scripts/run-opencode-attempt.sh

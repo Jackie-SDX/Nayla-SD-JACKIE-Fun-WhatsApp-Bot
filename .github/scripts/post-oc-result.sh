@@ -2,17 +2,21 @@
 set -euo pipefail
 
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
-target=0
-if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
-  target="$(jq -r '.issue.number // .pull_request.number // 0' "$GITHUB_EVENT_PATH" 2>/dev/null || printf '0')"
+comment_id=0
+if [[ -n "$GITHUB_EVENT_PATH" && -f "$GITHUB_EVENT_PATH" ]]; then
+  comment_id="$(jq -r '.comment.id // 0' "$GITHUB_EVENT_PATH" 2>/dev/null || printf '0')"
 fi
-[[ "$target" =~ ^[0-9]+$ && "$target" != "0" ]] || exit 0
+[[ "$comment_id" =~ ^[0-9]+$ && "$comment_id" != "0" ]] || exit 0
 
-run_id="${GITHUB_RUN_ID:-0}"
-marker="<!-- oc-result-run-id:$run_id -->"
-if gh api --paginate --slurp "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null | jq -e --arg marker "$marker" 'add // [] | any(.[]; (.body // "") | contains($marker))' >/dev/null 2>&1; then
-  exit 0
+result_marker="<!-- oc-result-for:$comment_id -->"
+marker="$result_marker"
+if [[ "$GITHUB_EVENT_NAME" == "pull_request_review_comment" ]]; then
+  comment_api="/repos/$repo/pulls/comments/$comment_id"
+else
+  comment_api="/repos/$repo/issues/comments/$comment_id"
 fi
+current_body="$(gh api "$comment_api" --jq '.body // ""' 2>/dev/null || true)"
+grep -Fq "$result_marker" <<<"$current_body" && exit 0
 
 task_mode="${TASK_MODE:-report}"
 body=""
@@ -46,8 +50,17 @@ else
     body="$(printf "%s\n## /oc\n\n%s" "$marker" "$answer")"
   elif [[ "$task_mode" == "report" && "${A1:-}" == "success" ]]; then
     body="$(printf "%s\n## /oc\nOpenCode completed, but no clean final response was captured." "$marker")"
-  elif [[ "${A1:-}" != "success" ]]; then
-    body="$(printf "%s\n## /oc\nAgent did not complete successfully. No success is claimed." "$marker")"
+  elif [[ "$A1" != "success" ]]; then
+    safe_log="$SAFE_LOG"
+    if [[ -z "$safe_log" ]]; then safe_log="$RUNNER_TEMP/opencode-1-safe.log"; fi
+    if [[ -z "$safe_log" ]]; then safe_log="/tmp/opencode-1-safe.log"; fi
+    findings=""
+    if [[ -s "$safe_log" ]]; then findings="$(sanitize_response "$safe_log")"; fi
+    if [[ -n "$findings" ]]; then
+      body="$(printf "%s\nAgent did not complete successfully. No success is claimed.\n\nSanitized findings:\n\n%s" "$marker" "$findings")"
+    else
+      body="$(printf "%s\nAgent did not complete successfully. No success is claimed." "$marker")"
+    fi
   else
     if [[ "${OC_TARGET_MODE:-local}" == "remote" && -n "${OC_TARGET_REPO:-}" && -n "${OC_TARGET_BRANCH:-}" ]]; then
       remote_sha="$(gh api "/repos/$OC_TARGET_REPO/git/ref/heads/$OC_TARGET_BRANCH" --jq '.object.sha' 2>/dev/null || true)"
@@ -73,4 +86,6 @@ else
   fi
 fi
 
-gh issue comment "$target" --body "$body" >/dev/null
+updated_body="$(printf '%s' "$current_body" | sed -E 's/[[:space:]]+$//')"
+updated_body="$updated_body"$'\n\n---\n## /oc response\n'"$body"$'\n'"$result_marker"
+gh api -X PATCH -f body="$updated_body" "$comment_api" >/dev/null

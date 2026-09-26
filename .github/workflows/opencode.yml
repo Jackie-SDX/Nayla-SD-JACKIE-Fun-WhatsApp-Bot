@@ -9,7 +9,7 @@ on:
 jobs:
   oc_claim:
     concurrency:
-      group: oc-claim-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      group: oc-claim-${{ github.event.comment.id || github.run_id }}
     if: |
       github.event.comment.user.type == 'User' &&
       github.event.comment.user.login == github.repository_owner &&
@@ -44,7 +44,7 @@ jobs:
   opencode:
     needs: oc_claim
     concurrency:
-      group: oc-agent-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}-${{ (startsWith(github.event.comment.body, '/oc ') || github.event.comment.body == '/oc') || (startsWith(github.event.comment.body, '/opencode ') || github.event.comment.body == '/opencode') }}
+      group: oc-agent-${{ github.event.comment.id || github.run_id }}
       cancel-in-progress: false
     if: |
       needs.oc_claim.outputs.accepted == 'true' &&
@@ -100,16 +100,6 @@ jobs:
           echo "OC_INITIAL_SHA=$sha" >> "$GITHUB_ENV"
           echo "OC_RUN_START_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           echo "OC_JOB_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
-
-      - name: Register /oc run marker
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
-          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
-        run: |
-          set -euo pipefail
-          [[ "$TARGET_NUMBER" =~ ^[0-9]+$ && "$TARGET_NUMBER" != "0" ]] || exit 0
-          gh issue comment "$TARGET_NUMBER" --body "<!-- oc-run-id:${GITHUB_RUN_ID} issue:${TARGET_NUMBER} sha:${GITHUB_SHA} -->"
 
       - name: Mark triggering /oc comment as running
         if: always()
@@ -275,18 +265,6 @@ jobs:
         shell: bash
         run: bash .github/scripts/recover-opencode-ci.sh
 
-      - name: Human handoff when the primary agent stops without durable work
-        if: always() && steps.attempt_1.outputs.agent_outcome == 'failure' && steps.attempt_1.outputs.durable_work != 'true' && steps.attempt_1.outputs.termination_reason != 'timeout' && steps.attempt_1.outputs.termination_reason != 'signal'
-        env:
-          GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
-          TARGET_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
-          SAFE_LOG: ${{ steps.attempt_1.outputs.safe_log_path }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          findings="$(tail -n 100 "$SAFE_LOG" 2>/dev/null || printf '%s' 'No sanitized agent log was available.')"
-          gh issue comment "$TARGET_NUMBER" --body "Agent stopped without a fully verified success. No success is claimed.\n\nSanitized findings:\n\n$findings"
-
       - name: Post concise /oc result
         if: always()
         continue-on-error: true
@@ -301,6 +279,7 @@ jobs:
           V1: ${{ steps.attempt_1.outputs.verified }}
           PR1: ${{ steps.attempt_1.outputs.pr_url }}
           SHA1: ${{ steps.attempt_1.outputs.verified_sha }}
+          SAFE_LOG: ${{ steps.attempt_1.outputs.safe_log_path }}
           MERGE_REQUESTED: ${{ env.OC_MERGE_REQUESTED }}
           MERGE_EXIT: ${{ env.OC_MERGE_EXIT }}
         run: bash .github/scripts/post-oc-result.sh
