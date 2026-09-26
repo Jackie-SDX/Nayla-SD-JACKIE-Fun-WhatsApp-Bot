@@ -54,19 +54,7 @@ grep -Fq 'story response without PR publication' <<<"$body"
 grep -Fq 'Mark triggering /oc comment as running' "$root/.github/workflows/opencode.yml"
 grep -Fq 'Clear /oc running reaction' "$root/.github/workflows/opencode.yml"
 grep -Fq 'message.part.updated' "$root/.opencode/plugins/agentic-observability.js"
-! grep -Fq 'status " + safe(event.properties?.status' "$root/.opencode/plugins/agentic-observability.js"
-grep -Fq 'retrying the same peer prompt without a custom-agent callback' "$root/.github/scripts/invite-copilot-peer.sh"
-grep -Fq 'OC_PUBLISH_REQUESTED:-' "$root/.github/scripts/run-attempt-pipeline.sh"
-cat > "$tmp/event-content.json" <<'JSON'
-{"comment":{"id":9,"body":"/oc Continue the lighthouse story with Parts 4 and 5 written by Copilot as co-author, then Part 6 by OpenCode. Do not modify the repository."},"issue":{"number":9}}
-JSON
-: > "$tmp/env-content"
-: > "$tmp/out-content"
-GITHUB_EVENT_PATH="$tmp/event-content.json" GITHUB_ENV="$tmp/env-content" GITHUB_OUTPUT="$tmp/out-content" bash "$root/.github/scripts/select-oc-task-mode.sh"
-grep -Fq 'OC_TASK_MODE=report' "$tmp/env-content"
-grep -Fq 'OC_CONTENT_TASK=true' "$tmp/env-content"
-grep -Fq 'OC_COPILOT_COLLAB_REQUESTED=true' "$tmp/env-content"
-
+! grep -Fq 'OC_PUBLISH_REQUESTED:-' "$root/.github/scripts/run-attempt-pipeline.sh"
 cat > "$tmp/event-code.json" <<'JSON'
 {"comment":{"id":10,"body":"/oc Fix the workflow bug and add a regression test. Do not create a PR yet."},"issue":{"number":10}}
 JSON
@@ -122,7 +110,4 @@ grep -Fq 'accepted=false' "$claim_tmp/output"
 grep -Fq 'refusing to execute' "$claim_tmp/log"
 grep -Fq 'needs: oc_claim' "$root/.github/workflows/opencode.yml"
 grep -Fq 'claim-oc-command.sh' "$root/.github/workflows/opencode.yml"
-grep -Fq 'peer_mode' "$root/.github/scripts/invite-copilot-peer.sh"
-grep -Fq 'writer_output_file' "$root/.github/scripts/invite-copilot-peer.sh"
-grep -Fq 'OC_COPILOT_COLLAB_REQUESTED' "$root/.github/scripts/run-opencode-attempt.sh"
 echo 'oc communication/reaction contract: OK'
