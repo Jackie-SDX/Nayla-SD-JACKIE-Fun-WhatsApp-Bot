@@ -49,7 +49,6 @@ session_state_file="${OC_SESSION_STATE_FILE:-}"
 : > "$safe_log"
 : > "$progress_log"
 
-provider_failure_kind=""
 
 checkpoint_worktree() {
   [[ -n "$agent_worktree" && -d "$agent_worktree" && -n "$session_branch" ]] || return 0
@@ -129,11 +128,12 @@ sanitize_line() {
   for secret in \
     "${COMPOSIO_API_KEY:-}" \
     "${OPENCODE_API_KEY:-}" \
-    "${OPENROUTER_API_KEY:-}" \
     "${GITHUB_TOKEN:-}" \
     "${GH_TOKEN:-}" \
     "${UNIVERSAL_TOKEN:-}" \
-    "${COPILOT_GITHUB_TOKEN:-}"; do
+    "${GITHUB_TOKEN:-}" \
+    "${GH_TOKEN:-}" \
+    "${UNIVERSAL_TOKEN:-}"; do
     if [[ -n "$secret" ]]; then
       line="${line//$secret/[REDACTED]}"
     fi
@@ -262,7 +262,6 @@ printf "[OC][attempt=%s][elapsed=%ss] finished exit_code=%s termination_reason=%
 {
   printf "exit_code=%s\n" "$exit_code"
   printf "termination_reason=%s\n" "$termination_reason"
-  printf "provider_failure_kind=%s\n" "$provider_failure_kind"
   printf "provider_warning=%s\n" "$provider_warning"
 } >> "$output_file"
 
