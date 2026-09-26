@@ -48,3 +48,25 @@ grep -Fq 'GH_TOKEN: ${{ github.token }}' .github/workflows/opencode.yml
 # Research mode: stream OpenCode thinking blocks into Actions logs.
 grep -Fq 'opencode run --thinking --dir "$agent_cwd" --model "$model_name"' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'Research mode: keep OpenCode thinking blocks enabled' .github/scripts/run-opencode-attempt.sh
+
+
+# Log cosmetics: summarize tool/command activity and keep comments free of live logs.
+grep -Fq 'suppress_command_output=0' .github/scripts/filter-opencode-live-output.awk
+grep -Fq '38;5;208m' .github/scripts/filter-opencode-live-output.awk
+grep -Fq '38;5;141m' .github/scripts/filter-opencode-live-output.awk
+grep -Fq '38;5;214m' .github/scripts/filter-opencode-live-output.awk
+grep -Fq '91m' .github/scripts/filter-opencode-live-output.awk
+grep -Fq 'Tool:' .github/scripts/filter-opencode-live-output.awk
+! grep -Fq 'safe_log="$SAFE_LOG"' .github/scripts/post-oc-result.sh
+grep -Fq '/^[[:space:]]*Thinking:' .github/scripts/post-oc-result.sh
+
+fixture="$(mktemp)"
+trap 'rm -f "$fixture"' EXIT
+printf '%s\n' '$ ls -la' 'total 40' 'Thinking: inspecting repository' '⚙ composio_COMPOSIO_SEARCH_TOOLS' 'WARNING: cache stale' 'ERROR: command failed' > "$fixture"
+filtered="$(awk -f .github/scripts/filter-opencode-live-output.awk "$fixture")"
+printf '%s\n' "$filtered" | grep -Fq '→ ls -la'
+! printf '%s\n' "$filtered" | grep -Fq 'total 40'
+printf '%s\n' "$filtered" | grep -Fq 'Thinking: inspecting repository'
+printf '%s\n' "$filtered" | grep -Fq 'Tool: composio COMPOSIO SEARCH TOOLS'
+printf '%s\n' "$filtered" | grep -Fq '⚠ WARNING: cache stale'
+printf '%s\n' "$filtered" | grep -Fq '✗ ERROR: command failed'

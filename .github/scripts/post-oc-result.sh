@@ -27,6 +27,9 @@ sanitize_response() {
     -e 's/OC-STATUS:[[:space:]]*//g' \
     -e 's/OC-PLAN:[[:space:]]*//g' \
     -e 's/OC-DONE:[[:space:]]*//g' \
+    -e '/^[[:space:]]*Thinking:[[:space:]]*/d' \
+    -e '/^[[:space:]]*⚙[[:space:]]*/d' \
+    -e '/^[[:space:]]*\\$[[:space:]]+/d' \
     -e 's/(gh[ps]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})/[REDACTED_GITHUB_TOKEN]/g' \
     -e 's/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
     "$file" | tr -d '\r' | sed 's/[[:space:]]*$//' | cut -c1-12000
@@ -49,16 +52,7 @@ else
   elif [[ "$task_mode" == "report" && "${A1:-}" == "success" ]]; then
     body="$(printf "%s\n## /oc\nOpenCode completed, but no clean final response was captured." "$marker")"
   elif [[ "$A1" != "success" ]]; then
-    safe_log="$SAFE_LOG"
-    if [[ -z "$safe_log" ]]; then safe_log="$RUNNER_TEMP/opencode-1-safe.log"; fi
-    if [[ -z "$safe_log" ]]; then safe_log="/tmp/opencode-1-safe.log"; fi
-    findings=""
-    if [[ -s "$safe_log" ]]; then findings="$(sanitize_response "$safe_log")"; fi
-    if [[ -n "$findings" ]]; then
-      body="$(printf "%s\nAgent did not complete successfully. No success is claimed.\n\nSanitized findings:\n\n%s" "$marker" "$findings")"
-    else
-      body="$(printf "%s\nAgent did not complete successfully. No success is claimed." "$marker")"
-    fi
+    body="$(printf "%s\n## /oc\nAgent did not complete successfully. No success is claimed." "$marker")"
   else
     if [[ "${OC_TARGET_MODE:-local}" == "remote" && -n "${OC_TARGET_REPO:-}" && -n "${OC_TARGET_BRANCH:-}" ]]; then
       remote_sha="$(gh api "/repos/$OC_TARGET_REPO/git/ref/heads/$OC_TARGET_BRANCH" --jq '.object.sha' 2>/dev/null || true)"
