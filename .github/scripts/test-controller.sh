@@ -60,7 +60,7 @@ grep -Fq 'official product documentation, GitHub/GitHub Actions documentation' .
 # Capability discovery: the agent must reason from outcomes and compose reachable primitives,
 # rather than treating direct tools or user-supplied mechanisms as the ceiling.
 grep -Fq '## Capability discovery / outside-the-box execution' .opencode/instructions.md
-grep -Fq 'Treat the user'\"s requested outcome as the specification' .opencode/instructions.md
+grep -Fq "Treat the user's requested outcome as the specification" .opencode/instructions.md
 grep -Fq 'compose available primitives into a working path' .opencode/instructions.md
 grep -Fq 'Do not claim impossibility until reachable alternatives have been investigated' .opencode/instructions.md
 grep -Fq 'Capability discovery / outside-the-box execution:' .github/scripts/run-opencode-attempt.sh
