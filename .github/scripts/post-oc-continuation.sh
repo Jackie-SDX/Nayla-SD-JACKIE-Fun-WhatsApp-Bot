@@ -28,9 +28,9 @@ run_url="$GITHUB_SERVER_URL/$repo/actions/runs/$run_id"
 
 open_prs="$(
   gh pr list --state open --limit 50 --json number,url,headRefName,headRefOid,baseRefName |
-    jq -r --arg a "opencode/issue$target-" --arg c "oc/copilot-$target-" --arg base "$base_ref" '
+    jq -r --arg a "opencode/issue$target-" --arg base "$base_ref" '
       .[] | select(.baseRefName == $base) |
-      select((.headRefName | startswith($a)) or (.headRefName | startswith($c))) |
+      select(.headRefName | startswith($a)) |
       "#\(.number) \(.url) \(.headRefName) \(.headRefOid)"
     ' 2>/dev/null || true
 )"

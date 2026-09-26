@@ -98,7 +98,7 @@ for ((round=1; round<=max_rounds; round++)); do
   recovery_prompt="Repair the actual CI failure in $packet. Read the complete user task context included there. Inspect the current repository, reproduce the failure when practical, and use Composio/web research whenever the error, dependency, API, or platform behavior is uncertain. Make the smallest evidence-backed fix. Run targeted deterministic tests. Do not commit, push, reset, clean, create a PR, or mutate GitHub. Leave the repaired worktree ready for the controller and report the hypothesis, evidence, change, and tests."
 
   if ! (cd "$worktree" && OC_ISSUE_CONTEXT_FILE="$context" \
-      opencode run --model "$(printenv OPENCODE_RECOVERY_MODEL 2>/dev/null || printf 'opencode/big-pickle')" \
+      opencode run --model "$(printenv OPENCODE_RECOVERY_MODEL 2>/dev/null || printf 'opencode/mimo-v2.6-flash-free')" \
       --agent build "$recovery_prompt"); then
     echo "[CI][round=$round] OpenCode recovery analysis returned non-zero; preserving evidence and trying only while the state changes."
   fi

@@ -211,13 +211,7 @@ if [[ "$mode" == "remote" ]]; then
   emit_env OC_TARGET_RESUME "$resume"
   emit_env OC_TARGET_FROM_MARKER "$from_marker"
   emit_env OC_TARGET_TASK "$task"
-  # Remote targets are always published and verified by controller-owned
-  # logic; the controller-repository Copilot publication path stays local-only.
-  if [[ -n "${OPENCODE_EXCLUDED_PROVIDERS:-}" ]]; then
-    emit_env OPENCODE_EXCLUDED_PROVIDERS "${OPENCODE_EXCLUDED_PROVIDERS},github-copilot"
-  else
-    emit_env OPENCODE_EXCLUDED_PROVIDERS "github-copilot"
-  fi
+  # Remote targets are always published and verified by controller-owned logic.
 fi
 
 emit_out mode "$mode"

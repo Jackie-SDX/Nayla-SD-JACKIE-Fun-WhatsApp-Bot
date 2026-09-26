@@ -14,7 +14,6 @@ publish_requested=false
 merge_requested=false
 session_required=false
 content_task=false
-copilot_collab_requested=false
 
 if [[ "$lower" =~ ^continue([[:space:]]|$) ]] &&
    ! printf '%s' "$lower" | grep -Eiq '\b(story|stories|chapter|fiction|poem|poetry|essay|prose|dialogue|joke|caption|lyrics?|creative|co-?author|part[[:space:]-]*[0-9]+)\b'; then
@@ -41,11 +40,7 @@ else
     mode=report
     intent=answer
     session_required=false
-    if printf '%s' "$positive_request" | grep -Eiq '\bcopilot\b' &&
-       printf '%s' "$positive_request" | grep -Eiq '\b(co-?author|part[[:space:]-]*[0-9]+|collaborat)\b'; then
-      copilot_collab_requested=true
-    fi
-  elif printf '%s' "$lower" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
+ elif printf '%s' "$lower" | grep -Eiq '\b(fix|edit|change|modify|implement|add|remove|create|delete|refactor|debug|repair|update|build|write|test|patch|migrate|replace|rename)\b'; then
     mode=code; intent=code; session_required=true; publish_requested=true
   elif [[ "$publish_requested" == true ]]; then
     mode=code; intent=publish; session_required=true
@@ -78,5 +73,4 @@ emit_env OC_PUBLISH_REQUESTED "$publish_requested"
 emit_env OC_MERGE_REQUESTED "$merge_requested"
 emit_env OC_SESSION_REQUIRED "$session_required"
 emit_env OC_CONTENT_TASK "$content_task"
-emit_env OC_COPILOT_COLLAB_REQUESTED "$copilot_collab_requested"
-echo "Selected /oc intent=$intent mode=$mode content=$content_task copilot_collab=$copilot_collab_requested resume=$resume_requested publish=$publish_requested merge=$merge_requested"
+echo "Selected /oc intent=$intent mode=$mode content=$content_task resume=$resume_requested publish=$publish_requested merge=$merge_requested"
