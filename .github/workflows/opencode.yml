@@ -130,7 +130,7 @@ jobs:
         id: opencode_release
         shell: bash
         env:
-          OPENCODE_VERSION_PIN: ${{ vars.OPENCODE_VERSION || '1.18.31' }}
+          OPENCODE_VERSION_PIN: ${{ vars.OPENCODE_VERSION || '1.18.32' }}
         run: |
           set -euo pipefail
           json="$(mktemp)"
@@ -201,7 +201,7 @@ jobs:
         run: bash .github/scripts/prepare-oc-target.sh
 
       - name: Bootstrap Composio session MCP
-        if: env.OC_TASK_MODE != 'merge'
+        if: env.OC_TASK_MODE == 'code' && env.OC_TASK_MODE != 'merge'
         continue-on-error: true
         id: composio_session
         shell: bash
@@ -211,10 +211,15 @@ jobs:
         id: attempt_1
         if: env.OC_TASK_MODE != 'merge'
         continue-on-error: true
+        env:
+          UNIVERSAL_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.target.outputs.mode == 'remote' && secrets.UNIVERSAL_TOKEN || github.token }}
+          COMPOSIO_API_KEY: ""
         uses: ./.github/actions/oc-attempt
         with:
           attempt: '1'
-          model: opencode/mimo-v2.6-flash-free
+          model: ${{ vars.OPENCODE_MODEL || 'opencode/mimo-v2.6-flash-free' }}
           target_number: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
           base_ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           initial_sha: ${{ steps.initial_state.outputs.sha }}
@@ -251,7 +256,6 @@ jobs:
           OC_JOB_BUDGET_SECONDS: "21600"
           OC_JOB_SAFETY_MARGIN_SECONDS: "120"
           OC_ISSUE_CONTEXT_FILE: ${{ env.OC_ISSUE_CONTEXT_FILE }}
-          OC_MAX_RECOVERY_ROUNDS: "5"
           OC_CI_WATCH_MINUTES: "45"
           OC_CI_WATCH_POLL_SECONDS: "20"
         shell: bash

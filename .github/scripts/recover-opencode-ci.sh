@@ -27,6 +27,7 @@ find_pr() {
 }
 
 round=1
+last_failure_signature=""
 while :; do
   if [[ "$start_epoch" =~ ^[0-9]+$ ]] && [[ "$budget" =~ ^[0-9]+$ ]] && [[ "$safety" =~ ^[0-9]+$ ]]; then
     remaining=$((budget - ($(date +%s) - start_epoch) - safety))
@@ -61,6 +62,13 @@ while :; do
     echo "[CI][round=$round] watcher did not produce actionable failure evidence (rc=$watch_rc); leaving advisory."
     exit 0
   fi
+
+  failure_signature="$(sed -E -e 's/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.+-]+Z//g' -e 's/[0-9a-f]{40}/[SHA]/g' -e 's/#[0-9]+/[PR]/g' -e 's/round [0-9]+/[ROUND]/Ig' -e 's/run[_-]?[0-9]+/[RUN]/Ig' "$report" | sha256sum | cut -d" " -f1)"
+  if [[ -n "$last_failure_signature" && "$failure_signature" == "$last_failure_signature" ]]; then
+    echo "[CI][round=$round] identical actionable failure signature repeated; stopping unchanged repair replay while preserving the existing branch."
+    exit 0
+  fi
+  last_failure_signature="$failure_signature"
 
   packet="$runner_temp/oc-ci-failure-round-$round.md"
   {
