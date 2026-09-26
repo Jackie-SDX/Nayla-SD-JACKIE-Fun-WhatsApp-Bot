@@ -371,7 +371,7 @@ jobs:
       - name: Upload /oc session context artifact
         if: always() && env.OC_SESSION_REQUIRED == 'true'
         continue-on-error: true
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oc-session-context-${{ github.run_id }}
           path: |
@@ -384,7 +384,7 @@ jobs:
 
       - name: Upload /oc run record artifact
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oc-run-record-${{ github.run_id }}
           path: docs/oc-runs/${{ github.run_id }}.json
