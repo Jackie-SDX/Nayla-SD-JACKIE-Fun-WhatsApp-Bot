@@ -5,7 +5,6 @@ repo="$GITHUB_REPOSITORY"
 target="$TARGET_NUMBER"
 base="$BASE_REF"
 since="$OC_RUN_START_ISO"
-max_rounds="$(printenv OC_MAX_RECOVERY_ROUNDS 2>/dev/null || printf 5)"
 runner_temp="$(printenv RUNNER_TEMP 2>/dev/null || printf /tmp)"
 context="$(printenv OC_ISSUE_CONTEXT_FILE 2>/dev/null || true)"
 budget="$(printenv OC_JOB_BUDGET_SECONDS 2>/dev/null || printf 21600)"
@@ -18,8 +17,6 @@ mkdir -p "$runner_temp"
 if ! [[ "$target" =~ ^[0-9]+$ ]] || [ "$target" = "0" ]; then
   exit 0
 fi
-if ! [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]]; then max_rounds=5; fi
-
 find_pr() {
   prefix="opencode/issue$target-"
   gh pr list --repo "$repo" --base "$base" --state open --limit 100 \
@@ -29,7 +26,8 @@ find_pr() {
        sort_by(.createdAt) | last // {}'
 }
 
-for ((round=1; round<=max_rounds; round++)); do
+round=1
+while :; do
   if [[ "$start_epoch" =~ ^[0-9]+$ ]] && [[ "$budget" =~ ^[0-9]+$ ]] && [[ "$safety" =~ ^[0-9]+$ ]]; then
     remaining=$((budget - ($(date +%s) - start_epoch) - safety))
     if (( remaining < 900 )); then
@@ -130,7 +128,5 @@ for ((round=1; round<=max_rounds; round++)); do
   fi
 
   git worktree remove --force "$worktree" >/dev/null 2>&1 || true
+  round=$((round + 1))
 done
-
-echo "[CI] bounded recovery reached $max_rounds rounds; final published work remains available for review."
-exit 0

@@ -40,6 +40,13 @@
       "rm -rf /*": "deny"
     },
     "external_directory": "allow",
-    "doom_loop": "allow"
+    "doom_loop": "allow",
+    "question": "allow",
+    "websearch": "allow",
+    "webfetch": "allow",
+    "skill": "allow",
+    "lsp": "allow",
+    "todowrite": "allow",
+    "todoread": "allow"
   }
 }

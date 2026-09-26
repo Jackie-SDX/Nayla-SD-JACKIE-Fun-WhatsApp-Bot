@@ -8,8 +8,7 @@ An owner-issued `/oc` command authorizes one primary OpenCode engineering sessio
 - Use the smallest evidence-backed change that satisfies the task.
 - Test the changed behavior, inspect CI, repair failures, and publish only when requested.
 - Do not ask for routine approval for normal engineering actions.
-- Do not delegate to Copilot, Gemini, OpenRouter fallback agents, critics, or nested AI subagents.
-- One primary OpenCode session is the only decision-making agent.
+- Use one primary OpenCode engineering session as the decision-making agent. Do not add an approval council, provider race, or secondary decision-maker merely to perform normal work.
 
 ## Operator-facing progress
 
@@ -57,25 +56,40 @@ Verify exact commands, API fields, action versions, configuration syntax, and co
 
 Research should accelerate execution, not become an approval gate. If web search is temporarily unavailable, continue with the strongest local evidence and clearly distinguish verified facts from assumptions.
 
-## Capability discovery / outside-the-box execution
+## Capability-driven execution
 
-Treat the user's requested outcome as the specification; treat the mechanism as an implementation detail unless the user explicitly requires that mechanism.
+Treat the user's requested outcome as the specification. Treat the implementation mechanism as an implementation detail unless the user explicitly requires a mechanism.
 
-Do not infer that an unavailable or unmentioned capability makes a task impossible. Before concluding that you cannot do something, actively inventory the capabilities reachable from the current environment:
-- Repository code, scripts, package managers, installed CLI tools, libraries, runtimes, and local assets.
-- GitHub Actions runners, workflow steps, artifacts, caches, releases, APIs, and repository automation.
-- Connected Composio/MCP services, external APIs, web/search tools, and authenticated integrations that are actually available to the session.
-- Official documentation, upstream projects, package registries, and other authoritative sources that can reveal an implementation path.
+Before acting, derive a capability graph from the task and repository, then build a lightweight capability matrix:
+1. Identify required runtimes, package managers, compilers, CLIs, libraries, browsers, document engines, SDKs, APIs, and test infrastructure.
+2. Check what is already available on the runner and in the repository.
+3. Acquire only missing capabilities that materially help the task.
+4. Prefer official package-manager or upstream installation paths. For externally downloaded binaries, pin an exact version and verify the vendor's checksum/signature before use. Never pipe untrusted remote bytes into a shell.
+5. Verify every acquired capability with a version/smoke check before relying on it.
+6. Pass the resulting capability matrix into the engineering session as evidence.
+7. If a capability is missing and the helper does not know how to acquire it safely, research the official installation path and acquire it as part of the task; the helper is an accelerator, not a hard allowlist.
 
-When the obvious/direct tool is absent, compose available primitives into a working path. You may create a temporary or durable workflow, script, adapter, API call, build step, helper service, conversion pipeline, or test harness when that is the most practical way to achieve the requested result. Use the environment as a capability substrate rather than treating the current tool list as a fixed product menu.
+The standard GitHub-hosted runner is a capability substrate, not a ceiling. Do not install a giant toolchain pre-emptively. Discover first, install second.
 
-Do not blindly follow an example mechanism merely because it was mentioned in a request. First determine the actual success criterion, then choose the mechanism that best satisfies it with the available evidence and infrastructure. A request can intentionally omit the implementation path; discover it yourself.
+Do not infer that an unavailable or unmentioned capability makes a task impossible. Inventory repository files, scripts, package managers, installed CLI tools, libraries, runtimes, local assets, GitHub Actions capabilities, artifacts/caches/releases/APIs, connected MCP services, and authoritative web resources before concluding that a task cannot be completed.
 
-For unfamiliar capabilities, research how to accomplish the outcome in the current environment rather than only searching for the noun the user used. Prefer authoritative documentation and current upstream guidance, then verify the discovered path by actually exercising it.
+When the direct tool is absent, compose reachable primitives into a working path. You may create a workflow, script, adapter, API call, build step, helper, conversion pipeline, temporary bridge, test harness, or other narrowly scoped mechanism when that is the best practical route. Do not contort the task to fit one tool.
 
-Do not contort the task to fit one available tool. Do not claim impossibility until reachable alternatives have been investigated. When no viable path exists, state the concrete boundary and the closest verified capability, rather than pretending or stopping at the first missing integration.
+Do not install software merely for completeness. Do not claim success merely because an installation command returned zero: verify the actual tool/version and the task-relevant behavior.
 
-The objective is capability discovery, composition, and verified execution: outcome first, mechanism discovered, tools orchestrated, result evidenced.
+## Ambiguity and clarification
+
+Do not ask the user for information that can be discovered from the repository, available tools, authoritative documentation, APIs, or live research.
+
+When a material ambiguity cannot be resolved safely from evidence, do not guess. Ask one focused clarification question, persist the session as waiting-for-input, and resume the same durable session after the user answers. In headless CI, record the clarification request for the controller to publish back to the issue/PR; do not silently fail or invent an assumption.
+
+## Information quality
+
+For current, niche, ambiguous, version-sensitive, security-sensitive, or externally documented facts, research authoritative live sources before acting. Prefer official product documentation, GitHub/GitHub Actions documentation, upstream repositories/releases, package registries, standards, advisories, and vendor documentation.
+
+Research accelerates execution; it is not an approval gate. If a live source is temporarily unavailable, continue with the strongest repository/runner evidence and clearly distinguish verified facts from assumptions.
+
+The objective is outcome-first capability discovery, minimal acquisition, evidence-backed execution, recovery, and exact verification.
 
 ## Safety
 

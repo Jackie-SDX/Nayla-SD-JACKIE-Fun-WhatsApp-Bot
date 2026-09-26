@@ -20,8 +20,11 @@ set -e
 
 agent_outcome="failure"
 [[ "$agent_rc" -eq 0 ]] && agent_outcome="success"
+[[ "$clarification_required" == "true" ]] && agent_outcome="clarification"
 termination_reason="$(read_back termination_reason)"
 [[ -n "$termination_reason" ]] || termination_reason="failed"
+clarification_required="$(read_back clarification_required)"
+[[ -n "$clarification_required" ]] || clarification_required="false"
 timed_out="false"
 [[ "$termination_reason" == "timeout" ]] && timed_out="true"
 safe_log_path="$(read_back safe_log_path)"
@@ -39,7 +42,9 @@ fi
 publish_outcome="not-requested"
 pr_url="$(read_back pr_url)"
 publish_rc=0
-if [[ "$task_mode" == "report" ]]; then
+if [[ "$clarification_required" == "true" ]]; then
+  publish_outcome="waiting-for-input"
+elif [[ "$task_mode" == "report" ]]; then
   publish_outcome="report-only"
 elif [[ "$publish_requested" == "true" && ( "$agent_outcome" == "success" || "$durable_work" == "true" ) ]]; then
   set +e
@@ -58,10 +63,12 @@ fi
 
 result_state="failed"
 [[ "$agent_outcome" == "success" ]] && result_state="completed"
+[[ "$agent_outcome" == "clarification" ]] && result_state="awaiting-input"
 [[ "$durable_work" == "true" && "$agent_outcome" != "success" ]] && result_state="checkpointed"
 [[ "$publish_rc" -ne 0 ]] && result_state="publication-failed"
 
 out agent_outcome "$agent_outcome"
+out clarification_required "$clarification_required"
 out termination_reason "$termination_reason"
 out timed_out "$timed_out"
 out safe_log_path "$safe_log_path"

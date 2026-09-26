@@ -83,6 +83,18 @@ else
   export OPENCODE_CONFIG_CONTENT="{\"model\":\"$runtime_model\",\"permission\":{\"external_directory\":\"allow\",\"bash\":{\"git push --force *\":\"deny\",\"git push -f *\":\"deny\",\"git push --force-with-lease *\":\"deny\",\"rm -rf /\":\"deny\",\"rm -rf /*\":\"deny\"}}}"
 fi
 
+request="$(printenv OC_COMMAND_TEXT 2>/dev/null || true)"
+event_path="$(printenv GITHUB_EVENT_PATH 2>/dev/null || true)"
+if [ -z "$request" ] && [ -f "$event_path" ]; then
+  request="$(jq -r '.comment.body // empty' "$event_path" 2>/dev/null | sed -E 's#^/(oc|opencode)[[:space:]]*##')"
+fi
+context_seed="$(printenv OC_ISSUE_CONTEXT_SEED_FILE 2>/dev/null || true)"
+context_full="$(printenv OC_ISSUE_CONTEXT_FILE 2>/dev/null || true)"
+context_refs="$(printenv OC_REFERENCE_CONTEXT_FILE 2>/dev/null || true)"
+[ -n "$context_seed" ] || context_seed="$runner_temp/oc-issue-context-seed.md"
+[ -n "$context_full" ] || context_full="$runner_temp/oc-issue-context-full.md"
+[ -n "$context_refs" ] || context_refs="$runner_temp/oc-reference-context.md"
+
 agent_cmd=()
 if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   ws="${OC_TARGET_WORKSPACE:-}"
@@ -128,28 +140,22 @@ else
   agent_cwd="$agent_worktree"
   echo "[OC][attempt=$attempt] isolated OpenCode workspace is ready"
 fi
-  request="${OC_COMMAND_TEXT:-$(jq -r '.comment.body // empty' "$GITHUB_EVENT_PATH" 2>/dev/null | sed -E 's#^/(oc|opencode)[[:space:]]*##')}"
-  context_seed="${OC_ISSUE_CONTEXT_SEED_FILE:-$runner_temp/oc-issue-context-seed.md}"
-  context_full="${OC_ISSUE_CONTEXT_FILE:-$runner_temp/oc-issue-context-full.md}"
-  context_refs="${OC_REFERENCE_CONTEXT_FILE:-$runner_temp/oc-reference-context.md}"
-
-  # Local runs use an isolated worktree. Build the actual headless OpenCode
-  # command here as well as for remote targets; a report-mode request must
-  # still execute the agent rather than invoking GNU timeout with no command.
-  if [[ "${OC_TARGET_MODE:-local}" != "remote" ]]; then
-    model_name="${MODEL:-opencode/mimo-v2.6-flash-free}"
-    task_prompt="$request"
-    if [[ -z "$task_prompt" || "$task_prompt" == "run" ]]; then
-      task_prompt="Execute the latest user request in the attached issue context. Treat the issue body and chronological comments as the task source of truth. Answer the user directly; do not modify, commit, publish, or merge repository files unless the request explicitly requires a repository change."
-    fi
-
-    task_prompt="$task_prompt"$'\n\n'"$activity_guidance"
-    agent_cmd=(opencode run --thinking --dir "$agent_cwd" --model "$model_name")
-    [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
-    agent_cmd+=(--agent build --title "oc local ${TARGET_NUMBER:-issue}")
-    [[ -f "$context_seed" ]] && agent_cmd+=(--file "$context_seed")
-    [[ -s "$context_refs" ]] && agent_cmd+=(--file "$context_refs")
+  capability_task_file="$runner_temp/oc-capability-task-$attempt.txt"
+  capability_matrix="$runner_temp/oc-capability-matrix-$attempt.md"
+  {
+    printf '%s\n\n' "$task_prompt"
+    [ -f "$context_seed" ] && cat "$context_seed"
+    [ -s "$context_refs" ] && cat "$context_refs"
+  } > "$capability_task_file"
+  if ! bash "$script_dir/capability-discovery.sh" --workspace "$agent_cwd" --task-file "$capability_task_file" --output "$capability_matrix"; then
+    echo "::warning title=Capability discovery degraded::The helper could not complete cleanly; OpenCode will continue and can acquire additional capabilities itself."
   fi
+  if [ -s "$capability_matrix" ]; then
+    agent_cmd+=(--file "$capability_matrix")
+    printf 'capability_matrix=%s\n' "$capability_matrix" >> "$output_file"
+    echo "[OC][attempt=$attempt] capability matrix ready: $capability_matrix"
+  fi
+
 sanitize_line() {
   local line="$1" secret
   for secret in \
@@ -272,6 +278,18 @@ if [[ -n "$agent_worktree" && -e "$agent_worktree/.git" ]]; then
   agent_branch="$(git -C "$agent_worktree" branch --show-current 2>/dev/null || true)"
 fi
 printf "agent_branch=%s\n" "$agent_branch" >> "$output_file"
+
+clarification_required="false"
+clarification_source="$runner_temp/oc-clarification.md"
+rm -f "$clarification_source"
+for candidate in   "$agent_cwd/.opencode/NEEDS_CLARIFICATION.md"   "$agent_cwd/.opencode/needs-clarification.md"   "$agent_worktree/.opencode/NEEDS_CLARIFICATION.md"   "$agent_worktree/.opencode/needs-clarification.md"; do
+  if [ -s "$candidate" ]; then
+    cp "$candidate" "$clarification_source"
+    clarification_required="true"
+    break
+  fi
+done
+printf "clarification_required=%s\n" "$clarification_required" >> "$output_file"
 set -e
 
 elapsed=$(( $(date +%s) - start_epoch ))
@@ -285,6 +303,9 @@ case "$exit_code" in
   0) termination_reason="completed" ;;
   *) termination_reason="failed" ;;
 esac
+if [ "$clarification_required" = "true" ]; then
+  termination_reason="clarification"
+fi
 
 printf "[OC][attempt=%s][elapsed=%ss] finished exit_code=%s termination_reason=%s\n" "$attempt" "$elapsed" "$exit_code" "$termination_reason" | tee -a "$progress_log"
 
@@ -296,4 +317,5 @@ printf "[OC][LIVE] OpenCode session finished; final result is being reconciled.\
 } >> "$output_file"
 
 echo "[OC][attempt=${attempt}] live stream complete; exit_code=${exit_code}; termination_reason=${termination_reason}"
+if [ "$clarification_required" = "true" ]; then exit 0; fi
 exit "$exit_code"

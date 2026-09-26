@@ -18,6 +18,7 @@ fi
 
 task_mode="${TASK_MODE:-report}"
 body=""
+clarification_file="$RUNNER_TEMP/oc-clarification.md"
 
 sanitize_response() {
   local file="$1"
@@ -35,7 +36,15 @@ sanitize_response() {
     "$file" | tr -d '\r' | sed 's/[[:space:]]*$//' | cut -c1-12000
 }
 
-if [[ "${MERGE_REQUESTED:-false}" == "true" ]]; then
+if [ -s "$clarification_file" ]; then
+  question="$(sanitize_response "$clarification_file")"
+  if [ -n "$question" ]; then
+    body="$(printf "%s\n## /oc - clarification required\n\n%s\n\nPlease answer this question in the issue/PR, then resume with /oc continue." "$marker" "$question")"
+  else
+    body="$(printf "%s\n## /oc - clarification required\n\nThe agent needs clarification before it can safely continue. Answer the latest question, then resume with /oc continue." "$marker")"
+  fi
+  OC_SESSION_PHASE="waiting_for_clarification" OC_SESSION_STATUS="waiting" OC_SESSION_NEXT_ACTION="answer the clarification request, then resume with /oc continue" OC_SESSION_EVIDENCE="clarification request published from headless OpenCode session" OC_DURABLE_WORK="false" bash .github/scripts/record-oc-session-progress.sh >/dev/null 2>&1 || true
+elif [[ "${MERGE_REQUESTED:-false}" == "true" ]]; then
   if [[ "${MERGE_EXIT:-1}" == "0" ]]; then
     body="$(printf "%s\n## /oc\nMerge command completed successfully." "$marker")"
   else

@@ -82,6 +82,7 @@ jobs:
       OC_SESSION_CHECKPOINT_INTERVAL_SECONDS: "300"
       OC_CI_WATCH_MINUTES: "45"
       OC_CI_WATCH_POLL_SECONDS: "20"
+      OC_CAPABILITY_AUTO_INSTALL: "true"
 
     steps:
       - name: Checkout repository
@@ -273,6 +274,7 @@ jobs:
           PR1: ${{ steps.attempt_1.outputs.pr_url }}
           SHA1: ${{ steps.attempt_1.outputs.verified_sha }}
           SAFE_LOG: ${{ steps.attempt_1.outputs.safe_log_path }}
+          CL1: ${{ steps.attempt_1.outputs.clarification_required }}
           MERGE_REQUESTED: ${{ env.OC_MERGE_REQUESTED }}
           MERGE_EXIT: ${{ env.OC_MERGE_EXIT }}
         run: bash .github/scripts/post-oc-result.sh
@@ -283,6 +285,7 @@ jobs:
           A1: ${{ steps.attempt_1.outputs.agent_outcome }}
           P1: ${{ steps.attempt_1.outputs.publish_outcome }}
           DW1: ${{ steps.attempt_1.outputs.durable_work }}
+          CL1: ${{ steps.attempt_1.outputs.clarification_required }}
           TASK_MODE: ${{ env.OC_TASK_MODE }}
           MERGE_REQUESTED: ${{ env.OC_MERGE_REQUESTED }}
           MERGE_EXIT: ${{ env.OC_MERGE_EXIT }}
@@ -290,11 +293,18 @@ jobs:
           set -euo pipefail
           success=false
           if [[ "$MERGE_REQUESTED" == "true" ]]; then [[ "$MERGE_EXIT" == "0" ]] && success=true; fi
+          if [[ "$CL1" == "true" ]]; then success=true; fi
           if [[ "$TASK_MODE" == "report" && "$A1" == "success" ]]; then success=true; fi
           if [[ "$TASK_MODE" != "report" && "$A1" == "success" && "$P1" != "failed" ]]; then success=true; fi
           if [[ "$DW1" == "true" ]]; then success=true; fi
           if [[ "$success" == "true" ]]; then
-            [[ "$A1" == "success" ]] && echo "OpenCode control-plane operation completed." || echo "Durable progress checkpointed; resume with /oc continue."
+            if [[ "$CL1" == "true" ]]; then
+              echo "Clarification requested; session is waiting for user input. Resume with /oc continue."
+            elif [[ "$A1" == "success" ]]; then
+              echo "OpenCode control-plane operation completed."
+            else
+              echo "Durable progress checkpointed; resume with /oc continue."
+            fi
             exit 0
           fi
           echo "::error title=Agent operation not completed::No successful completion or durable checkpoint was produced."
@@ -306,13 +316,15 @@ jobs:
         shell: bash
         env:
           DW1: ${{ steps.attempt_1.outputs.durable_work }}
+          CL1: ${{ steps.attempt_1.outputs.clarification_required }}
           A1: ${{ steps.attempt_1.outputs.agent_outcome }}
         run: |
           durable=false
           [[ "$DW1" == "true" ]] && durable=true
           phase=blocked; status=active; next="inspect the durable branch and continue"
-          [[ "$durable" == "true" ]] && phase=checkpointed && next="resume with /oc continue"
-          [[ "$A1" == "success" ]] && phase=completed && status=complete && next="await user direction"
+          [[ "$CL1" == "true" ]] && phase=waiting_for_clarification && status=waiting && next="answer the clarification request, then resume with /oc continue"
+          [[ "$CL1" != "true" && "$durable" == "true" ]] && phase=checkpointed && next="resume with /oc continue"
+          [[ "$CL1" != "true" && "$A1" == "success" ]] && phase=completed && status=complete && next="await user direction"
           OC_DURABLE_WORK="$durable" OC_SESSION_PHASE="$phase" OC_SESSION_STATUS="$status" OC_SESSION_NEXT_ACTION="$next" bash .github/scripts/record-oc-session-progress.sh || true
 
       - name: Record /oc run observability record

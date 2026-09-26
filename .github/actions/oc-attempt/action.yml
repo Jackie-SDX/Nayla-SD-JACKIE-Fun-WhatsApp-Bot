@@ -50,6 +50,8 @@ outputs:
     value: ${{ steps.run.outputs.durable_work }}
   session_head_sha:
     value: ${{ steps.run.outputs.session_head_sha }}
+  clarification_required:
+    value: ${{ steps.run.outputs.clarification_required }}
 runs:
   using: composite
   steps:
