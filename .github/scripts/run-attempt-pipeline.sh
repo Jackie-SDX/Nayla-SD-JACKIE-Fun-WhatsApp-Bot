@@ -16,7 +16,7 @@ out() { printf '%s=%s\n' "$1" "$2" >> "$output_file"; }
 read_back() { sed -nE "s/^${1}=//p" "$output_file" 2>/dev/null | tail -n 1; }
 
 set +e
-env -u GITHUB_TOKEN -u GH_TOKEN -u UNIVERSAL_TOKEN -u COMPOSIO_API_KEY MODEL="$model" VARIANT="" SHARE="false" AGENT="build" bash .github/scripts/run-opencode-attempt.sh "$attempt"
+MODEL="$model" VARIANT="" SHARE="false" AGENT="build" bash .github/scripts/run-opencode-attempt.sh "$attempt"
 agent_rc=$?
 set -e
 
