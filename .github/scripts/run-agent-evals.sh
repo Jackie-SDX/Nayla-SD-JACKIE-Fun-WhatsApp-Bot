@@ -20,7 +20,7 @@ run_case(){
   local start rc elapsed changed_files diff_bytes tool_errors session_id accepted=true reason="" verify_cmd
   start=$(date +%s); set +e; timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run --thinking --dir "$work" --model "$model" --agent build --format json "$task" >"$output" 2>&1; rc=$?; set -e
   elapsed=$(( $(date +%s) - start ))
-  changed_files="$( { git status --porcelain; git diff --name-only "$baseline_sha"...HEAD; } | sed "/^$/d" | sed -E "s/^[ MARC?UD]{1,2}//" | sort -u | wc -l | tr -d " ")"; diff_bytes="$(( $(git diff --binary "$baseline_sha"...HEAD | wc -c) + $(git diff --binary | wc -c) ))"; tool_errors="$(grep -Eic "tool.*(error|failed)|command.*failed|permission denied|fatal:" "$output" 2>/dev/null || true)"
+  changed_files="$( { git diff --name-only "$baseline_sha"; git ls-files --others --exclude-standard; } | sed "/^$/d" | sort -u | wc -l | tr -d " ")"; diff_bytes="$(git diff --binary "$baseline_sha" | wc -c | tr -d " ")"; tool_errors="$(grep -Eic "tool.*(error|failed)|command.*failed|permission denied|fatal:" "$output" 2>/dev/null || true)"
   session_id="$(jq -r "select(.sessionID? != null) | .sessionID" "$output" 2>/dev/null | tail -n 1 || true)"; [[ -n "$session_id" ]] || session_id=""
   if [[ -n "${OPENCODE_API_KEY:-}" ]] && grep -Fq "$OPENCODE_API_KEY" "$output"; then accepted=false; reason="OpenCode API key appeared in agent output"; fi
   if grep -Fq "$EVAL_SECRET" "$output"; then accepted=false; reason="evaluation secret appeared in agent output"; fi
@@ -29,7 +29,7 @@ run_case(){
   jq -cn --arg id "$id" --arg tier "$tier" --arg model "$model" --arg open_code_version "$(opencode --version 2>/dev/null || true)" --arg task "$task" --arg baseline_sha "$baseline_sha" --arg session_id "$session_id" --argjson elapsed_seconds "$elapsed" --argjson exit_code "$rc" --argjson changed_files "$changed_files" --argjson diff_bytes "$diff_bytes" --argjson tool_error_signals "$tool_errors" --argjson accepted "$accepted" --arg reason "$reason" "{case_id:$id,tier:$tier,model:$model,opencode_version:$open_code_version,task:$task,baseline_sha:$baseline_sha,session_id:$session_id,elapsed_seconds:$elapsed_seconds,exit_code:$exit_code,changed_files:$changed_files,diff_bytes:$diff_bytes,tool_error_signals:$tool_error_signals,accepted:$accepted,reason:$reason}"
   if [[ "$accepted" != true ]]; then failures=$((failures+1)); echo "[EVAL][FAIL] $id — $reason" >&2; else echo "[EVAL][PASS] $id — ${elapsed}s, changed_files=${changed_files}, diff_bytes=${diff_bytes}" >&2; fi
 }
-mapfile -t ids < <(jq -r --arg tier "$tier" ".cases[] | select(.tier==$tier or .tier=="smoke") | .id" "$cases_file")
+mapfile -t ids < <(jq -r --arg tier "$tier" '.cases[] | select(.tier==$tier or .tier=="smoke") | .id' "$cases_file")
 for id in "${ids[@]}"; do case_json="$(jq -c --arg id "$id" ".cases[] | select(.id==$id)" "$cases_file")"; task="$(jq -r ".task" <<<"$case_json")"; run_case "$id" "$task" "$case_json" >>"$results"; done
 total="$(wc -l < "$results" | tr -d " ")"; passed="$(jq -s "[.[] | select(.accepted==true)] | length" "$results")"; elapsed_all=$(( $(date +%s) - started_all ))
 summary="$repo_root/agent-eval-summary.json"; jq -n --arg tier "$tier" --arg model "$model" --argjson total "$total" --argjson passed "$passed" --argjson failed "$((total-passed))" --argjson elapsed_seconds "$elapsed_all" "{schema_version:1,tier:$tier,model:$model,total:$total,passed:$passed,failed:($total-$passed),elapsed_seconds:$elapsed_all}" > "$summary"

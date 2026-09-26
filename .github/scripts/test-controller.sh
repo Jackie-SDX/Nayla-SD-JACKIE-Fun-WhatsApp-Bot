@@ -168,3 +168,5 @@ grep -Fq 'OC_CONTROLLER_UNIVERSAL_TOKEN' .github/workflows/opencode.yml
 # Capability discovery is agent-owned via the native OpenCode skill, not controller preflight.
 if grep -Fq 'capability-discovery.sh' .github/scripts/run-opencode-attempt.sh; then echo 'FAIL: controller still invokes capability discovery'; exit 1; fi
 grep -Fq '.opencode/skills/capability-discovery/SKILL.md' .github/scripts/test-controller.sh .github/agent-evals/README.md 2>/dev/null || true
+
+grep -Fq 'name: capability-discovery' .opencode/skills/capability-discovery/SKILL.md

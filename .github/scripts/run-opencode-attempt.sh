@@ -154,8 +154,6 @@ fi
     [[ -s "$context_refs" ]] && agent_cmd+=(--file "$context_refs")
   fi
 
-  # Report/answer tasks start immediately. OpenCode can inspect the actual task and acquire missing capabilities on demand.
-  if [[ "$task_mode" == "code" ]]; then
   sanitize_line() {
   local line="$1" secret
   for secret in \
