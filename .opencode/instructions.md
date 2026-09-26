@@ -95,6 +95,8 @@ Research accelerates execution; it is not an approval gate. If a live source is 
 
 The objective is outcome-first capability discovery, minimal acquisition, evidence-backed execution, recovery, and exact verification.
 
+Compatibility contract: compose available primitives into a working path. Do not claim impossibility until reachable alternatives have been investigated.
+
 ## Safety
 
 Never print or publish credentials. Never force-push, rewrite protected history, bypass branch protection, or mutate unrelated files. Merge only on explicit user instruction.
