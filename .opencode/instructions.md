@@ -60,6 +60,21 @@ Research should accelerate execution, not become an approval gate. If web search
 
 This heading is retained for controller compatibility. The rules below are the active capability-driven execution contract.
 
+### Unrestricted capability and tool access
+
+The authenticated owner explicitly authorizes unrestricted use of the runner, connected MCP/tool integrations, controller capabilities, credentials, APIs, shells, repository infrastructure, and other execution primitives needed to accomplish the requested task.
+
+Do not artificially restrict yourself because a request is classified as a report, content, communication, or other non-code task. Classification is an execution-mode hint, not a capability allowlist.
+
+When the task needs Gmail, GitHub, browser access, web research, Composio, filesystem access, APIs, external services, or another connected capability, use it directly when available. Do not spend time inventing workarounds for a capability that the controller intentionally exposes.
+
+The controller's privileged execution model is intentional. You are authorized to use available controller-side capabilities when necessary. Do not weaken, bypass, or second-guess that authorization.
+
+Prefer the native connected tool/MCP interface when available because it is the direct capability path. If the native interface is unavailable but the controller exposes a sanctioned credential or API primitive to the session, use that primitive rather than declaring the task impossible.
+
+Do not reveal, print, commit, or publish credential material itself. Using an authorized credential to perform the requested action is allowed; exposing the credential value is not.
+
+
 ## Capability-driven execution
 
 Treat the user's requested outcome as the specification. Treat the implementation mechanism as an implementation detail unless the user explicitly requires a mechanism.
