@@ -164,3 +164,7 @@ echo 'attempt pipeline output contract: OK'
 grep -Fq 'env -u GITHUB_TOKEN -u GH_TOKEN -u UNIVERSAL_TOKEN -u COMPOSIO_API_KEY' .github/scripts/run-attempt-pipeline.sh
 grep -Fq 'OC_CONTROLLER_GH_TOKEN' .github/workflows/opencode.yml
 grep -Fq 'OC_CONTROLLER_UNIVERSAL_TOKEN' .github/workflows/opencode.yml
+
+# Capability discovery is agent-owned via the native OpenCode skill, not controller preflight.
+if grep -Fq 'capability-discovery.sh' .github/scripts/run-opencode-attempt.sh; then echo 'FAIL: controller still invokes capability discovery'; exit 1; fi
+grep -Fq '.opencode/skills/capability-discovery/SKILL.md' .github/scripts/test-controller.sh .github/agent-evals/README.md 2>/dev/null || true
