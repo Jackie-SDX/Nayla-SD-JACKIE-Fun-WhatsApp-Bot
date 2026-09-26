@@ -30,7 +30,8 @@ jobs:
             texlive-latex-recommended \
             texlive-latex-extra \
             texlive-fonts-recommended \
-            lmodern
+            lmodern \
+            poppler-utils
 
       - name: Report toolchain versions
         run: |
@@ -58,6 +59,13 @@ jobs:
           test "$SIZE" -gt 1024
           test "$MAGIC" = "%PDF-"
           command -v file >/dev/null && file "$PDF" || true
+          pdfinfo "$PDF"
+          PAGES="$(pdfinfo "$PDF" | awk '/^Pages:/ {print $2}')"
+          echo "page count     : $PAGES"
+          test "$PAGES" -ge 1
+          pdfinfo "$PDF" | grep -F "Title: SnapDragon Pandoc-to-PDF Capability Test"
+          echo "--- extracted text (first 20 lines) ---"
+          pdftotext "$PDF" - | sed -n '1,20p'
           ls -l output
 
       - name: Upload PDF artifact
