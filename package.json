@@ -5,10 +5,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node scripts/test-simple-web-crawler.js",
+    "test": "node scripts/test-simple-web-crawler.js && node scripts/test-agent-invariants.js",
     "test:invariants": "node scripts/test-agent-invariants.js",
     "lint": "eslint \"scripts/**/*.js\" eslint.config.js",
-    "pair": "node pair.js"
+    "pair": "node tools/pair.js",
+    "test:syntax": "node --check index.js && node --check tools/pair.js"
   },
   "engines": {
     "node": ">=20"

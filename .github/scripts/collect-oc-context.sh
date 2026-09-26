@@ -9,7 +9,7 @@ full="$runner_temp/oc-issue-context-full.md"
 seed="$runner_temp/oc-issue-context-seed.md"
 index="$runner_temp/oc-issue-context.index"
 refs="$runner_temp/oc-reference-context.md"
-seed_bytes="${OC_CONTEXT_SEED_BYTES:-300000}"
+seed_bytes="${OC_CONTEXT_SEED_BYTES:-60000}"
 
 mkdir -p "$runner_temp"
 : > "$full"; : > "$index"; : > "$refs"

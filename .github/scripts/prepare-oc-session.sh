@@ -40,7 +40,7 @@ fi
 gh auth setup-git >/dev/null 2>&1 || echo "::warning title=Git credential setup degraded::The repository credential helper could not be configured; native agent integration may still push."
 
 head_sha="$(git rev-parse "$branch")"
-session_id="$(jq -r '.session_id // "oc-'$target'"' "$state_file" 2>/dev/null || printf 'oc-%s' "$target")"
+session_id="$(jq -r --arg target "$target" '.session_id // ("oc-" + $target)' "$state_file" 2>/dev/null || printf 'oc-%s' "$target")"
 resume="false"
 if [[ "$(jq -r '.state_revision // 0' "$state_file" 2>/dev/null || printf 0)" =~ ^[1-9][0-9]*$ ]]; then resume="true"; fi
 now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

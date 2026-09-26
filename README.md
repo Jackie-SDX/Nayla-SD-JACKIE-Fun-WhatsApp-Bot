@@ -107,7 +107,7 @@
 </tr>
 </table>
 
-> 📚 **This README covers usage, deployment, and reference material only.** For the full history of every bug found, every architectural decision, and *why* things work the way they do, see [`NAYLA_PROJECT_DOCUMENTATION.md`](./NAYLA_PROJECT_DOCUMENTATION.md) — required reading before making non-trivial changes.
+> 📚 **This README covers usage, deployment, and reference material only.** For the full history of every bug found, every architectural decision, and *why* things work the way they do, see [`NAYLA_PROJECT_DOCUMENTATION.md`](./docs/NAYLA_PROJECT_DOCUMENTATION.md) — required reading before making non-trivial changes.
 
 ---
 
@@ -178,7 +178,7 @@ flowchart TB
 ```
 .
 ├── index.js                          # The entire bot. ~4,900 lines, single file, everything lives here.
-├── pair.js                           # One-time, run-locally pairing script (not part of the deployed bot).
+├── tools/pair.js                           # One-time, run-locally pairing script (not part of the deployed bot).
 ├── package.json                      # Dependencies (see below).
 ├── .env                              # Local environment variables (never commit this).
 ├── README.md                         # You are here.
@@ -193,7 +193,7 @@ flowchart TB
 | File | Responsibility |
 |---|---|
 | **`index.js`** | Everything: the WhatsApp socket, the HTTP keep-alive server, the full message pipeline, every command, the AI provider chain, MongoDB schemas and persistence, vision/audio/TTS/image-generation integrations, gamification, and every background scheduler job. |
-| **`pair.js`** | A **separate, one-time-use script** you run manually and locally (not on Render). It opens its own Baileys connection, walks you through linking a device to your WhatsApp account (QR code or pairing code, depending on how it's invoked), and uploads the resulting session credentials to the same MongoDB collection `index.js` reads from on startup. Never run this as part of your production deployment — see [Pairing](#-pairing-your-whatsapp-account). |
+| **`tools/pair.js`** | A **separate, one-time-use script** you run manually and locally (not on Render). It opens its own Baileys connection, walks you through linking a device to your WhatsApp account (QR code or pairing code, depending on how it's invoked), and uploads the resulting session credentials to the same MongoDB collection `index.js` reads from on startup. Never run this as part of your production deployment — see [Pairing](#-pairing-your-whatsapp-account). |
 | **`package.json`** | Standard npm manifest. See [Requirements](#-requirements) for the dependency list `index.js` actually imports. |
 | **`NAYLA_PROJECT_DOCUMENTATION.md`** | The living record of *why* — architectural decisions, every confirmed bug and its root cause, recurring bug patterns to avoid reintroducing, and the reasoning behind every non-obvious constant in the code. Read this before making any change that touches identity comparison, message-type detection, AI prompts, or the message pipeline's ordering. |
 
@@ -416,7 +416,7 @@ Render's disk is **ephemeral** — anything written to disk is wiped on every re
 2. Re-uploads it again on a standalone 60-second interval (independent of credential-update events, closing a gap that otherwise causes "Bad MAC" decryption errors after a restart — see [Troubleshooting](#-troubleshooting)), **and**
 3. Downloads it back from MongoDB to local disk *before* Baileys reads it, on every boot.
 
-As long as `MONGODB_URI` points at the same database `pair.js` uploaded to, **you never need to re-pair after the first successful pairing** — restarts and redeploys just work.
+As long as `MONGODB_URI` points at the same database `tools/pair.js` uploaded to, **you never need to re-pair after the first successful pairing** — restarts and redeploys just work.
 
 ### Common deployment mistakes
 
@@ -426,13 +426,13 @@ As long as `MONGODB_URI` points at the same database `pair.js` uploaded to, **yo
 | Using a `.env` file on Render | Render doesn't read `.env` files from your repo | Add every variable in Render's **Environment** dashboard tab instead |
 | Deploying without ever running `npm run pair` locally first | Bot exits immediately with a "no active session" error | Pair locally once, confirm the session uploaded to MongoDB, *then* deploy |
 | Forgetting to allowlist `0.0.0.0/0` (or Render's IPs) in Atlas Network Access | `MongoServerSelectionError`, connection timeout | Update Atlas Network Access rules |
-| Running `pair.js` *on* Render itself | No way to interactively scan a QR/enter a pairing code in a headless deploy | Always pair from a local machine, never in the deployed environment |
+| Running `tools/pair.js` *on* Render itself | No way to interactively scan a QR/enter a pairing code in a headless deploy | Always pair from a local machine, never in the deployed environment |
 
 ---
 
 ## 🔗 Pairing Your WhatsApp Account
 
-`pair.js` is a **separate, local, one-time-use script** — it is never run as part of the deployed bot.
+`tools/pair.js` is a **separate, local, one-time-use script** — it is never run as part of the deployed bot.
 
 **What it does:** opens its own short-lived Baileys connection, walks you through linking a device to the target WhatsApp account (the same mechanism as adding WhatsApp Web/Desktop as a linked device), and on success, uploads the resulting session credentials to the `Session` collection in your MongoDB database.
 
@@ -447,7 +447,7 @@ As long as `MONGODB_URI` points at the same database `pair.js` uploaded to, **yo
 - After a `440` (session-conflict) disconnect — that means *another* device took over the same session; check for a duplicate running instance rather than re-pairing
 - After a `405` (protocol version) disconnect — this self-corrects automatically on reconnect; re-pairing won't help
 
-> ⚠️ `pair.js` and `index.js` must point at the **exact same** `MONGODB_URI` database. If pairing "doesn't take effect" on your deployed bot, this mismatch is the first thing to check.
+> ⚠️ `tools/pair.js` and `index.js` must point at the **exact same** `MONGODB_URI` database. If pairing "doesn't take effect" on your deployed bot, this mismatch is the first thing to check.
 
 ---
 
@@ -551,7 +551,7 @@ All five are genuinely free-forever with no card required, and all speak the sam
 ### Vision and TTS have their own, separate chains
 
 Vision: **Gemini → OpenRouter → Groq** (a smaller, vision-capable subset, since not every provider above supports image input).
-TTS: **ElevenLabs → StreamElements → plain text** — no equally clean "free forever" option exists for TTS as of this writing, so this chain is deliberately structured differently from the others (see [`NAYLA_PROJECT_DOCUMENTATION.md`](./NAYLA_PROJECT_DOCUMENTATION.md) §17.7/§18.9 for the full reasoning).
+TTS: **ElevenLabs → StreamElements → plain text** — no equally clean "free forever" option exists for TTS as of this writing, so this chain is deliberately structured differently from the others (see [`NAYLA_PROJECT_DOCUMENTATION.md`](./docs/NAYLA_PROJECT_DOCUMENTATION.md) §17.7/§18.9 for the full reasoning).
 
 ---
 
@@ -749,7 +749,7 @@ Locking a group requires the bot to already be a group admin. If it isn't, raid 
 No — `.health` and `.stats` (in-chat commands) are the entire observability surface. This is a deliberate scope decision for a single-owner, single-file project.
 
 **Q: Where do I report a bug or read about one that's already been found?**
-See [`NAYLA_PROJECT_DOCUMENTATION.md`](./NAYLA_PROJECT_DOCUMENTATION.md) — it contains a full, continuously-updated history of every confirmed bug, including ones still open, before you file a new one.
+See [`NAYLA_PROJECT_DOCUMENTATION.md`](./docs/NAYLA_PROJECT_DOCUMENTATION.md) — it contains a full, continuously-updated history of every confirmed bug, including ones still open, before you file a new one.
 
 </details>
 
@@ -818,7 +818,7 @@ No license has been chosen for this project yet. Until a `LICENSE` file is added
 
 <div align="center">
 
-*If you're picking this project up cold, read [`NAYLA_PROJECT_DOCUMENTATION.md`](./NAYLA_PROJECT_DOCUMENTATION.md) next.*
+*If you're picking this project up cold, read [`NAYLA_PROJECT_DOCUMENTATION.md`](./docs/NAYLA_PROJECT_DOCUMENTATION.md) next.*
 
 </div>
 ## FOR EASE, YOU CAN JUST DOWNLOAD THE CODE, RUN PAIR.JS ON KATABUMP(CREATE ACCOUNT )STOP, RUN THE MAIN INDEX.JS AFTER, (YOU CAN CREATE A .ENV FILE WITH ALL NECESSARY VARIABLES AND UPLOAD TO KATABUMP TOO, BECAUSE RENDER'S FREE TIER CAPS AT 5GB BANDWIDTH 
