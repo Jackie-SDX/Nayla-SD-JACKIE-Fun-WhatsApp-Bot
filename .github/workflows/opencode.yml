@@ -69,54 +69,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
-      id-token: write
       contents: write
       issues: write
       pull-requests: write
       actions: write
       checks: read
       statuses: read
-      copilot-requests: write
     env:
       UNIVERSAL_TOKEN: ${{ secrets.UNIVERSAL_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
       GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
       OPENCODE_AGENT_TIMEOUT_MINUTES: "350"
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
-      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
-      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
-      GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
-      GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
-      GEMINI_ADVISORY_MODEL: ${{ vars.GEMINI_ADVISORY_MODEL || 'gemini-3.8-flash' }}
-      GEMINI_ADVISORY_MODELS: ${{ vars.GEMINI_ADVISORY_MODELS || 'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite' }}
-      GEMINI_ADVISORY_MAX_CALLS: "5"
-      GEMINI_ADVISORY_MIN_INTERVAL_SECONDS: "12"
-      GEMINI_ADVISORY_PROVIDER_ORDER: "gemini,groq,openrouter"
-      GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
-      GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
-      GROQ_API_KEY_3: ${{ secrets.GROQ_API_KEY_3 }}
-      GROQ_API_KEY_4: ${{ secrets.GROQ_API_KEY_4 }}
-      GROQ_API_KEY_5: ${{ secrets.GROQ_API_KEY_5 }}
-      GROQ_ADVISORY_MODEL: ${{ vars.GROQ_ADVISORY_MODEL || 'openai/gpt-oss-20b' }}
-      OPENCODE_ZEN_FREE_MODELS: ${{ vars.OPENCODE_ZEN_FREE_MODELS || 'big-pickle,mimo-v2.6-flash-free' }}
-      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
       COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
       COMPOSIO_USER_ID: ${{ vars.COMPOSIO_USER_ID || github.repository_owner }}
-      COPILOT_MAX_AI_CREDITS: "60"
-      COPILOT_PEER_MAX_AI_CREDITS: "30"
       OC_CI_VERIFY_SETTLE_SECONDS: "30"
       OC_JOB_BUDGET_SECONDS: "21600"
       OC_JOB_SAFETY_MARGIN_SECONDS: "120"
-      OC_PROGRESS_INTERVAL_SECONDS: "30"
       OC_CONTEXT_SEED_BYTES: "300000"
       OC_SESSION_CHECKPOINT_INTERVAL_SECONDS: "300"
-      COPILOT_PEER_MAX_ROUNDS: "5"
       OC_CI_WATCH_MINUTES: "45"
       OC_CI_WATCH_POLL_SECONDS: "20"
-      OPENCODE_BAD_MODELS: ${{ vars.OPENCODE_BAD_MODELS }}
-      OPENCODE_BAD_MODELS_MAX_AGE_HOURS: ${{ vars.OPENCODE_BAD_MODELS_MAX_AGE_HOURS || '24' }}
 
     steps:
       - name: Checkout repository
@@ -257,22 +230,6 @@ jobs:
           [[ -n "${UNIVERSAL_TOKEN:-}" ]] && echo "Universal GitHub credential: configured" || echo "Universal GitHub credential: not configured; using the workflow GitHub token."
           echo "Zen free model candidates: $OPENCODE_ZEN_FREE_MODELS"
 
-      - name: Prepare peer credential file
-        if: env.OC_TASK_MODE != 'merge'
-        shell: bash
-        run: |
-          set -euo pipefail
-          umask 077
-          peer_token_file="$RUNNER_TEMP/copilot-peer-token"
-          if [[ -n "${COPILOT_GITHUB_TOKEN:-}" ]]; then
-            printf '%s' "$COPILOT_GITHUB_TOKEN" > "$peer_token_file"
-            chmod 600 "$peer_token_file"
-            echo "COPILOT_PEER_TOKEN_FILE=$peer_token_file" >> "$GITHUB_ENV"
-          else
-            rm -f "$peer_token_file"
-            echo "COPILOT_PEER_TOKEN_FILE=" >> "$GITHUB_ENV"
-          fi
-
       - name: Prepare remote target workspace
         if: steps.target.outputs.mode == 'remote'
         shell: bash
@@ -288,90 +245,28 @@ jobs:
         shell: bash
         run: bash .github/scripts/prepare-composio-mcp.sh
 
-      - name: Select route 1
+      - name: Select primary OpenCode route
         id: route_1
         if: env.OC_TASK_MODE != 'merge'
         shell: bash
         run: bash .github/scripts/select-opencode-route.sh
 
-      - name: Attempt 1
+      - name: Run primary OpenCode attempt
         id: attempt_1
         if: env.OC_TASK_MODE != 'merge' && steps.route_1.outputs.selected == 'true'
         continue-on-error: true
         uses: ./.github/actions/oc-attempt
         with:
-          attempt: "1"
-          provider: ${{ steps.route_1.outputs.provider }}
+          attempt: '1'
+          provider: opencode
           model: ${{ env.OPENCODE_SELECTED_MODEL }}
           target_number: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
           base_ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
           initial_sha: ${{ steps.initial_state.outputs.sha }}
           mode: ${{ steps.target.outputs.mode }}
-          task_mode: ${{ steps.task_mode.outputs.mode }}
-          verify_wait_minutes: "20"
-          verify_poll_seconds: "20"
-
-      # Route-2 fallback remains gated by durable_work != 'true'. Checkpointed work is resumed, not duplicated.
-      # durable_work != 'true'
-      - name: Select route 2
-        id: route_2
-        if: |
-          env.OC_TASK_MODE == 'code' &&
-          steps.attempt_1.outputs.agent_outcome == 'failure' &&
-          steps.attempt_1.outputs.durable_work != 'true' &&
-          steps.attempt_1.outputs.termination_reason != 'timeout' &&
-          steps.attempt_1.outputs.termination_reason != 'signal' &&
-          steps.attempt_1.outputs.classify_outcome == 'success' &&
-          steps.attempt_1.outputs.result_state != 'published-after-provider-warning'
-        shell: bash
-        run: bash .github/scripts/select-opencode-route.sh
-
-      - name: Attempt 2
-        id: attempt_2
-        if: env.OC_TASK_MODE != 'merge' && steps.route_2.outputs.selected == 'true'
-        continue-on-error: true
-        uses: ./.github/actions/oc-attempt
-        with:
-          attempt: "2"
-          provider: ${{ steps.route_2.outputs.provider }}
-          model: ${{ env.OPENCODE_SELECTED_MODEL }}
-          target_number: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
-          base_ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
-          initial_sha: ${{ steps.initial_state.outputs.sha }}
-          mode: ${{ steps.target.outputs.mode }}
-          task_mode: ${{ steps.task_mode.outputs.mode }}
-          verify_wait_minutes: "20"
-          verify_poll_seconds: "20"
-
-      - name: Select route 3
-        id: route_3
-        if: |
-          env.OC_TASK_MODE == 'code' &&
-          steps.attempt_2.outputs.agent_outcome == 'failure' &&
-          steps.attempt_2.outputs.durable_work != 'true' &&
-          steps.attempt_2.outputs.termination_reason != 'timeout' &&
-          steps.attempt_2.outputs.termination_reason != 'signal' &&
-          steps.attempt_2.outputs.classify_outcome == 'success' &&
-          steps.attempt_2.outputs.result_state != 'published-after-provider-warning'
-        shell: bash
-        run: bash .github/scripts/select-opencode-route.sh
-
-      - name: Attempt 3
-        id: attempt_3
-        if: env.OC_TASK_MODE != 'merge' && steps.route_3.outputs.selected == 'true'
-        continue-on-error: true
-        uses: ./.github/actions/oc-attempt
-        with:
-          attempt: "3"
-          provider: ${{ steps.route_3.outputs.provider }}
-          model: ${{ env.OPENCODE_SELECTED_MODEL }}
-          target_number: ${{ github.event.issue.number || github.event.pull_request.number || 0 }}
-          base_ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
-          initial_sha: ${{ steps.initial_state.outputs.sha }}
-          mode: ${{ steps.target.outputs.mode }}
-          task_mode: ${{ steps.task_mode.outputs.mode }}
-          verify_wait_minutes: "20"
-          verify_poll_seconds: "20"
+          task_mode: ${{ env.OC_TASK_MODE }}
+          verify_wait_minutes: '20'
+          verify_poll_seconds: '20'
 
       - name: OpenCode success inspection
         if: always() && ((steps.attempt_1.outputs.agent_outcome == 'success' && steps.attempt_1.outputs.publish_outcome != 'failed' && steps.route_1.outputs.provider == 'opencode') || (steps.attempt_2.outputs.agent_outcome == 'success' && steps.attempt_2.outputs.publish_outcome != 'failed' && steps.route_2.outputs.provider == 'opencode') || (steps.attempt_3.outputs.agent_outcome == 'success' && steps.attempt_3.outputs.publish_outcome != 'failed' && steps.route_3.outputs.provider == 'opencode'))
