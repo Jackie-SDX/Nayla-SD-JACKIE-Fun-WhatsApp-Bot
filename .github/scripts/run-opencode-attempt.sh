@@ -119,6 +119,7 @@ else
   fi
   agent_cwd="$agent_worktree"
   echo "[OC][attempt=$attempt] isolated OpenCode workspace is ready"
+fi
   request="${OC_COMMAND_TEXT:-$(jq -r '.comment.body // empty' "$GITHUB_EVENT_PATH" 2>/dev/null | sed -E 's#^/(oc|opencode)[[:space:]]*##')}"
   context_seed="${OC_ISSUE_CONTEXT_SEED_FILE:-$runner_temp/oc-issue-context-seed.md}"
   context_full="${OC_ISSUE_CONTEXT_FILE:-$runner_temp/oc-issue-context-full.md}"
@@ -246,7 +247,6 @@ set -e
 
 elapsed=$(( $(date +%s) - start_epoch ))
 termination_reason="completed"
-provider_failure_kind=""
 provider_warning="false"
 case "$exit_code" in
   124) termination_reason="timeout" ;;
