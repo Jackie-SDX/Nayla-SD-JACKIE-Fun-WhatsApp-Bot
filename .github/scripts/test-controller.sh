@@ -57,6 +57,16 @@ grep -Fq '## Research-first / web-first' .opencode/instructions.md
 grep -Fq 'web/search tools are available through Composio' .opencode/instructions.md
 grep -Fq 'official product documentation, GitHub/GitHub Actions documentation' .opencode/instructions.md
 
+# Capability discovery: the agent must reason from outcomes and compose reachable primitives,
+# rather than treating direct tools or user-supplied mechanisms as the ceiling.
+grep -Fq '## Capability discovery / outside-the-box execution' .opencode/instructions.md
+grep -Fq 'Treat the user'\"s requested outcome as the specification' .opencode/instructions.md
+grep -Fq 'compose available primitives into a working path' .opencode/instructions.md
+grep -Fq 'Do not claim impossibility until reachable alternatives have been investigated' .opencode/instructions.md
+grep -Fq 'Capability discovery / outside-the-box execution:' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'inventory reachable repository code and CLI tools' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'Do not claim impossibility until viable reachable alternatives have been investigated' .github/scripts/run-opencode-attempt.sh
+
 # Log cosmetics: summarize tool/command activity and keep comments free of live logs.
 grep -Fq 'suppress_command_output=0' .github/scripts/filter-opencode-live-output.awk
 grep -Fq '38;5;208m' .github/scripts/filter-opencode-live-output.awk
