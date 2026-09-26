@@ -1,268 +1,78 @@
 #!/usr/bin/env bash
 set -u
-# Verifier/recovery utilities are retained for audit and manual forensic use only.
-# verify-agent-result.sh and recover-verify-failure.sh MUST NEVER control route selection,
-# agent_outcome, publication success, or fallback decisions. EXPECTED_TARGET_HEAD remains
-# an audit concept only; the agent result is authoritative for this attempt.
-# One consolidated run unit for a single /oc route attempt (audit item 5).
-#
-# Executed as the only step of the oc-attempt composite action. It owns the
-# full attempt lifecycle that previously lived as copy-pasted step chains in
-# opencode.yml: copilot branch preparation, the agent run, publication
-# (copilot/local or remote-target/opencode), independent verification with one
-# bounded exact-head CI recovery rerun (audit item 2), provider-failure
-# classification, and lost-openCode-model memory recording.
-#
-# Every sub-script writes into the same GITHUB_OUTPUT/GITHUB_ENV so the two
-# step-owned files remain a single coherent ledger; later writers win on
-# duplicate keys (GitHub last-wins semantics).
-#
-# Env (provided by the composite action inputs + inherited job env):
-#   ATTEMPT, PROVIDER, OC_SELECTED_MODEL, OC_TARGET_MODE, TARGET_NUMBER,
-#   BASE_REF, INITIAL_SHA, OC_CI_VERIFY_WAIT_MINUTES, OC_CI_VERIFY_POLL_SECONDS
 
-attempt="${ATTEMPT:-unknown}"
-provider="${PROVIDER:-none}"
-model="${OC_SELECTED_MODEL:-}"
-variant="${OC_SELECTED_VARIANT:-}"
+attempt="${ATTEMPT:-1}"
+model="${MODEL:-opencode/mimo-v2.6-flash-free}"
 mode="${OC_TARGET_MODE:-local}"
 task_mode="${TASK_MODE:-code}"
 publish_requested="${OC_PUBLISH_REQUESTED:-${PUBLISH_REQUESTED:-false}}"
-agent_branch=""
-durable_work="false"
-target_number="${TARGET_NUMBER:-0}"
-base_ref="${BASE_REF:-}"
 initial_sha="${INITIAL_SHA:-}"
-
 output_file="${GITHUB_OUTPUT:-/dev/null}"
+start_epoch="$(date +%s)"
+
 out() { printf '%s=%s\n' "$1" "$2" >> "$output_file"; }
+read_back() { sed -nE "s/^${1}=//p" "$output_file" 2>/dev/null | tail -n 1; }
 
-attempt_start="$(date +%s)"
-out attempt_elapsed_seconds 0
+set +e
+MODEL="$model" VARIANT="" SHARE="false" AGENT="build" bash .github/scripts/run-opencode-attempt.sh "$attempt"
+agent_rc=$?
+set -e
 
-read_back_output() {
-  local key="$1"
-  local val=""
-  if [[ -f "$output_file" ]]; then
-    val="$(sed -nE "s/^${key}=//p" "$output_file" | tail -n 1)"
-  fi
-  printf '%s' "$val"
-}
+agent_outcome="failure"
+[[ "$agent_rc" -eq 0 ]] && agent_outcome="success"
+termination_reason="$(read_back termination_reason)"
+[[ -n "$termination_reason" ]] || termination_reason="failed"
+timed_out="false"
+[[ "$termination_reason" == "timeout" ]] && timed_out="true"
+safe_log_path="$(read_back safe_log_path)"
+agent_branch="$(read_back agent_branch)"
+session_head_sha=""
+durable_work="false"
 
-run_agent() {
-  case "$provider" in
-    opencode|openrouter)
-      MODEL="$model" VARIANT="$variant" SHARE="false" AGENT="build" \
-        bash .github/scripts/run-opencode-attempt.sh "$attempt" ;;
-    github-copilot)
-      bash .github/scripts/run-copilot-attempt.sh "$attempt" ;;
-    *)
-      echo "::error title=No agent provider::provider='$provider' is not routable for attempt $attempt." >&2
-      return 2 ;;
-  esac
-}
-
-# The Copilot publication lane is local-only: a remote target is always owned
-# by workflow publication/verification logic, and run-copilot-attempt.sh
-# would mutate the controller checkout instead of the target workspace.
-if [[ "$provider" == "github-copilot" && "$mode" == "remote" ]]; then
-  echo "::error title=Copilot lane is local-only::github-copilot is not supported for remote /oc targets." >&2
-  out agent_outcome failure
-  out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
-  exit 3
-fi
-
-if [[ "$provider" == "github-copilot" && "$mode" == "local" ]]; then
-  branch="$(printenv OC_SESSION_BRANCH 2>/dev/null || true)"
-  [[ -n "$branch" ]] || branch="oc/copilot-$target_number-$GITHUB_RUN_ID-$attempt"
-  if git show-ref --verify --quiet "refs/heads/$branch"; then
-    git switch "$branch" || exit 1
-  else
-    git switch -c "$branch" || {
-      echo "::error title=Copilot session branch prep failed::Could not create branch $branch." >&2
-      out agent_outcome failure
-      out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
-      exit 1
-    }
-  fi
-  agent_branch="$branch"
-fi
-
-agent_rc=99
-if [[ "$provider" != "none" ]]; then
-  set +e
-  run_agent
-  agent_rc=$?
-  set -e
-else
-  out agent_outcome none
-  out publish_outcome "not-applicable"
-  out classify_outcome "not-applicable"
-  out durable_work "false"
-  out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
-  exit 0
-fi
-
-if [[ -z "$agent_branch" ]]; then
-  agent_branch="$(read_back_output agent_branch)"
-fi
 if [[ -n "$agent_branch" ]]; then
   session_head_sha="$(git rev-parse "$agent_branch" 2>/dev/null || true)"
-  if [[ -n "$initial_sha" && "$session_head_sha" != "$initial_sha" && "$session_head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+  if [[ "$initial_sha" =~ ^[0-9a-f]{40}$ && "$session_head_sha" =~ ^[0-9a-f]{40}$ && "$session_head_sha" != "$initial_sha" ]]; then
     durable_work="true"
   fi
 fi
-if [[ "$durable_work" == "true" && -n "$agent_branch" && "$mode" == "local" ]]; then
-  OC_SESSION_BRANCH="$agent_branch" OC_ATTEMPT="$attempt" bash .github/scripts/checkpoint-oc-working-tree.sh . || true
-fi
-if [[ -n "$agent_branch" ]]; then
-  session_head_sha="$(git rev-parse "$agent_branch" 2>/dev/null || true)"
-  if [[ -n "$initial_sha" && "$session_head_sha" != "$initial_sha" && "$session_head_sha" =~ ^[0-9a-f]{40}$ ]]; then durable_work="true"; fi
-fi
-safe_log_path="$(read_back_output safe_log_path)"
-copilot_peer_result="$(read_back_output copilot_peer_result)"
-copilot_peer_elapsed_seconds="$(read_back_output copilot_peer_elapsed_seconds)"
-copilot_peer_rounds_used="$(read_back_output copilot_peer_rounds_used)"
-copilot_peer_log_path="$(read_back_output copilot_peer_log_path)"
-termination_reason="$(read_back_output termination_reason)"
-provider_failure_kind="$(read_back_output provider_failure_kind)"
-provider_warning="$(read_back_output provider_warning)"
-[ -n "$provider_warning" ] || provider_warning="false"
 
-agent_outcome="failure"
-result_state="agent-failed"
-
-# A provider-unavailable result after an OpenCode PR was already published is
-# not permission to discard that durable work and launch the whole task again.
-# Preserve the published branch and let exact-head CI verification/recovery
-# decide whether more work is needed.
-if [ "$agent_rc" -ne 0 ] &&
-   [ "$termination_reason" = "provider-unavailable" ] &&
-   [ "$provider" = "opencode" ] &&
-   [ "$mode" = "local" ] &&
-   [[ "$target_number" =~ ^[0-9]+$ ]] &&
-   [ "$target_number" != "0" ]; then
-  attempt_since="$(date -u -d "@$attempt_start" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || printenv OC_RUN_START_ISO 2>/dev/null || printf '%s' '')"
-  repo="$(printenv GITHUB_REPOSITORY 2>/dev/null || printf '%s' '')"
-  pr_candidates="$(gh pr list --repo "$repo" --base "$base_ref" --state open --limit 100 --json number,url,headRefName,headRefOid,createdAt 2>/dev/null || printf '%s' '[]')"
-
-  if [ -n "$agent_branch" ]; then
-    published_pr="$(jq -c --arg branch "$agent_branch" --arg initial "$initial_sha" '
-      [ .[] |
-        select(.headRefName == $branch) |
-        select((.headRefOid // "") != $initial)
-      ] | sort_by(.createdAt) | last // {}
-    ' <<<"$pr_candidates" 2>/dev/null || printf '%s' '{}')"
-  else
-    prefix="opencode/issue$target_number-"
-    published_pr="$(jq -c --arg prefix "$prefix" --arg initial "$initial_sha" --arg since "$attempt_since" '
-      [ .[] |
-        select((.headRefName|startswith($prefix))) |
-        select((.headRefOid // "") != $initial) |
-        select(($since == "") or ((.createdAt // "") >= $since))
-      ] | sort_by(.createdAt) | last // {}
-    ' <<<"$pr_candidates" 2>/dev/null || printf '%s' '{}')"
-  fi
-  published_number="$(jq -r '.number // 0' <<<"$published_pr" 2>/dev/null || printf '0')"
-  if [[ "$published_number" =~ ^[1-9][0-9]*$ ]]; then
-    agent_rc=0
-    agent_outcome="success"
-    result_state="published-after-provider-warning"
-    provider_warning="true"
-    pr_url="$(jq -r '.url // empty' <<<"$published_pr" 2>/dev/null || true)"
-    [ -n "$pr_url" ] && out pr_url "$pr_url"
-    echo "::warning title=Provider warning after publication::Attempt $attempt already published PR #$published_number; preserving that result and skipping fresh fallback."
-  fi
-fi
-
-if [ "$agent_rc" -eq 0 ] && [ "$agent_outcome" != "success" ]; then
-  agent_outcome="success"
-  [ "$result_state" = "agent-failed" ] && result_state="completed"
-fi
-out agent_outcome "$agent_outcome"
-out provider_warning "$provider_warning"
-out result_state "$result_state"
-[[ -n "$safe_log_path" ]] && out safe_log_path "$safe_log_path"
-[[ -n "$copilot_peer_result" ]] && out copilot_peer_result "$copilot_peer_result"
-[[ -n "$copilot_peer_elapsed_seconds" ]] && out copilot_peer_elapsed_seconds "$copilot_peer_elapsed_seconds"
-[[ -n "$copilot_peer_rounds_used" ]] && out copilot_peer_rounds_used "$copilot_peer_rounds_used"
-[[ -n "$copilot_peer_log_path" ]] && out copilot_peer_log_path "$copilot_peer_log_path"
-agent_branch="$(read_back_output agent_branch)"
-[[ -n "$agent_branch" ]] && out agent_branch "$agent_branch"
-[[ -n "$termination_reason" ]] && out termination_reason "$termination_reason"
-
-# Publication is explicit. Branch-only progress is valid and resumable.
 publish_outcome="not-requested"
-if [[ "$agent_rc" -eq 0 || "$durable_work" == "true" ]]; then
-  publish_rc=0
-  if [[ "$task_mode" == "report" ]]; then
-    publish_outcome="report-only"
-  elif [[ "$publish_requested" == "true" ]]; then
-    if [[ "$provider" == "github-copilot" && "$mode" == "local" ]]; then
-      set +e
-      bash .github/scripts/publish-copilot-change.sh
-      publish_rc=$?
-      set -e
-    elif [[ "$provider" == "opencode" && "$mode" == "local" ]]; then
-      set +e
-      OC_SESSION_BRANCH="$agent_branch" PUBLISH_REQUESTED="true" bash .github/scripts/publish-oc-session.sh
-      publish_rc=$?
-      set -e
-    elif [[ "$provider" == "opencode" && "$mode" == "remote" ]]; then
-      set +e
-      PUBLISH_REQUESTED="true" bash .github/scripts/publish-remote-opencode.sh
-      publish_rc=$?
-      set -e
-    fi
-    publish_outcome="published"
-    [[ "$publish_rc" -eq 0 ]] || publish_outcome="failed"
-  elif [[ "$durable_work" == "true" ]]; then
-    publish_outcome="checkpointed"
-  fi
-  out publish_outcome "$publish_outcome"
-  if [[ "$publish_rc" -ne 0 ]]; then
-    echo "::error title=Explicit publication failed::The requested PR publication did not complete." >&2
-    out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
-    exit 1
-  fi
-fi
-out verified "false"
-out verification_outcome "not-run-advisory"
-out ci_surfaces "unobserved"
-
-classify_outcome="not-applicable"
-classify_rc=""
-if [[ "$agent_rc" -ne 0 ]] && [[ "$provider" != "none" ]] &&
-   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" ]] &&
-   [[ -n "$safe_log_path" ]]; then
+pr_url="$(read_back pr_url)"
+publish_rc=0
+if [[ "$task_mode" == "report" ]]; then
+  publish_outcome="report-only"
+elif [[ "$publish_requested" == "true" && ( "$agent_outcome" == "success" || "$durable_work" == "true" ) ]]; then
   set +e
-  CURRENT_PROVIDER="$provider" SAFE_LOG="$safe_log_path" bash .github/scripts/classify-provider-failure.sh
-  classify_rc=$?
-  set -e
-fi
-if [[ -n "$classify_rc" ]]; then
-  if [[ "$classify_rc" -eq 0 ]]; then
-    classify_outcome="success"
+  if [[ "$mode" == "remote" ]]; then
+    PUBLISH_REQUESTED="true" bash .github/scripts/publish-remote-opencode.sh
   else
-    classify_outcome="failure"
+    OC_SESSION_BRANCH="$agent_branch" PUBLISH_REQUESTED="true" bash .github/scripts/publish-oc-session.sh
   fi
-fi
-out classify_outcome "$classify_outcome"
-
-# Lost-openCode-model memory (audit item 6): remember a model that failed for
-# model-specific reasons so later runs skip it; timeout/signal terminations are
-# budget events, not model defects, and must never poison the ladder.
-if [[ "$agent_rc" -ne 0 ]] && [[ "$provider" == "opencode" ]] && [[ -n "$model" ]] &&
-   [[ "$termination_reason" != "timeout" && "$termination_reason" != "signal" && "$termination_reason" != "provider-unavailable" ]]; then
-  set +e
-  CURRENT_PROVIDER="$provider" MODEL="$model" AGENT_OUTCOME="failure" TERMINATION_REASON="$termination_reason" \
-    bash .github/scripts/record-model-memory.sh
+  publish_rc=$?
   set -e
+  pr_url="$(read_back pr_url)"
+  if [[ "$publish_rc" -eq 0 ]]; then publish_outcome="published"; else publish_outcome="failed"; fi
+elif [[ "$durable_work" == "true" ]]; then
+  publish_outcome="checkpointed"
 fi
 
-out provider_warning "$provider_warning"
-out result_state "$result_state"
+result_state="failed"
+[[ "$agent_outcome" == "success" ]] && result_state="completed"
+[[ "$durable_work" == "true" && "$agent_outcome" != "success" ]] && result_state="checkpointed"
+[[ "$publish_rc" -ne 0 ]] && result_state="publication-failed"
+
+out agent_outcome "$agent_outcome"
+out termination_reason "$termination_reason"
+out timed_out "$timed_out"
+out safe_log_path "$safe_log_path"
 out durable_work "$durable_work"
-out session_head_sha "$(git rev-parse "$agent_branch" 2>/dev/null || true)"
-out attempt_elapsed_seconds "$(( $(date +%s) - attempt_start ))"
+out session_head_sha "$session_head_sha"
+out publish_outcome "$publish_outcome"
+out pr_url "$pr_url"
+out verified "false"
+out verified_sha ""
+out ci_surfaces "unobserved"
+out ci_run_id ""
+out result_state "$result_state"
+out attempt_elapsed_seconds "$(( $(date +%s) - start_epoch ))"
 exit 0
