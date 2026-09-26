@@ -23,9 +23,20 @@ cat > "$bin/gh" <<'FAKEGH'
 set -euo pipefail
 case "$*" in
   "api user --jq .login") printf '%s\n' github-actions[bot] ;;
-  *"/reactions?per_page=100"*) printf '%s\n' '[]' ;;
-  *"--method POST"*"/reactions"*) printf '%s\n' '123' ;;
-  *"--method DELETE"*"/reactions/123"*) exit 0 ;;
+  *"/reactions?per_page=100"*)
+    if [[ -f "${FAKEGH_REACTION_STATE:-$RUNNER_TEMP/fake-reaction-state}" ]]; then
+      printf '%s\n' '[{"id":123,"content":"eyes","user":{"login":"github-actions[bot]"}}]'
+    else
+      printf '%s\n' '[]'
+    fi
+    ;;
+  *"--method POST"*"/reactions"*)
+    printf '%s\n' 123 > "${FAKEGH_REACTION_STATE:-$RUNNER_TEMP/fake-reaction-state}"
+    printf '%s\n' '123'
+    ;;
+  *"--method DELETE"*"/reactions/123"*)
+    rm -f "${FAKEGH_REACTION_STATE:-$RUNNER_TEMP/fake-reaction-state}"
+    exit 0 ;;
   *"/issues/7/comments?per_page=100"*) printf '%s\n' '[[]]' ;;
   *"api -X POST"*"/issues/"*"/comments"*) printf '%s\n' "$*" >> "${GH_PUBLISH_LOG:-/dev/null}" ;;
   "issue comment"*) printf '%s\n' "$*" > "${GH_COMMENT_FILE:?GH_COMMENT_FILE test seam is unset}" ;;
@@ -34,6 +45,7 @@ esac
 FAKEGH
 chmod +x "$bin/gh"
 export PATH="$bin:$PATH"
+export FAKEGH_REACTION_STATE="$tmp/fake-reaction-state"
 export GITHUB_REPOSITORY=fixture/repo GITHUB_EVENT_NAME=issue_comment RUNNER_TEMP="$tmp" GH_COMMENT_FILE="$tmp/comment" GH_PUBLISH_LOG="$tmp/api-publish" RUN_ID=424242
 : > "$GH_PUBLISH_LOG"
 cat > "$tmp/event.json" <<'JSON'
@@ -43,8 +55,11 @@ export GITHUB_EVENT_PATH="$tmp/event.json" GITHUB_RUN_ID=424242
 bash "$root/.github/scripts/oc-running-reaction.sh" add >"$tmp/add"
 grep -Fq 'Added /oc running reaction 123.' "$tmp/add"
 [[ "$(cat "$tmp/oc-running-reaction.state")" == 123 ]]
+[[ -f "$FAKEGH_REACTION_STATE" ]]
 bash "$root/.github/scripts/oc-running-reaction.sh" remove >"$tmp/remove"
+grep -Fq 'Removed /oc running reaction(s) owned by github-actions[bot].' "$tmp/remove"
 [[ ! -e "$tmp/oc-running-reaction.state" ]]
+[[ ! -e "$FAKEGH_REACTION_STATE" ]]
 bash -n "$root/.github/scripts/oc-running-reaction.sh"
 bash -n "$root/.github/scripts/post-oc-result.sh"
 node --check "$root/.opencode/plugins/agentic-observability.js"

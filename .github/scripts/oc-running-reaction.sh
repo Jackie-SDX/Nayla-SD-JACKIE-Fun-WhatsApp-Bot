@@ -40,13 +40,26 @@ case "$action" in
     fi
     ;;
   remove)
-    reaction_id=""
-    [[ -f "$state_file" ]] && reaction_id="$(cat "$state_file" 2>/dev/null || true)"
-    if [[ "$reaction_id" =~ ^[0-9]+$ ]]; then
-      gh api --method DELETE "$reaction_path/$reaction_id" >/dev/null 2>&1 || true
-      rm -f "$state_file"
-      echo "Removed /oc running reaction $reaction_id."
+    # Claim and cleanup run in different GitHub jobs, so RUNNER_TEMP state is not shared.
+    # Resolve the workflow actor and remove only that actor's eyes reaction.
+    actor="$(gh api user --jq ".login" 2>/dev/null || true)"
+    if [[ -n "$actor" ]]; then
+      reaction_ids="$(gh api "$reaction_path?per_page=100" 2>/dev/null | jq -r --arg actor "$actor" '.[] | select(.content=="eyes" and .user.login==$actor) | .id' 2>/dev/null || true)"
+      removed=0
+      while IFS= read -r reaction_id; do
+        [[ "$reaction_id" =~ ^[0-9]+$ ]] || continue
+        gh api --method DELETE "$reaction_path/$reaction_id" >/dev/null 2>&1 || true
+        removed=1
+      done <<<"$reaction_ids"
+      if [[ "$removed" == "1" ]]; then
+        echo "Removed /oc running reaction(s) owned by $actor."
+      else
+        echo "No /oc running reaction owned by $actor was present."
+      fi
+    else
+      echo "::warning title=/oc running reaction cleanup unavailable::Could not identify the authenticated workflow actor."
     fi
+    rm -f "$state_file"
     ;;
   *) echo "::error title=Invalid /oc reaction action::Expected add or remove." >&2; exit 2 ;;
 esac

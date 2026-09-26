@@ -72,6 +72,7 @@ Before acting, derive a capability graph from the task and repository, then buil
 5. Verify every acquired capability with a version/smoke check before relying on it.
 6. Pass the resulting capability matrix into the engineering session as evidence.
 7. If a capability is missing and the helper does not know how to acquire it safely, research the official installation path and acquire it as part of the task; the helper is an accelerator, not a hard allowlist.
+8. Do not rely on controller-side preinstallation for ordinary tasks. OpenCode should start first, inspect the actual task, and acquire only task-relevant missing capabilities on demand.
 
 The standard GitHub-hosted runner is a capability substrate, not a ceiling. Do not install a giant toolchain pre-emptively. Discover first, install second.
 

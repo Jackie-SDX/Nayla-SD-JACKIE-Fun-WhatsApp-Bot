@@ -161,7 +161,8 @@ fi
     [ -f "$context_seed" ] && cat "$context_seed"
     [ -s "$context_refs" ] && cat "$context_refs"
   } > "$capability_task_file"
-  if ! bash "$script_dir/capability-discovery.sh" --workspace "$agent_cwd" --task-file "$capability_task_file" --output "$capability_matrix"; then
+  # Probe only before OpenCode starts. Capability acquisition is deferred to the agent, so trivial tasks never pre-install an unrelated toolchain.
+  if ! OC_CAPABILITY_AUTO_INSTALL=false bash "$script_dir/capability-discovery.sh" --workspace "$agent_cwd" --task-file "$capability_task_file" --output "$capability_matrix"; then
     echo "::warning title=Capability discovery degraded::The helper could not complete cleanly; OpenCode will continue and can acquire additional capabilities itself."
   fi
   if [ -s "$capability_matrix" ]; then

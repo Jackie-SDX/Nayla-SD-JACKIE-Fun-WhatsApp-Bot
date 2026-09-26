@@ -82,7 +82,7 @@ jobs:
       OC_SESSION_CHECKPOINT_INTERVAL_SECONDS: "300"
       OC_CI_WATCH_MINUTES: "45"
       OC_CI_WATCH_POLL_SECONDS: "20"
-      OC_CAPABILITY_AUTO_INSTALL: "true"
+      OC_CAPABILITY_AUTO_INSTALL: "false"
 
     steps:
       - name: Checkout repository

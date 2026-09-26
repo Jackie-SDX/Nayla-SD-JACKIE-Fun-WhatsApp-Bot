@@ -64,7 +64,7 @@ if [[ -d "$workspace/.github/workflows" ]]; then
   cap shellcheck shellcheck shellcheck "controller shell validation"
 fi
 
-if printf "%s" "$lower_task" | grep -qiE "pdf|pandoc|document|markdown|latex|report|runbook" || [[ -d "$workspace/docs/pandoc-demo" ]]; then
+if printf "%s" "$lower_task" | grep -qiE "pdf|pandoc|document generation|markdown generation|latex|runbook generation"; then
   cap pandoc pandoc pandoc "document/PDF task"
   cap pdfinfo pdfinfo poppler-utils "PDF inspection"
   cap pdftotext pdftotext poppler-utils "PDF text verification"
@@ -93,7 +93,7 @@ while IFS=$'\t' read -r label cmd package reason; do
   if ! command -v "$cmd" >/dev/null 2>&1 && [[ -n "$package" ]]; then need "$package"; fi
 done < "$caps_file"
 
-if [[ -n "$install_list" && "${OC_CAPABILITY_AUTO_INSTALL:-true}" == "true" ]]; then
+if [[ -n "$install_list" && "${OC_CAPABILITY_AUTO_INSTALL:-false}" == "true" ]]; then
   if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
     echo "[CAP] acquiring missing capabilities: $install_list"
     if ! sudo apt-get update -y >/dev/null 2>&1 || ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $install_list >/dev/null 2>&1; then
