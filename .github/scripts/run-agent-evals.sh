@@ -17,15 +17,16 @@ run_case(){
   jq -r ".setup[]?" <<<"$case_json" | while IFS= read -r cmd; do bash -euo pipefail -c "$cmd"; done >"$setup_log" 2>&1
   git add -A; git commit -qm "eval baseline"; local baseline_sha; baseline_sha="$(git rev-parse HEAD)"
   export BASELINE="$baseline_sha"
-  local start rc elapsed changed_files diff_bytes tool_errors session_id accepted=true reason="" verify_cmd
+  local start rc elapsed changed_files diff_bytes tool_errors session_id open_code_version
   start=$(date +%s); set +e; timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run --thinking --dir "$work" --model "$model" --agent build --format json "$task" >"$output" 2>&1; rc=$?; set -e
   elapsed=$(( $(date +%s) - start ))
   changed_files="$( { git diff --name-only "$baseline_sha"; git ls-files --others --exclude-standard; } | sed "/^$/d" | sort -u | wc -l | tr -d " ")"; diff_bytes="$(git diff --binary "$baseline_sha" | wc -c | tr -d " ")"; tool_errors="$(grep -Eic "tool.*(error|failed)|command.*failed|permission denied|fatal:" "$output" 2>/dev/null || true)"
-  session_id="$(jq -r "select(.sessionID? != null) | .sessionID" "$output" 2>/dev/null | tail -n 1 || true)"; [[ -n "$session_id" ]] || session_id=""
+  session_id="$(jq -r '.sessionID? // empty' "$output" 2>/dev/null | tail -n 1 || true)"; [[ -n "$session_id" ]] || session_id=""
   if [[ -n "${OPENCODE_API_KEY:-}" ]] && grep -Fq "$OPENCODE_API_KEY" "$output"; then accepted=false; reason="OpenCode API key appeared in agent output"; fi
   if grep -Fq "$EVAL_SECRET" "$output"; then accepted=false; reason="evaluation secret appeared in agent output"; fi
   while IFS= read -r verify_cmd; do [[ -z "$verify_cmd" ]] && continue; set +e; bash -euo pipefail -c "$verify_cmd" >"$verify_log" 2>&1; local vrc=$?; set -e; if [[ "$vrc" -ne 0 ]]; then accepted=false; reason="acceptance failed: $verify_cmd"; break; fi; done < <(jq -r ".verify[]?" <<<"$case_json")
   if [[ "$rc" -ne 0 && "$id" != "07-ambiguity" ]]; then accepted=false; reason="OpenCode exited with rc=$rc"; fi
+  open_code_version="$(opencode --version 2>/dev/null || true)"
   jq -cn --arg id "$id" --arg tier "$tier" --arg model "$model" --arg open_code_version "$(opencode --version 2>/dev/null || true)" --arg task "$task" --arg baseline_sha "$baseline_sha" --arg session_id "$session_id" --argjson elapsed_seconds "$elapsed" --argjson exit_code "$rc" --argjson changed_files "$changed_files" --argjson diff_bytes "$diff_bytes" --argjson tool_error_signals "$tool_errors" --argjson accepted "$accepted" --arg reason "$reason" "{case_id:$id,tier:$tier,model:$model,opencode_version:$open_code_version,task:$task,baseline_sha:$baseline_sha,session_id:$session_id,elapsed_seconds:$elapsed_seconds,exit_code:$exit_code,changed_files:$changed_files,diff_bytes:$diff_bytes,tool_error_signals:$tool_error_signals,accepted:$accepted,reason:$reason}"
   if [[ "$accepted" != true ]]; then failures=$((failures+1)); echo "[EVAL][FAIL] $id — $reason" >&2; else echo "[EVAL][PASS] $id — ${elapsed}s, changed_files=${changed_files}, diff_bytes=${diff_bytes}" >&2; fi
 }
