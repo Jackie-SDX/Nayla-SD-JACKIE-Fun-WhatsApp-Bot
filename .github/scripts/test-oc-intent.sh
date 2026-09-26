@@ -16,14 +16,7 @@ run_case(){
 run_case '/oc hello' report false false
 run_case '/oc explain the architecture' report false false
 run_case '/oc inspect why this fails' report false false
-run_case 
-run_case '/oc fix the parser' code true false
-run_case '/oc create a pull request for this' code true false
-run_case '/oc continue' code true true
-run_case '/oc continue fix the parser' code true true
-run_case '/oc merge PR #123' merge false false
-echo 'intent classification contract: OK'
-/oc hi\nDo not inspect, modify, commit, push, or run repository tests; this is a startup/lazy-tooling smoke test.' report false false
+run_case $'/oc hi\nDo not inspect, modify, commit, push, or run repository tests; this is a startup/lazy-tooling smoke test.' report false false
 run_case '/oc fix the parser' code true false
 run_case '/oc create a pull request for this' code true false
 run_case '/oc continue' code true true
