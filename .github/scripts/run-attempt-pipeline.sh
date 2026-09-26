@@ -9,12 +9,14 @@ publish_requested="${OC_PUBLISH_REQUESTED:-${PUBLISH_REQUESTED:-false}}"
 initial_sha="${INITIAL_SHA:-}"
 output_file="${GITHUB_OUTPUT:-/dev/null}"
 start_epoch="$(date +%s)"
+controller_gh_token="${OC_CONTROLLER_GH_TOKEN:-}"
+controller_universal_token="${OC_CONTROLLER_UNIVERSAL_TOKEN:-}"
 
 out() { printf '%s=%s\n' "$1" "$2" >> "$output_file"; }
 read_back() { sed -nE "s/^${1}=//p" "$output_file" 2>/dev/null | tail -n 1; }
 
 set +e
-MODEL="$model" VARIANT="" SHARE="false" AGENT="build" bash .github/scripts/run-opencode-attempt.sh "$attempt"
+env -u GITHUB_TOKEN -u GH_TOKEN -u UNIVERSAL_TOKEN -u COMPOSIO_API_KEY MODEL="$model" VARIANT="" SHARE="false" AGENT="build" bash .github/scripts/run-opencode-attempt.sh "$attempt"
 agent_rc=$?
 set -e
 
@@ -51,9 +53,9 @@ elif [[ "$task_mode" == "report" ]]; then
 elif [[ "$publish_requested" == "true" && ( "$agent_outcome" == "success" || "$durable_work" == "true" ) ]]; then
   set +e
   if [[ "$mode" == "remote" ]]; then
-    PUBLISH_REQUESTED="true" bash .github/scripts/publish-remote-opencode.sh
+    GH_TOKEN="$controller_gh_token" GITHUB_TOKEN="$controller_gh_token" UNIVERSAL_TOKEN="$controller_universal_token" PUBLISH_REQUESTED="true" bash .github/scripts/publish-remote-opencode.sh
   else
-    OC_SESSION_BRANCH="$agent_branch" PUBLISH_REQUESTED="true" bash .github/scripts/publish-oc-session.sh
+    GH_TOKEN="$controller_gh_token" GITHUB_TOKEN="$controller_gh_token" UNIVERSAL_TOKEN="$controller_universal_token" OC_SESSION_BRANCH="$agent_branch" PUBLISH_REQUESTED="true" bash .github/scripts/publish-oc-session.sh
   fi
   publish_rc=$?
   set -e
