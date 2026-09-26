@@ -63,7 +63,8 @@ jobs:
           PAGES="$(pdfinfo "$PDF" | awk '/^Pages:/ {print $2}')"
           echo "page count     : $PAGES"
           test "$PAGES" -ge 1
-          pdfinfo "$PDF" | grep -F "Title: SnapDragon Pandoc-to-PDF Capability Test"
+          pdfinfo "$PDF" | awk -F': *' '/^Title:/ {ok = ($2 == "SnapDragon Pandoc-to-PDF Capability Test")} END {exit !ok}'
+          echo "title metadata  : verified"
           echo "--- extracted text (first 20 lines) ---"
           pdftotext "$PDF" - | sed -n '1,20p'
           ls -l output
