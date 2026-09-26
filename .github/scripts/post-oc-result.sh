@@ -22,6 +22,9 @@ sanitize_response() {
   sed -E \
     -e '/^\[OPENCODE\]/d' \
     -e '/\[object Object\]/d' \
+    -e 's/OC-STATUS:[[:space:]]*//g' \
+    -e 's/OC-PLAN:[[:space:]]*//g' \
+    -e 's/OC-DONE:[[:space:]]*//g' \
     -e 's/(gh[ps]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})/[REDACTED_GITHUB_TOKEN]/g' \
     -e 's/(Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
     "$file" | tr -d '\r' | sed 's/[[:space:]]*$//' | cut -c1-12000
