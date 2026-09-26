@@ -88,7 +88,7 @@ else
   notes="${notes}\n- mise is not assumed globally installed. If an alternate runtime version is required, use the official current mise installation/release guidance and verify the selected version."
 fi
 
-while IFS=$"\t" read -r label cmd package reason; do
+while IFS= read -r label cmd package reason; do
   [[ -n "$label" ]] || continue
   if ! command -v "$cmd" >/dev/null 2>&1 && [[ -n "$package" ]]; then need "$package"; fi
 done < "$caps_file"
@@ -114,6 +114,101 @@ fi
   echo "## Required/detected capabilities"
   echo
   while IFS=$"\t" read -r label cmd package reason; do
+    [[ -n "$label" ]] || continue
+    if command -v "$cmd" >/dev/null 2>&1; then
+      path="$(command -v "$cmd")"
+      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
+      [[ -n "$version" ]] || version="$("$cmd" -V 2>/dev/null | head -n 1 || true)"
+      echo "- [x] $label — $version — $path — $reason"
+    else
+      echo "- [ ] $label — missing — $reason"
+    fi
+  done < "$caps_file"
+  echo
+  echo "## Useful baseline capabilities"
+  echo
+  for cmd in python3 node npm cmake ninja clang clang-format clang-tidy docker kubectl helm gh jq yq rg shellcheck pandoc pdflatex pdfinfo pdftotext dot convert ffmpeg mise; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
+      echo "- [x] $cmd — $version"
+    else
+      echo "- [ ] $cmd — not installed"
+    fi
+  done
+  if [[ -n "$notes" ]]; then
+    echo
+    echo "## Acquisition notes"
+    printf "%b\n" "$notes"
+  fi
+  echo
+  echo "## Policy"
+  echo
+  echo "This matrix is evidence for the primary OpenCode session, not a hard allowlist."
+  echo "Unknown capabilities may be acquired by the agent when required, using authoritative upstream instructions and verification."
+} > "$output"
+
+echo "[CAP] capability matrix: $output"
+exit 0\t' read -r label cmd package reason; do
+  [[ -n "$label" ]] || continue
+  if ! command -v "$cmd" >/dev/null 2>&1 && [[ -n "$package" ]]; then need "$package"; fi
+done < "$caps_file"
+
+if [[ -n "$installs" ]]; then
+  if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    echo "[CAP] acquiring missing capabilities: $installs"
+    if ! sudo apt-get update -y >/dev/null 2>&1 || ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $installs >/dev/null 2>&1; then
+      notes="${notes}\n- Automatic APT acquisition failed for: $installs. Continue with an official user-space/project-local installation path."
+    fi
+  else
+    notes="${notes}\n- Insufficient privilege for APT acquisition: $installs. Continue with an official user-space/project-local installation path."
+  fi
+fi
+
+{
+  echo "# OpenCode capability matrix"
+  echo
+  echo "- Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "- Workspace: $workspace"
+  echo "- Runner: $(uname -srm 2>/dev/null || true)"
+  echo
+  echo "## Required/detected capabilities"
+  echo
+  while IFS= read -r label cmd package reason; do
+    [[ -n "$label" ]] || continue
+    if command -v "$cmd" >/dev/null 2>&1; then
+      path="$(command -v "$cmd")"
+      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
+      [[ -n "$version" ]] || version="$("$cmd" -V 2>/dev/null | head -n 1 || true)"
+      echo "- [x] $label — $version — $path — $reason"
+    else
+      echo "- [ ] $label — missing — $reason"
+    fi
+  done < "$caps_file"
+  echo
+  echo "## Useful baseline capabilities"
+  echo
+  for cmd in python3 node npm cmake ninja clang clang-format clang-tidy docker kubectl helm gh jq yq rg shellcheck pandoc pdflatex pdfinfo pdftotext dot convert ffmpeg mise; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      version="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
+      echo "- [x] $cmd — $version"
+    else
+      echo "- [ ] $cmd — not installed"
+    fi
+  done
+  if [[ -n "$notes" ]]; then
+    echo
+    echo "## Acquisition notes"
+    printf "%b\n" "$notes"
+  fi
+  echo
+  echo "## Policy"
+  echo
+  echo "This matrix is evidence for the primary OpenCode session, not a hard allowlist."
+  echo "Unknown capabilities may be acquired by the agent when required, using authoritative upstream instructions and verification."
+} > "$output"
+
+echo "[CAP] capability matrix: $output"
+exit 0\t' read -r label cmd package reason; do
     [[ -n "$label" ]] || continue
     if command -v "$cmd" >/dev/null 2>&1; then
       path="$(command -v "$cmd")"
