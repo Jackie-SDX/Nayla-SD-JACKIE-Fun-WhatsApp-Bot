@@ -25,9 +25,9 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
     env:
-      GH_TOKEN: ${{ secrets.UNIVERSAL_TOKEN || github.token }}
+      GH_TOKEN: ${{ github.token }}
     outputs:
       accepted: ${{ steps.claim.outputs.accepted }}
     steps:
@@ -100,15 +100,6 @@ jobs:
           echo "OC_INITIAL_SHA=$sha" >> "$GITHUB_ENV"
           echo "OC_RUN_START_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           echo "OC_JOB_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
-
-      - name: Mark triggering /oc comment as running
-        if: always()
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: bash .github/scripts/oc-running-reaction.sh add
 
       - name: Resolve /oc target
         id: target
@@ -270,6 +261,8 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           TASK_MODE: ${{ env.OC_TASK_MODE }}
           OC_TARGET_MODE: ${{ steps.target.outputs.mode }}
           OC_TARGET_REPO: ${{ steps.target.outputs.target_repo }}

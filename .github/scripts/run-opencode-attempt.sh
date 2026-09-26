@@ -29,6 +29,7 @@ command -v mkfifo >/dev/null 2>&1 || {
 }
 
 runner_temp="${RUNNER_TEMP:-/tmp}"
+activity_guidance='Operational log guidance: emit only brief high-level OC-PLAN/OC-STATUS/OC-DECISION markers for observable work (inspect repository, edit file, run tests, verify CI). Never emit private chain-of-thought, hidden reasoning, secrets, credentials, or raw sensitive context.'
 mkdir -p "$runner_temp"
 safe_log="$runner_temp/opencode-${attempt}-safe.log"
 progress_log="$runner_temp/opencode-${attempt}-progress.log"
@@ -90,6 +91,7 @@ if [[ "${OC_TARGET_MODE:-local}" == "remote" ]]; then
   fi
   [[ -n "$task_prompt" ]] || task_prompt="Inspect the target repository workspace and implement the requested change. Work inside this repository only; use its own project instructions. You may commit, push, create/update PRs, inspect CI, repair failures, and merge when the user explicitly requests that lifecycle step. Never force-push, rewrite protected history, bypass branch protection, expose credentials, or make unrelated changes."
   model_name="${MODEL:-opencode/mimo-v2.6-flash-free}"
+  task_prompt="$task_prompt"$'\n\n'"$activity_guidance"
   agent_cmd=(opencode run --dir "$ws" --model "$model_name")
   [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
   agent_cmd+=(--agent build --title "oc remote ${OC_TARGET_REPO:-target}")
@@ -135,6 +137,7 @@ fi
       task_prompt="Execute the latest user request in the attached issue context. Treat the issue body and chronological comments as the task source of truth. Answer the user directly; do not modify, commit, publish, or merge repository files unless the request explicitly requires a repository change."
     fi
 
+    task_prompt="$task_prompt"$'\n\n'"$activity_guidance"
     agent_cmd=(opencode run --dir "$agent_cwd" --model "$model_name")
     [[ -n "${VARIANT:-}" ]] && agent_cmd+=(--variant "$VARIANT")
     agent_cmd+=(--agent build --title "oc local ${TARGET_NUMBER:-issue}")
@@ -234,11 +237,13 @@ if [[ -n "$agent_cwd" ]]; then
     echo "::error title=Agent worktree entry failed::Could not enter $agent_cwd." >&2
     exit 2
   }
+  printf "[OC][LIVE] OpenCode session started; streaming safe activity summaries and tool actions.\n" | tee -a "$progress_log"
   timeout --signal=TERM --kill-after=60s "${effective_timeout_seconds}s" "${agent_cmd[@]}" < <(printf "%s
 " "$task_prompt") >"$fifo" 2>&1 &
   agent_pid=$!
   popd >/dev/null
 else
+  printf "[OC][LIVE] OpenCode session started; streaming safe activity summaries and tool actions.\n" | tee -a "$progress_log"
   timeout --signal=TERM --kill-after=60s "${effective_timeout_seconds}s" "${agent_cmd[@]}" >"$fifo" 2>&1 &
   agent_pid=$!
 fi
@@ -278,6 +283,7 @@ esac
 printf "[OC][attempt=%s][elapsed=%ss] finished exit_code=%s termination_reason=%s\n" "$attempt" "$elapsed" "$exit_code" "$termination_reason" | tee -a "$progress_log"
 
 {
+  printf "[OC][LIVE] OpenCode session finished; final result is being reconciled.\n" | tee -a "$progress_log"
   printf "exit_code=%s\n" "$exit_code"
   printf "termination_reason=%s\n" "$termination_reason"
   printf "provider_warning=%s\n" "$provider_warning"

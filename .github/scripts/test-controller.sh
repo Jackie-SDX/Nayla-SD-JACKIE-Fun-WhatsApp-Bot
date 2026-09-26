@@ -37,3 +37,18 @@ grep -Fq 'gh api -X PATCH' .github/scripts/post-oc-result.sh
 ! grep -Fq 'agent_cmd+=("$task_prompt")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'agent_cmd+=(--file "$context_seed")' .github/scripts/run-opencode-attempt.sh
 grep -Fq 'printf "%s\n" "$task_prompt"' .github/scripts/run-opencode-attempt.sh
+
+# User comments are immutable: claim uses an authenticated bot reaction, not comment PATCH.
+! grep -Fq 'PATCH -f body=' .github/scripts/claim-oc-command.sh
+grep -Fq 'content=eyes' .github/scripts/claim-oc-command.sh
+grep -Fq 'gh api user' .github/scripts/claim-oc-command.sh
+
+# Final result is a new top-level comment using GITHUB_TOKEN.
+grep -Fq 'gh api -X POST -f body="$body" "/repos/$repo/issues/$target/comments"' .github/scripts/post-oc-result.sh
+grep -Fq 'GH_TOKEN: ${{ github.token }}' .github/workflows/opencode.yml
+! grep -Fq 'name: Mark triggering /oc comment as running' .github/workflows/opencode.yml
+
+# Agent logs expose safe progress markers only.
+grep -Fq 'OC-PLAN/OC-STATUS/OC-DECISION markers' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'streaming safe activity summaries and tool actions' .github/scripts/run-opencode-attempt.sh
+grep -Fq 'private chain-of-thought' .github/scripts/run-opencode-attempt.sh

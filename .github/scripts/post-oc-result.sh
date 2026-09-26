@@ -2,21 +2,19 @@
 set -euo pipefail
 
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
-comment_id=0
+target=0
 if [[ -n "$GITHUB_EVENT_PATH" && -f "$GITHUB_EVENT_PATH" ]]; then
-  comment_id="$(jq -r '.comment.id // 0' "$GITHUB_EVENT_PATH" 2>/dev/null || printf '0')"
+  target="$(jq -r '.issue.number // .pull_request.number // 0' "$GITHUB_EVENT_PATH" 2>/dev/null || printf '0')"
 fi
-[[ "$comment_id" =~ ^[0-9]+$ && "$comment_id" != "0" ]] || exit 0
+[[ "$target" =~ ^[0-9]+$ && "$target" != "0" ]] || exit 0
 
-result_marker="<!-- oc-result-for:$comment_id -->"
+run_id="${GITHUB_RUN_ID:-0}"
+result_marker="<!-- oc-controller-result:run-$run_id -->"
 marker="$result_marker"
-if [[ "$GITHUB_EVENT_NAME" == "pull_request_review_comment" ]]; then
-  comment_api="/repos/$repo/pulls/comments/$comment_id"
-else
-  comment_api="/repos/$repo/issues/comments/$comment_id"
+if gh api --paginate --slurp "/repos/$repo/issues/$target/comments?per_page=100" 2>/dev/null |
+    jq -e --arg marker "$result_marker" 'add // [] | any(.[]; (.body // "") | contains($marker))' >/dev/null 2>&1; then
+  exit 0
 fi
-current_body="$(gh api "$comment_api" --jq '.body // ""' 2>/dev/null || true)"
-grep -Fq "$result_marker" <<<"$current_body" && exit 0
 
 task_mode="${TASK_MODE:-report}"
 body=""
@@ -86,6 +84,6 @@ else
   fi
 fi
 
-updated_body="$(printf '%s' "$current_body" | sed -E 's/[[:space:]]+$//')"
-updated_body="$updated_body"$'\n\n---\n## /oc response\n'"$body"$'\n'"$result_marker"
-gh api -X PATCH -f body="$updated_body" "$comment_api" >/dev/null
+body="$body"$'
+'"$result_marker"
+gh api -X POST -f body="$body" "/repos/$repo/issues/$target/comments" >/dev/null
