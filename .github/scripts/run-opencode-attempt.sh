@@ -211,9 +211,6 @@ heartbeat() {
 }
 
 set +e
-if [[ "$task_mode" == "code" && -n "$agent_cwd" ]]; then
-  run_copilot_peer 1 peer "Inspect the task and repository independently before implementation. Identify the highest-risk correctness or regression risk and make only small justified edits. Do not commit or push."
-fi
 if [[ -n "$agent_cwd" ]]; then
   pushd "$agent_cwd" >/dev/null || {
     echo "::error title=Agent worktree entry failed::Could not enter $agent_cwd." >&2
@@ -240,19 +237,6 @@ if [[ "$task_mode" == "code" && -n "$agent_cwd" ]]; then
   checkpoint_worktree
 fi
 
-peer_result_file="$runner_temp/copilot-peer-${attempt}.result"
-copilot_peer_result=""
-copilot_peer_elapsed_seconds=""
-copilot_peer_log_path=""
-if [[ -f "$peer_result_file" ]]; then
-  copilot_peer_result="$(sed -n "s/^COPILOT_PEER_RESULT=//p" "$peer_result_file" | tail -n 1)"
-  copilot_peer_elapsed_seconds="$(sed -n "s/^COPILOT_PEER_ELAPSED_SECONDS=//p" "$peer_result_file" | tail -n 1)"
-  copilot_peer_log_path="$(sed -n "s/^COPILOT_PEER_LOG_PATH=//p" "$peer_result_file" | tail -n 1)"
-  printf "copilot_peer_result=%s\n" "$copilot_peer_result" >> "$output_file"
-  printf "copilot_peer_elapsed_seconds=%s\n" "$copilot_peer_elapsed_seconds" >> "$output_file"
-  printf "copilot_peer_log_path=%s\n" "$copilot_peer_log_path" >> "$output_file"
-fi
-
 agent_branch=""
 if [[ -n "$agent_worktree" && -e "$agent_worktree/.git" ]]; then
   agent_branch="$(git -C "$agent_worktree" branch --show-current 2>/dev/null || true)"
@@ -262,9 +246,11 @@ set -e
 
 elapsed=$(( $(date +%s) - start_epoch ))
 termination_reason="completed"
+provider_failure_kind=""
+provider_warning="false"
 case "$exit_code" in
   124) termination_reason="timeout" ;;
-  75) termination_reason="provider-unavailable" ;;
+
   125|126|127) termination_reason="failed" ;;
   128|129|130|131|132|133|134|135|136|137|138|139|140|141|142|143|144|145|146|147|148|149|150|151|152|153|154|155|156|157|158|159) termination_reason="signal" ;;
   0) termination_reason="completed" ;;
